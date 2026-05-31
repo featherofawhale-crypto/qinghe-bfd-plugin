@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+
+artifacts/
+dist/
+
+*.dmg
+*.mp4
+
+清何黑帧夹帧检测_v1.9.48_Windows/ffmpeg/bin/
+清何黑帧夹帧检测_v1.9.48_Windows/ffmpeg/doc/
