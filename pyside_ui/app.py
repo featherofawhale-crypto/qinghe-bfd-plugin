@@ -45,68 +45,68 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.58"
+APP_VERSION = "1.9.59"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 
 APP_STYLE = """
 QToolTip {
-    background: #18212f;
-    color: #f8fbff;
-    border: 1px solid #6b7d93;
+    background: #111827;
+    color: #f8fafc;
+    border: 1px solid #94a3b8;
     padding: 8px;
     border-radius: 7px;
 }
 QWidget {
-    background: #eef4fb;
-    color: #142033;
+    background: #f5f7fa;
+    color: #1f2937;
     font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI";
     font-size: 13px;
 }
 QLabel, QCheckBox, QSlider {
     background: transparent;
 }
-QMainWindow { background: #e8f0f9; }
+QMainWindow { background: #f2f5f8; }
 QFrame#Shell {
-    background: #f8fbff;
-    border: 1px solid #d7e2ee;
-    border-radius: 10px;
+    background: #fbfcfe;
+    border: 1px solid #d9e1ea;
+    border-radius: 12px;
 }
 QFrame#Panel {
     background: #ffffff;
-    border: 1px solid #d7e2ee;
+    border: 1px solid #d9e1ea;
     border-radius: 8px;
 }
 QFrame#StatCard {
-    background: #fbfdff;
-    border: 1px solid #dae5f0;
-    border-top: 3px solid #18a999;
+    background: #fbfcfe;
+    border: 1px solid #d8e0ea;
+    border-top: 3px solid #7aa2c7;
     border-radius: 8px;
 }
 QLabel#Title {
     font-size: 24px;
     font-weight: 700;
-    color: #10243f;
+    color: #172033;
 }
-QLabel#Subtitle, QLabel#Muted { color: #607089; }
+QLabel#Subtitle, QLabel#Muted { color: #64748b; }
 QLabel#BadgeOk {
     color: #047857;
-    background: #dff7ec;
-    border: 1px solid #9ae6c3;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
     border-radius: 7px;
     padding: 4px 9px;
     font-weight: 700;
 }
 QLabel#BadgeWarn {
-    color: #995d00;
-    background: #fff3cf;
-    border: 1px solid #f5cf75;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
     border-radius: 7px;
     padding: 4px 9px;
     font-weight: 700;
 }
 QGroupBox {
-    border: 1px solid #d7e2ee;
+    border: 1px solid #d9e1ea;
     border-radius: 8px;
     margin-top: 22px;
     padding: 16px 14px 14px 14px;
@@ -117,45 +117,52 @@ QGroupBox::title {
     subcontrol-origin: margin;
     left: 12px;
     padding: 0 6px;
-    color: #334155;
+    color: #475569;
 }
 QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit, QPlainTextEdit {
     min-height: 34px;
     border-radius: 8px;
-    border: 1px solid #cbd8e6;
-    background: #f9fcff;
-    color: #122033;
+    border: 1px solid #cad5e2;
+    background: #ffffff;
+    color: #172033;
     padding: 4px 9px;
 }
 QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QLineEdit:hover {
-    border-color: #82a7cf;
+    border-color: #8aa7c7;
 }
-QCheckBox { spacing: 8px; color: #26384f; }
+QCheckBox { spacing: 8px; color: #253244; }
 QCheckBox::indicator {
     width: 16px;
     height: 16px;
+    border-radius: 4px;
+    border: 1px solid #94a3b8;
+    background: #ffffff;
 }
+QCheckBox::indicator:checked { background: #2563eb; border-color: #1d4ed8; }
 QCheckBox:disabled { color: #9aa8b7; }
+QCheckBox#MarkerCheck { color: #253244; font-weight: 600; }
 QPushButton {
     min-height: 34px;
     border-radius: 8px;
-    border: 1px solid #c8d5e2;
+    border: 1px solid #cbd5e1;
     background: #ffffff;
-    color: #1d314d;
+    color: #1f2937;
     padding: 6px 12px;
     font-weight: 700;
 }
-QPushButton:hover { background: #f1f7ff; border-color: #7fa7d7; }
+QPushButton:hover { background: #f8fafc; border-color: #8aa7c7; }
+QPushButton:pressed { background: #e8f0ff; padding-top: 7px; padding-bottom: 5px; }
 QPushButton#Primary {
     min-height: 42px;
-    background: #1769e0;
-    border-color: #1769e0;
+    background: #2563eb;
+    border-color: #2563eb;
     color: white;
 }
-QPushButton#Primary:hover { background: #0f5aca; }
-QPushButton#Primary:disabled { background: #a9bfdc; color: #eef4ff; }
+QPushButton#Primary:hover { background: #1d4ed8; }
+QPushButton#Primary:pressed { background: #1e40af; }
+QPushButton#Primary:disabled { background: #aebfd5; color: #eef4ff; }
 QTabWidget::pane {
-    border: 1px solid #d7e2ee;
+    border: 1px solid #d9e1ea;
     border-radius: 8px;
     background: #ffffff;
 }
@@ -164,38 +171,38 @@ QTabBar::tab {
     min-height: 30px;
     padding: 5px 12px;
     margin-right: 4px;
-    border: 1px solid #d7e2ee;
+    border: 1px solid #d9e1ea;
     border-bottom: none;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
-    background: #edf4fb;
-    color: #52647d;
+    background: #eef2f7;
+    color: #526175;
     font-weight: 700;
 }
 QTabBar::tab:selected {
     background: #ffffff;
-    color: #1769e0;
+    color: #2563eb;
 }
 QProgressBar {
     min-height: 16px;
     border-radius: 8px;
-    background: #e6eef7;
-    border: 1px solid #cfdae8;
+    background: #e6edf5;
+    border: 1px solid #cfd8e3;
     text-align: center;
     color: #22364f;
 }
 QProgressBar::chunk {
     border-radius: 7px;
-    background: #18a999;
+    background: #2563eb;
 }
 QSlider::groove:horizontal {
     height: 6px;
     border-radius: 3px;
-    background: #d9e5f1;
+    background: #d9e2ec;
 }
 QSlider::sub-page:horizontal {
     border-radius: 3px;
-    background: #1769e0;
+    background: #2563eb;
 }
 QSlider::handle:horizontal {
     width: 16px;
@@ -203,11 +210,11 @@ QSlider::handle:horizontal {
     margin: -5px 0;
     border-radius: 8px;
     background: #ffffff;
-    border: 1px solid #1769e0;
+    border: 1px solid #2563eb;
 }
 QTextEdit {
-    background: #f9fcff;
-    border: 1px solid #d7e2ee;
+    background: #ffffff;
+    border: 1px solid #d9e1ea;
     border-radius: 8px;
     color: #31445d;
     padding: 8px;
@@ -216,15 +223,15 @@ QTextEdit {
 
 
 MARKER_COLORS = {
-    "error": "#ff5b5b",
-    "suspect": "#ffd166",
-    "scene": "#61a8ff",
-    "gap": "#b589ff",
-    "duplicate": "#ff8db3",
-    "content_dup": "#f15bb5",
-    "opacity": "#63d7a4",
-    "corrupt": "#72d3ff",
-    "audio": "#14b8a6",
+    "error": "#B42318",
+    "suspect": "#A16207",
+    "scene": "#2563EB",
+    "gap": "#6D5BD0",
+    "duplicate": "#B83280",
+    "content_dup": "#8F3F71",
+    "opacity": "#047857",
+    "corrupt": "#0369A1",
+    "audio": "#0F766E",
 }
 
 
@@ -409,6 +416,7 @@ class MainWindow(QMainWindow):
         self.result_records: list[dict] = []
         self.result_index = 0
         self._tab_animation: QPropertyAnimation | None = None
+        self._active_animations: list[QPropertyAnimation] = []
         self._loading_timelines = False
         self._loading_settings = False
         self.progress_timer = QTimer(self)
@@ -448,6 +456,7 @@ class MainWindow(QMainWindow):
         wrapper_layout.setContentsMargins(14, 14, 14, 14)
         wrapper_layout.addWidget(shell)
         self.setCentralWidget(wrapper)
+        self.install_button_motion()
 
         self.refresh_timelines()
         self.load_settings()
@@ -810,7 +819,7 @@ class MainWindow(QMainWindow):
             card.setObjectName("StatCard")
             card.setStyleSheet(
                 "QFrame#StatCard {"
-                "background: #fbfdff; border: 1px solid #dae5f0;"
+                "background: #fbfcfe; border: 1px solid #d8e0ea;"
                 f"border-top: 3px solid {color}; border-radius: 8px;"
                 "}"
             )
@@ -834,15 +843,9 @@ class MainWindow(QMainWindow):
         return check
 
     def _marker_check(self, text: str, color_key: str, checked: bool, tooltip: str) -> QCheckBox:
-        check = self._check(f"● {text}", checked, tooltip)
-        color = MARKER_COLORS[color_key]
-        check.setStyleSheet(
-            "QCheckBox {"
-            f"color: {color};"
-            "font-weight: 700;"
-            "}"
-            "QCheckBox:disabled { color: #9aa8b7; }"
-        )
+        check = self._check(text, checked, tooltip)
+        check.setObjectName("MarkerCheck")
+        check.setProperty("markerRole", color_key)
         return check
 
     def _make_slider(self, minimum: int, maximum: int, value: int, spinbox: QSpinBox) -> QSlider:
@@ -1299,15 +1302,33 @@ class MainWindow(QMainWindow):
         if widget:
             self.animate_widget(widget, 180)
 
-    def animate_widget(self, widget: QWidget, duration: int = 220) -> None:
+    def install_button_motion(self) -> None:
+        for button in self.findChildren(QPushButton):
+            self.wire_button_motion(button)
+
+    def wire_button_motion(self, button: QPushButton) -> None:
+        if button.property("motion") == "press-fade":
+            return
+        button.setProperty("motion", "press-fade")
+        button.setCursor(Qt.PointingHandCursor)
+        button.clicked.connect(lambda _checked=False, btn=button: self.animate_widget(btn, 120, 0.86))
+
+    def animate_widget(self, widget: QWidget, duration: int = 220, start_opacity: float = 0.72) -> None:
         effect = QGraphicsOpacityEffect(widget)
         widget.setGraphicsEffect(effect)
         animation = QPropertyAnimation(effect, b"opacity", self)
         animation.setDuration(duration)
-        animation.setStartValue(0.72)
+        animation.setStartValue(start_opacity)
         animation.setEndValue(1.0)
         animation.setEasingCurve(QEasingCurve.OutCubic)
-        animation.finished.connect(lambda: widget.setGraphicsEffect(None))
+        self._active_animations.append(animation)
+
+        def finish_animation() -> None:
+            widget.setGraphicsEffect(None)
+            if animation in self._active_animations:
+                self._active_animations.remove(animation)
+
+        animation.finished.connect(finish_animation)
         self._tab_animation = animation
         animation.start()
 

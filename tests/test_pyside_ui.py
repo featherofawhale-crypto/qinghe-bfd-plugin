@@ -139,6 +139,30 @@ class PySideUiTest(unittest.TestCase):
         for control in controls:
             self.assertTrue(control.toolTip(), f"{control.text()} missing tooltip")
 
+    def test_marker_options_are_neutral_and_buttons_have_motion_feedback(self) -> None:
+        window = MainWindow()
+        marker_checks = [
+            window.chk_error,
+            window.chk_suspect,
+            window.chk_scene,
+            window.chk_gap,
+            window.chk_duplicate,
+            window.chk_content_dup,
+            window.chk_opacity,
+            window.chk_corrupt,
+            window.chk_audio_mono,
+        ]
+
+        for check in marker_checks:
+            self.assertNotIn("●", check.text())
+            self.assertEqual(check.objectName(), "MarkerCheck")
+            self.assertNotIn("#ff5b5b", check.styleSheet().lower())
+
+        buttons = window.findChildren(QPushButton)
+        self.assertTrue(buttons)
+        for button in buttons:
+            self.assertEqual(button.property("motion"), "press-fade")
+
     def test_visible_ui_labels_are_readable_chinese(self) -> None:
         window = MainWindow()
         text = " ".join(check.text() for check in window.findChildren(QCheckBox))
