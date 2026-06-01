@@ -1,5 +1,5 @@
 -- config.lua - 清何黑帧夹帧检测小工具 全局配置
--- 版本: v1.9.69
+-- 版本: v1.9.70
 
 local config = {}
 
@@ -7,7 +7,7 @@ local config = {}
 -- 插件元信息
 -- ============================================================
 config.PLUGIN_NAME = "清何黑帧夹帧检测小工具"
-config.PLUGIN_VERSION = "1.9.69"
+config.PLUGIN_VERSION = "1.9.70"
 config.PLUGIN_AUTHOR = "qinghe"
 config.MARKER_PREFIX = "[BFD]"  -- Black Frame Detection 标记前缀
 

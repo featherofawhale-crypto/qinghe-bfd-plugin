@@ -163,6 +163,18 @@ class PySideUiTest(unittest.TestCase):
         for button in buttons:
             self.assertEqual(button.property("motion"), "press-fade")
 
+    def test_default_window_is_compact_with_complementary_accent(self) -> None:
+        window = MainWindow()
+
+        self.assertLessEqual(window.size().width(), 980)
+        self.assertLessEqual(window.size().height(), 680)
+        self.assertEqual(window.progress_label.minimumWidth(), 138)
+        self.assertEqual(window.result_list.minimumHeight(), 190)
+        self.assertEqual(window.audio_list.minimumHeight(), 230)
+        self.assertEqual(window.log.minimumHeight(), 300)
+        self.assertIn("#f59e0b", ui_app.APP_STYLE.lower())
+        self.assertIn("qpushbutton#primary", ui_app.APP_STYLE.lower())
+
     def test_visible_ui_labels_are_readable_chinese(self) -> None:
         window = MainWindow()
         text = " ".join(check.text() for check in window.findChildren(QCheckBox))

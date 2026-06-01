@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.69"
+APP_VERSION = "1.9.70"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 
@@ -58,33 +58,33 @@ QToolTip {
     border-radius: 7px;
 }
 QWidget {
-    background: #f5f7fa;
+    background: #f6f8fb;
     color: #1f2937;
     font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI";
-    font-size: 13px;
+    font-size: 12px;
 }
 QLabel, QCheckBox, QSlider {
     background: transparent;
 }
-QMainWindow { background: #f2f5f8; }
+QMainWindow { background: #eef3f7; }
 QFrame#Shell {
     background: #fbfcfe;
-    border: 1px solid #d9e1ea;
-    border-radius: 12px;
+    border: 1px solid #d6e0ea;
+    border-radius: 10px;
 }
 QFrame#Panel {
     background: #ffffff;
     border: 1px solid #d9e1ea;
-    border-radius: 8px;
+    border-radius: 7px;
 }
 QFrame#StatCard {
     background: #fbfcfe;
     border: 1px solid #d8e0ea;
-    border-top: 3px solid #7aa2c7;
-    border-radius: 8px;
+    border-top: 3px solid #f59e0b;
+    border-radius: 7px;
 }
 QLabel#Title {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 700;
     color: #172033;
 }
@@ -107,9 +107,9 @@ QLabel#BadgeWarn {
 }
 QGroupBox {
     border: 1px solid #d9e1ea;
-    border-radius: 8px;
-    margin-top: 22px;
-    padding: 16px 14px 14px 14px;
+    border-radius: 7px;
+    margin-top: 17px;
+    padding: 12px 10px 10px 10px;
     background: #ffffff;
     font-weight: 700;
 }
@@ -120,56 +120,56 @@ QGroupBox::title {
     color: #475569;
 }
 QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit, QPlainTextEdit {
-    min-height: 34px;
-    border-radius: 8px;
+    min-height: 29px;
+    border-radius: 7px;
     border: 1px solid #cad5e2;
     background: #ffffff;
     color: #172033;
-    padding: 4px 9px;
+    padding: 3px 7px;
 }
 QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QLineEdit:hover {
-    border-color: #8aa7c7;
+    border-color: #f59e0b;
 }
 QCheckBox { spacing: 8px; color: #253244; }
 QCheckBox::indicator {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     border-radius: 4px;
     border: 1px solid #94a3b8;
     background: #ffffff;
 }
-QCheckBox::indicator:checked { background: #2563eb; border-color: #1d4ed8; }
+QCheckBox::indicator:checked { background: #f59e0b; border-color: #d97706; }
 QCheckBox:disabled { color: #9aa8b7; }
 QCheckBox#MarkerCheck { color: #253244; font-weight: 600; }
 QPushButton {
-    min-height: 34px;
-    border-radius: 8px;
+    min-height: 29px;
+    border-radius: 7px;
     border: 1px solid #cbd5e1;
     background: #ffffff;
     color: #1f2937;
-    padding: 6px 12px;
+    padding: 4px 10px;
     font-weight: 700;
 }
-QPushButton:hover { background: #f8fafc; border-color: #8aa7c7; }
-QPushButton:pressed { background: #e8f0ff; padding-top: 7px; padding-bottom: 5px; }
+QPushButton:hover { background: #fff7ed; border-color: #f59e0b; }
+QPushButton:pressed { background: #ffedd5; padding-top: 5px; padding-bottom: 3px; }
 QPushButton#Primary {
-    min-height: 42px;
-    background: #2563eb;
-    border-color: #2563eb;
-    color: white;
+    min-height: 36px;
+    background: #f59e0b;
+    border-color: #d97706;
+    color: #111827;
 }
-QPushButton#Primary:hover { background: #1d4ed8; }
-QPushButton#Primary:pressed { background: #1e40af; }
-QPushButton#Primary:disabled { background: #aebfd5; color: #eef4ff; }
+QPushButton#Primary:hover { background: #fbbf24; }
+QPushButton#Primary:pressed { background: #d97706; }
+QPushButton#Primary:disabled { background: #ead4ad; color: #8a6b36; }
 QTabWidget::pane {
     border: 1px solid #d9e1ea;
     border-radius: 8px;
     background: #ffffff;
 }
 QTabBar::tab {
-    min-width: 72px;
-    min-height: 30px;
-    padding: 5px 12px;
+    min-width: 64px;
+    min-height: 26px;
+    padding: 4px 10px;
     margin-right: 4px;
     border: 1px solid #d9e1ea;
     border-bottom: none;
@@ -181,19 +181,19 @@ QTabBar::tab {
 }
 QTabBar::tab:selected {
     background: #ffffff;
-    color: #2563eb;
+    color: #d97706;
 }
 QProgressBar {
-    min-height: 16px;
-    border-radius: 8px;
+    min-height: 14px;
+    border-radius: 7px;
     background: #e6edf5;
     border: 1px solid #cfd8e3;
     text-align: center;
     color: #22364f;
 }
 QProgressBar::chunk {
-    border-radius: 7px;
-    background: #2563eb;
+    border-radius: 6px;
+    background: #f59e0b;
 }
 QSlider::groove:horizontal {
     height: 6px;
@@ -202,22 +202,22 @@ QSlider::groove:horizontal {
 }
 QSlider::sub-page:horizontal {
     border-radius: 3px;
-    background: #2563eb;
+    background: #f59e0b;
 }
 QSlider::handle:horizontal {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     margin: -5px 0;
-    border-radius: 8px;
+    border-radius: 7px;
     background: #ffffff;
-    border: 1px solid #2563eb;
+    border: 1px solid #d97706;
 }
 QTextEdit {
     background: #ffffff;
     border: 1px solid #d9e1ea;
-    border-radius: 8px;
+    border-radius: 7px;
     color: #31445d;
-    padding: 8px;
+    padding: 6px;
 }
 """
 
@@ -408,7 +408,7 @@ class MainWindow(QMainWindow):
         if app:
             app.setFont(QFont(font_family, 10))
         self.setWindowTitle("清何黑帧夹帧检测 - Pro Control")
-        self.resize(1120, 780)
+        self.resize(960, 660)
         self.bridge = ResolveBridge()
         self.timelines: list[TimelineInfo] = []
         self.worker: SubmitWorker | None = None
@@ -426,20 +426,20 @@ class MainWindow(QMainWindow):
         shell = QFrame()
         shell.setObjectName("Shell")
         root = QVBoxLayout(shell)
-        root.setContentsMargins(22, 20, 22, 20)
-        root.setSpacing(12)
+        root.setContentsMargins(16, 14, 16, 14)
+        root.setSpacing(9)
 
         root.addLayout(self._build_header())
         body = QHBoxLayout()
-        body.setSpacing(12)
+        body.setSpacing(9)
 
         controls = QVBoxLayout()
-        controls.setSpacing(10)
+        controls.setSpacing(8)
         controls.addWidget(self._build_timeline_group())
 
         main_grid = QGridLayout()
-        main_grid.setHorizontalSpacing(12)
-        main_grid.setVerticalSpacing(10)
+        main_grid.setHorizontalSpacing(9)
+        main_grid.setVerticalSpacing(8)
         main_grid.addWidget(self._build_detection_group(), 0, 0)
         main_grid.addWidget(self._build_threshold_group(), 0, 1)
         main_grid.addWidget(self._build_advanced_group(), 1, 0, 1, 2)
@@ -453,7 +453,7 @@ class MainWindow(QMainWindow):
 
         wrapper = QWidget()
         wrapper_layout = QVBoxLayout(wrapper)
-        wrapper_layout.setContentsMargins(14, 14, 14, 14)
+        wrapper_layout.setContentsMargins(8, 8, 8, 8)
         wrapper_layout.addWidget(shell)
         self.setCentralWidget(wrapper)
         self.install_button_motion()
@@ -485,8 +485,8 @@ class MainWindow(QMainWindow):
     def _build_timeline_group(self) -> QGroupBox:
         box = QGroupBox("时间线")
         layout = QGridLayout(box)
-        layout.setHorizontalSpacing(12)
-        layout.setVerticalSpacing(10)
+        layout.setHorizontalSpacing(9)
+        layout.setVerticalSpacing(8)
 
         self.timeline_combo = QComboBox()
         set_tip(self.timeline_combo, "选择要检测的 Resolve 时间线；默认会优先当前打开的时间线。")
@@ -512,8 +512,8 @@ class MainWindow(QMainWindow):
         self.chk_batch_timelines.toggled.connect(self.on_batch_toggled)
 
         self.batch_timeline_list = QListWidget()
-        self.batch_timeline_list.setMinimumHeight(76)
-        self.batch_timeline_list.setMaximumHeight(120)
+        self.batch_timeline_list.setMinimumHeight(58)
+        self.batch_timeline_list.setMaximumHeight(92)
         self.batch_timeline_list.setEnabled(False)
         set_tip(self.batch_timeline_list, "勾选要批量检测的时间线；每条时间线会使用自己的帧率换算阈值。")
 
@@ -532,8 +532,8 @@ class MainWindow(QMainWindow):
     def _build_detection_group(self) -> QGroupBox:
         box = QGroupBox("检测与标记")
         layout = QGridLayout(box)
-        layout.setHorizontalSpacing(16)
-        layout.setVerticalSpacing(10)
+        layout.setHorizontalSpacing(12)
+        layout.setVerticalSpacing(8)
 
         self.chk_error = self._marker_check("夹帧错误", "error", True, "片段或黑场持续帧数小于等于夹帧阈值，会打红色 [BFD-ERR] 标记。")
         self.chk_suspect = self._marker_check("可疑黑帧", "suspect", True, "黑场超过夹帧阈值但不超过可疑阈值，会打黄色 [BFD-SUS] 标记，建议人工确认。")
@@ -563,8 +563,8 @@ class MainWindow(QMainWindow):
     def _build_threshold_group(self) -> QGroupBox:
         box = QGroupBox("阈值")
         layout = QGridLayout(box)
-        layout.setHorizontalSpacing(12)
-        layout.setVerticalSpacing(10)
+        layout.setHorizontalSpacing(9)
+        layout.setVerticalSpacing(8)
 
         self.severity = QComboBox()
         self.severity.addItems(["通用交付复查", "发布会/课程长线", "纪录片/访谈", "严格母版质检"])
@@ -632,8 +632,8 @@ class MainWindow(QMainWindow):
     def _build_advanced_group(self) -> QGroupBox:
         box = QGroupBox("高级选项")
         layout = QGridLayout(box)
-        layout.setHorizontalSpacing(16)
-        layout.setVerticalSpacing(10)
+        layout.setHorizontalSpacing(12)
+        layout.setVerticalSpacing(8)
 
         self.chk_clear = self._check("检测前清理旧 BFD 标记", True, "只清理 [BFD] 前缀的旧标记，不删除用户手动标记。")
         self.chk_mark_hidden = self._check("标记隐藏/禁用素材", False, "默认跳过隐藏/禁用素材；开启后会把这类素材也作为问题打标。")
@@ -667,11 +667,11 @@ class MainWindow(QMainWindow):
         panel = QFrame()
         panel.setObjectName("Panel")
         layout = QHBoxLayout(panel)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(8)
 
         self.progress_label = QLabel("待机")
-        self.progress_label.setMinimumWidth(180)
+        self.progress_label.setMinimumWidth(138)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setFormat("%p%")
@@ -716,13 +716,13 @@ class MainWindow(QMainWindow):
     def _build_results_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
 
         layout.addWidget(self._build_result_group())
         self.result_list = QTextEdit()
         self.result_list.setReadOnly(True)
-        self.result_list.setMinimumHeight(260)
+        self.result_list.setMinimumHeight(190)
         self.result_list.setPlaceholderText("检测完成后，这里会显示所有问题、颜色标签、时间码和跳转顺序。")
         set_tip(self.result_list, "结果按时间线顺序显示；颜色名对应 Resolve 时间线标记颜色。")
         layout.addWidget(self.result_list, 1)
@@ -748,8 +748,8 @@ class MainWindow(QMainWindow):
     def _build_audio_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
 
         self.audio_summary = QLabel("未扫描音频。")
         self.audio_summary.setObjectName("Muted")
@@ -778,7 +778,7 @@ class MainWindow(QMainWindow):
 
         self.audio_list = QTextEdit()
         self.audio_list.setReadOnly(True)
-        self.audio_list.setMinimumHeight(320)
+        self.audio_list.setMinimumHeight(230)
         self.audio_list.setPlaceholderText("扫描结果会列出轨道、片段、起止帧和识别原因。")
         set_tip(self.audio_list, "单声道识别依据：音轨 subtype=mono、源文件 embedded_audio_channels=1、或 source channel mapping 为 mono。")
         layout.addWidget(self.audio_list, 1)
@@ -787,10 +787,10 @@ class MainWindow(QMainWindow):
     def _build_log_tab(self) -> QWidget:
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(8, 8, 8, 8)
         self.log = QTextEdit()
         self.log.setReadOnly(True)
-        self.log.setMinimumHeight(420)
+        self.log.setMinimumHeight(300)
         set_tip(self.log, "这里显示参数提交、Resolve 执行和进度文件回传的信息。")
         layout.addWidget(self.log)
         return tab
@@ -799,9 +799,9 @@ class MainWindow(QMainWindow):
         panel = QFrame()
         panel.setObjectName("Panel")
         layout = QGridLayout(panel)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setHorizontalSpacing(8)
-        layout.setVerticalSpacing(8)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setHorizontalSpacing(7)
+        layout.setVerticalSpacing(7)
 
         items = [
             ("total", "总数", "所有已回传的问题数量。", "#35c4a1"),
@@ -820,13 +820,13 @@ class MainWindow(QMainWindow):
             card.setStyleSheet(
                 "QFrame#StatCard {"
                 "background: #fbfcfe; border: 1px solid #d8e0ea;"
-                f"border-top: 3px solid {color}; border-radius: 8px;"
+                f"border-top: 3px solid {color}; border-radius: 7px;"
                 "}"
             )
             card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(10, 8, 10, 8)
+            card_layout.setContentsMargins(8, 6, 8, 6)
             value = QLabel("0")
-            value.setFont(QFont("Microsoft YaHei", 17, QFont.Bold))
+            value.setFont(QFont("Microsoft YaHei", 15, QFont.Bold))
             name = QLabel(title)
             name.setObjectName("Muted")
             card_layout.addWidget(value)
