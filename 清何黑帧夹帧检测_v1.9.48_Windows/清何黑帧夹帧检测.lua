@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.74
+-- 版本: v1.9.75
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.74 启动 ===")
+dlog("=== BFD v1.9.75 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -1866,6 +1866,9 @@ function Main()
     end
 
     local function build_progress_payload(records)
+        table.sort(records, function(a, b)
+            return (a.timeline_start_frame or 0) < (b.timeline_start_frame or 0)
+        end)
         local counts = {
             total = #records,
             error = 0,
@@ -1902,6 +1905,8 @@ function Main()
             if i <= 500 then
                 table.insert(compact_records, {
                     timecode = r.timeline_start_tc or "",
+                    frame = r.timeline_start_frame or 0,
+                    timeline_start_frame = r.timeline_start_frame or 0,
                     classification = cls,
                     name = marker_name,
                     color = r.marker_color or "",

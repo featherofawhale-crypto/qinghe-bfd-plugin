@@ -137,7 +137,7 @@ function MarkerManager.export_to_csv(analyzed_results)
 
     -- 按帧号排序
     table.sort(all_records, function(a, b)
-        return a.timeline_start_frame < b.timeline_end_frame
+        return (a.timeline_start_frame or 0) < (b.timeline_start_frame or 0)
     end)
 
     for _, r in ipairs(all_records) do

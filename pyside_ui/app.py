@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.74"
+APP_VERSION = "1.9.75"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -368,9 +368,11 @@ class ResultTextEdit(QTextEdit):
     rowDoubleClicked = Signal(int)
 
     def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802
-        cursor = self.cursorForPosition(event.position().toPoint())
+        point = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        cursor = self.cursorForPosition(point)
+        self.setTextCursor(cursor)
         self.rowDoubleClicked.emit(cursor.blockNumber())
-        super().mouseDoubleClickEvent(event)
+        event.accept()
 
 
 class FeedbackDialog(QDialog):
@@ -1477,6 +1479,27 @@ class MainWindow(QMainWindow):
         total = counts.get("total") if isinstance(counts, dict) else None
         return total == 0 and isinstance(records, list) and not records
 
+    @staticmethod
+    def result_sort_key(record: dict) -> tuple[int, str]:
+        for key in ("frame", "timeline_start_frame", "marker_frame"):
+            try:
+                value = record.get(key)
+                if value is not None and value != "":
+                    return int(float(value)), str(record.get("timecode") or record.get("timeline_start_tc") or "")
+            except Exception:
+                pass
+        timecode = str(record.get("timecode") or record.get("timeline_start_tc") or "")
+        parts = timecode.split(":")
+        if len(parts) == 4:
+            try:
+                hh, mm, ss, ff = [int(part) for part in parts]
+                fps = int(round(float(record.get("fps") or record.get("timeline_fps") or 24)))
+                fps = max(1, fps)
+                return (((hh * 60 + mm) * 60 + ss) * fps + ff), timecode
+            except Exception:
+                pass
+        return 10**12, timecode
+
     def render_result_records(self, records: list) -> None:
         default_timeline_index = int(self.selected_timeline_data().get("index", 1))
         self.result_records = []
@@ -1485,6 +1508,7 @@ class MainWindow(QMainWindow):
                 normalized = dict(record)
                 normalized.setdefault("timeline_index", default_timeline_index)
                 self.result_records.append(normalized)
+        self.result_records.sort(key=self.result_sort_key)
         lines = []
         for idx, record in enumerate(self.result_records, 1):
             timecode = record.get("timecode") or record.get("timeline_start_tc") or "??:??:??:??"

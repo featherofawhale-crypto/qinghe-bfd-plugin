@@ -415,6 +415,10 @@ try:
     fps = float(fps_raw)
 except Exception:
     fps = 25.0
+try:
+    start_frame = int(float(timeline.GetStartFrame() or 0))
+except Exception:
+    start_frame = 0
 
 def as_number(value):
     if value is None or value == "":
@@ -423,6 +427,14 @@ def as_number(value):
         return int(float(value))
     except Exception:
         return None
+
+def normalize_mark_frame(value):
+    frame = as_number(value)
+    if frame is None:
+        return None
+    if start_frame > 0 and frame < start_frame:
+        return start_frame + frame
+    return frame
 
 def try_method(name):
     try:
@@ -435,6 +447,21 @@ def try_method(name):
 
 in_frame = None
 out_frame = None
+try:
+    mark = timeline.GetMarkInOut() or {{}}
+except Exception:
+    mark = {{}}
+if isinstance(mark, dict):
+    for mark_type in ("video", "all", "audio"):
+        entry = mark.get(mark_type)
+        if not isinstance(entry, dict):
+            continue
+        if in_frame is None:
+            in_frame = normalize_mark_frame(entry.get("in"))
+        if out_frame is None:
+            out_frame = normalize_mark_frame(entry.get("out"))
+        if in_frame is not None and out_frame is not None:
+            break
 for in_name, out_name in [
     ("GetInPoint", "GetOutPoint"),
     ("GetMarkIn", "GetMarkOut"),
@@ -442,9 +469,9 @@ for in_name, out_name in [
     ("GetTimelineIn", "GetTimelineOut"),
 ]:
     if in_frame is None:
-        in_frame = try_method(in_name)
+        in_frame = normalize_mark_frame(try_method(in_name))
     if out_frame is None:
-        out_frame = try_method(out_name)
+        out_frame = normalize_mark_frame(try_method(out_name))
 
 if in_frame is None or out_frame is None:
     for in_key, out_key in [
@@ -455,9 +482,9 @@ if in_frame is None or out_frame is None:
     ]:
         try:
             if in_frame is None:
-                in_frame = as_number(timeline.GetSetting(in_key))
+                in_frame = normalize_mark_frame(timeline.GetSetting(in_key))
             if out_frame is None:
-                out_frame = as_number(timeline.GetSetting(out_key))
+                out_frame = normalize_mark_frame(timeline.GetSetting(out_key))
         except Exception:
             pass
 

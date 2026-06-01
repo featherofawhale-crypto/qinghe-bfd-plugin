@@ -341,6 +341,21 @@ class PySideUiTest(unittest.TestCase):
         self.assertEqual(window.result_values["total"].text(), "2")
         self.assertIn("01:00:01:00", window.result_list.toPlainText())
 
+    def test_result_records_are_sorted_by_timeline_time(self) -> None:
+        window = MainWindow()
+        window.render_result_records(
+            [
+                {"timecode": "01:00:10:00", "classification": "error", "name": "late"},
+                {"timecode": "01:00:01:00", "classification": "error", "name": "early"},
+                {"frame": 86450, "timecode": "01:00:02:02", "classification": "error", "name": "middle"},
+            ]
+        )
+
+        lines = window.result_list.toPlainText().splitlines()
+        self.assertIn("early", lines[0])
+        self.assertIn("middle", lines[1])
+        self.assertIn("late", lines[2])
+
     def test_zero_result_progress_shows_in_out_hint_once(self) -> None:
         window = MainWindow()
 
@@ -387,6 +402,7 @@ class PySideUiTest(unittest.TestCase):
         self.assertTrue(window.scan_audio_btn.toolTip())
         self.assertTrue(window.fix_audio_btn.toolTip())
         self.assertTrue(window.collect_params()["detect_mono_audio"])
+        self.assertTrue(window.collect_params()["detect_mixed_cut"])
 
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {
