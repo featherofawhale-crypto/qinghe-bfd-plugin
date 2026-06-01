@@ -80,6 +80,7 @@ function Bridge.load_pending_params(timeline_list)
         stuck_frames = tonumber(raw.stuck_frames or 2) or 2,
         suspect_frames = tonumber(raw.suspect_frames or 8) or 8,
         pix_th = tonumber(raw.pix_th or 0.10) or 0.10,
+        min_black_frames = tonumber(raw.min_black_frames or 1) or 1,
         min_duration = tonumber(raw.min_duration or 0.04) or 0.04,
         marker_types = {
             error = marker_types.error ~= false,
@@ -108,7 +109,7 @@ function Bridge.load_pending_params(timeline_list)
         manual_io_out = raw.manual_io_out or "",
         timeline_index = timeline_index - 1,
         timeline_name = selected_tl and selected_tl.name or raw.timeline_name or "Current timeline",
-        timeline_fps = selected_tl and selected_tl.fps or tonumber(raw.timeline_fps or 24) or 24,
+        timeline_fps = selected_tl and selected_tl.fps or tonumber(raw.timeline_fps or 25) or 25,
         timeline_obj = selected_tl and selected_tl.timeline or nil,
         verbose = true,
         headless = raw.headless == true,

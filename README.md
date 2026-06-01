@@ -1,6 +1,6 @@
 # 清何黑帧检测 UI 优化和加密
 
-当前 Windows 插件版本：`1.9.57`
+当前 Windows 插件版本：`1.9.58`
 
 ## Windows 一键安装
 
@@ -28,4 +28,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_release_windows.
 .\pyside_ui\run_ui.bat
 ```
 
-点击“开始检测”后，PySide6 会把参数写到 `~/.qinghe_bfd/last_params.lua`。随后在 Resolve 中运行原 Lua 脚本时，插件会优先读取这些参数并把进度写回 `~/.qinghe_bfd/progress.json`。
+点击“开始检测”后，控制台会保存参数、打开目标时间线并启动检测引擎；进度会写回 `~/.qinghe_bfd/progress.json`。

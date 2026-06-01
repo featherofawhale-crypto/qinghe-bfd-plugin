@@ -267,11 +267,11 @@ for index in range(1, count + 1):
     if not timeline:
         continue
     name = timeline.GetName() or f"Timeline {index}"
-    fps_raw = timeline.GetSetting("timelineFrameRate") or 24
+    fps_raw = timeline.GetSetting("timelineFrameRate") or 25
     try:
         fps = float(fps_raw)
     except Exception:
-        fps = 24.0
+        fps = 25.0
     if name == current_name:
         name = name + "  (当前)"
     items.append({"index": index, "name": name, "fps": fps})
@@ -279,12 +279,12 @@ print(json.dumps({"connected": True, "timelines": items}, ensure_ascii=False))
 '''
         )
         if not data:
-            return [TimelineInfo(1, "当前时间线", 24.0)]
+            return [TimelineInfo(1, "当前时间线", 25.0)]
         timelines = [
             TimelineInfo(int(item["index"]), str(item["name"]), float(item["fps"]))
             for item in data.get("timelines", [])
         ]
-        return timelines or [TimelineInfo(1, "当前时间线", 24.0)]
+        return timelines or [TimelineInfo(1, "当前时间线", 25.0)]
 
     def submit_params(self, params: dict[str, Any]) -> Path:
         params = dict(params)
@@ -309,6 +309,29 @@ print(json.dumps({"ok": ok}))
 '''
         )
         return bool(data and data.get("ok"))
+
+    def activate_timeline(self, timeline_index: int = 1) -> tuple[bool, str]:
+        data = self._run_resolve_python(
+            rf'''
+import json
+resolve = dvr_script.scriptapp("Resolve")
+project_manager = resolve.GetProjectManager() if resolve else None
+project = project_manager.GetCurrentProject() if project_manager else None
+timeline = project.GetTimelineByIndex({max(1, int(timeline_index))}) if project else None
+ok = False
+name = ""
+if project and timeline:
+    name = timeline.GetName() or ""
+    ok = bool(project.SetCurrentTimeline(timeline))
+    if resolve:
+        resolve.OpenPage("edit")
+message = f"已打开时间线：{{name}}" if ok else "未找到或无法打开目标时间线。"
+print(json.dumps({{"ok": ok, "message": message, "name": name}}, ensure_ascii=False))
+'''
+        )
+        if not data:
+            return False, "Resolve API 未返回时间线切换结果。"
+        return bool(data.get("ok")), str(data.get("message", "时间线已打开。"))
 
     def clear_bfd_markers(self, timeline_index: int = 1) -> tuple[bool, str]:
         data = self._run_resolve_python(
@@ -350,11 +373,11 @@ timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else Non
 if not timeline:
     print(json.dumps({{"ok": False, "message": "未找到目标时间线。"}}, ensure_ascii=False))
     raise SystemExit(0)
-fps_raw = timeline.GetSetting("timelineFrameRate") or 24
+fps_raw = timeline.GetSetting("timelineFrameRate") or 25
 try:
     fps = float(fps_raw)
 except Exception:
-    fps = 24.0
+    fps = 25.0
 
 def as_number(value):
     if value is None or value == "":
@@ -414,7 +437,7 @@ print(json.dumps({{
         if not data:
             return {"ok": False, "message": "读取失败：Resolve API 未返回结果。"}
         if data.get("ok"):
-            fps = float(data.get("fps", 24.0))
+            fps = float(data.get("fps", 25.0))
             data["in_tc"] = frames_to_timecode(data.get("in_frame", 0), fps)
             data["out_tc"] = frames_to_timecode(data.get("out_frame", 0), fps)
         return data
@@ -568,7 +591,7 @@ print(json.dumps({{
             return False, "fuscript was not found."
         lua_entry = find_lua_entry()
         if not lua_entry:
-            return False, "Lua entry was not found."
+            return False, "检测入口未找到。"
 
         env = os.environ.copy()
         env["BFD_PARAMS_FILE"] = str(params_path)

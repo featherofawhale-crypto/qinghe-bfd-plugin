@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.57
+-- 版本: v1.9.58
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -120,7 +120,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.57 启动 ===")
+dlog("=== BFD v1.9.58 启动 ===")
 setup_module_path()
 
 -- ============================================================
@@ -232,7 +232,7 @@ function Main()
     -- 使用用户选择的时间线（或fallback到当前）
     local timeline = params.timeline_obj
     local timeline_name = params.timeline_name or "未命名"
-    local timeline_fps = params.timeline_fps or 24
+    local timeline_fps = params.timeline_fps or 25
     dlog("阶段4入口: timeline_obj=" .. tostring(timeline) .. " name=" .. timeline_name .. " fps=" .. timeline_fps)
 
     if not timeline then

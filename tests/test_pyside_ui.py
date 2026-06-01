@@ -12,12 +12,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "pyside_ui"))
 
-from PySide6.QtWidgets import QApplication, QCheckBox, QPushButton, QSlider, QTabWidget  # noqa: E402
+from PySide6.QtWidgets import QApplication, QCheckBox, QListWidget, QPushButton, QSlider, QTabWidget  # noqa: E402
 
 import app as ui_app  # noqa: E402
 import resolve_bridge  # noqa: E402
 from app import MainWindow  # noqa: E402
-from resolve_bridge import read_progress_file, write_lua_params  # noqa: E402
+from resolve_bridge import TimelineInfo, read_progress_file, write_lua_params  # noqa: E402
 
 
 class PySideUiTest(unittest.TestCase):
@@ -33,14 +33,43 @@ class PySideUiTest(unittest.TestCase):
         self.assertGreaterEqual(window.stuck_frames.maximum(), 999)
         self.assertGreaterEqual(window.suspect_frames.maximum(), 999)
         self.assertGreaterEqual(window.content_sample_interval.maximum(), 999)
-        self.assertGreaterEqual(window.min_duration.maximum(), 60.0)
+        self.assertGreaterEqual(window.min_black_frames.maximum(), 999)
         self.assertEqual(window.progress.format(), "%p%")
         self.assertEqual(window.progress_label.text(), "待机")
+
+    def test_presets_are_delivery_focused_and_scale_with_timeline_fps(self) -> None:
+        with patch.object(
+            ui_app.ResolveBridge,
+            "list_timelines",
+            return_value=[
+                TimelineInfo(1, "25fps 主时间线  (当前)", 25.0),
+                TimelineInfo(2, "60fps 发布会", 60.0),
+            ],
+        ):
+            window = MainWindow()
+
+        self.assertEqual(window.severity.itemText(0), "通用交付复查")
+        self.assertNotIn("短剧", " ".join(window.severity.itemText(i) for i in range(window.severity.count())))
+
+        window.timeline_combo.setCurrentIndex(0)
+        window.apply_severity()
+        self.assertEqual(window.stuck_frames.value(), 3)
+        self.assertEqual(window.suspect_frames.value(), 12)
+        self.assertEqual(window.min_black_frames.value(), 1)
+
+        window.timeline_combo.setCurrentIndex(1)
+        window.apply_severity()
+        self.assertEqual(window.stuck_frames.value(), 8)
+        self.assertEqual(window.suspect_frames.value(), 29)
+        self.assertEqual(window.min_black_frames.value(), 3)
+        self.assertIn("25fps", window.stuck_frames.toolTip())
+        self.assertIn("60fps", window.fps_hint.text())
 
     def test_collect_params_includes_extended_detection_options(self) -> None:
         window = MainWindow()
         window.content_sample_interval.setValue(120)
         window.stuck_frames.setValue(123)
+        window.min_black_frames.setValue(5)
         window.chk_scene.setChecked(True)
         window.chk_mark_hidden.setChecked(True)
         window.chk_png_opaque.setChecked(True)
@@ -51,6 +80,8 @@ class PySideUiTest(unittest.TestCase):
 
         self.assertEqual(params["stuck_frames"], 123)
         self.assertEqual(params["content_sample_interval"], 120)
+        self.assertEqual(params["min_black_frames"], 5)
+        self.assertAlmostEqual(params["min_duration"], 5 / params["timeline_fps"], places=5)
         self.assertIn("detect_content_dup", params)
         self.assertIn("detect_corrupt", params)
         self.assertTrue(params["marker_types"]["scene"])
@@ -95,13 +126,16 @@ class PySideUiTest(unittest.TestCase):
             window.chk_opacity,
             window.chk_complex,
             window.chk_merge,
-            window.chk_auto_run,
             window.feedback_btn,
             window.clear_markers_btn,
         ]
 
         self.assertEqual(window.feedback_btn.text(), "反馈")
         self.assertEqual(window.clear_markers_btn.text(), "清除标记")
+        visible_text = " ".join(check.text() for check in window.findChildren(QCheckBox))
+        visible_text += " ".join(button.text() for button in window.findChildren(QPushButton))
+        self.assertNotIn("Lua", visible_text)
+        self.assertNotIn("自动触发", visible_text)
         for control in controls:
             self.assertTrue(control.toolTip(), f"{control.text()} missing tooltip")
 
@@ -187,6 +221,8 @@ class PySideUiTest(unittest.TestCase):
                 first.chk_content_dup.setChecked(True)
                 first.chk_audio_mono.setChecked(True)
                 first.content_sample_interval.setValue(24)
+                first.min_black_frames.setValue(7)
+                first.pixel_threshold.setValue(1.2)
                 first.save_settings()
 
                 second = MainWindow()
@@ -198,6 +234,24 @@ class PySideUiTest(unittest.TestCase):
         self.assertTrue(second.chk_content_dup.isChecked())
         self.assertTrue(second.chk_audio_mono.isChecked())
         self.assertEqual(second.content_sample_interval.value(), 24)
+        self.assertEqual(second.min_black_frames.value(), 7)
+        self.assertAlmostEqual(second.pixel_threshold.value(), 1.2, places=2)
+
+    def test_legacy_pixel_threshold_cache_is_converted_to_percent_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings_file = Path(tmp) / "ui_settings.json"
+            settings_file.write_text('{"pix_th": 0.01}', encoding="utf-8")
+            with patch.object(ui_app, "settings_path", return_value=settings_file, create=True):
+                legacy = MainWindow()
+                legacy.load_settings()
+
+            settings_file.write_text('{"pix_th": 1.0}', encoding="utf-8")
+            with patch.object(ui_app, "settings_path", return_value=settings_file, create=True):
+                percent = MainWindow()
+                percent.load_settings()
+
+        self.assertAlmostEqual(legacy.pixel_threshold.value(), 1.0, places=2)
+        self.assertAlmostEqual(percent.pixel_threshold.value(), 1.0, places=2)
 
     def test_results_tab_is_visible_and_completion_switches_to_results(self) -> None:
         window = MainWindow()
@@ -272,6 +326,40 @@ class PySideUiTest(unittest.TestCase):
         self.assertTrue(resolve_bridge.is_mono_audio_mapping(mono_mapping))
         self.assertFalse(resolve_bridge.is_mono_audio_mapping(stereo_mapping))
         self.assertEqual(resolve_bridge.frames_to_timecode(1500, 25), "00:01:00:00")
+
+    def test_batch_timeline_selection_builds_multiple_detection_jobs(self) -> None:
+        with patch.object(
+            ui_app.ResolveBridge,
+            "list_timelines",
+            return_value=[
+                TimelineInfo(1, "发布会 A  (当前)", 25.0),
+                TimelineInfo(2, "纪录片 B", 50.0),
+                TimelineInfo(3, "交付 C", 60.0),
+            ],
+        ):
+            window = MainWindow()
+
+        lists = window.findChildren(QListWidget)
+        self.assertTrue(lists)
+        self.assertEqual(window.batch_timeline_list.count(), 3)
+
+        window.chk_batch_timelines.setChecked(True)
+        window.timeline_combo.setCurrentIndex(0)
+        window.apply_severity()
+        for index in range(window.batch_timeline_list.count()):
+            item = window.batch_timeline_list.item(index)
+            item.setCheckState(ui_app.Qt.Checked if index in {0, 2} else ui_app.Qt.Unchecked)
+
+        jobs = window.collect_batch_params()
+
+        self.assertEqual([job["timeline_index"] for job in jobs], [1, 3])
+        self.assertEqual(jobs[0]["timeline_fps"], 25.0)
+        self.assertEqual(jobs[1]["timeline_fps"], 60.0)
+        self.assertEqual(jobs[0]["stuck_frames"], 3)
+        self.assertEqual(jobs[1]["stuck_frames"], 8)
+        self.assertEqual(jobs[1]["suspect_frames"], 29)
+        self.assertEqual(jobs[1]["min_black_frames"], 3)
+        self.assertIn("批量", window.chk_batch_timelines.toolTip())
 
 
 if __name__ == "__main__":

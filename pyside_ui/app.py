@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 import time
 import urllib.error
@@ -24,6 +25,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
@@ -42,7 +45,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.57"
+APP_VERSION = "1.9.58"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 
@@ -312,39 +315,36 @@ class SubmitWorker(QThread):
     progress = Signal(int, str)
     done = Signal(bool, str)
 
-    def __init__(self, bridge: ResolveBridge, params: dict, auto_run_lua: bool) -> None:
+    def __init__(self, bridge: ResolveBridge, jobs: dict | list[dict]) -> None:
         super().__init__()
         self.bridge = bridge
-        self.params = params
-        self.auto_run_lua = auto_run_lua
+        self.jobs = jobs if isinstance(jobs, list) else [jobs]
 
     def run(self) -> None:
-        self.progress.emit(18, "正在序列化检测参数")
-        time.sleep(0.15)
-        params_path = self.bridge.submit_params(self.params)
-
-        self.progress.emit(45, f"参数已写入 {params_path}")
-        self.bridge.open_resolve_page()
-
-        if self.auto_run_lua:
-            self.progress.emit(70, "正在通过 fuscript 触发 Lua 入口")
-            ok, message = self.bridge.run_lua_entry_with_fuscript(params_path)
-            self.progress.emit(100, "已提交给 Resolve" if ok else "参数已写入，自动触发失败")
-            if ok:
-                self.done.emit(True, message or "检测已提交。")
+        total = len(self.jobs)
+        messages: list[str] = []
+        for index, params in enumerate(self.jobs, 1):
+            timeline_name = str(params.get("timeline_name", f"时间线 {index}"))
+            base = int(((index - 1) / max(1, total)) * 90)
+            self.progress.emit(base + 8, f"准备 {timeline_name}")
+            time.sleep(0.12)
+            params_path = self.bridge.submit_params(params)
+            self.progress.emit(base + 25, f"打开时间线：{timeline_name}")
+            if self.bridge.is_connected():
+                ok, message = self.bridge.activate_timeline(int(params.get("timeline_index", 1)))
+                if not ok:
+                    self.done.emit(False, f"{timeline_name} 打开失败：{message}")
+                    return
             else:
-                self.done.emit(
-                    True,
-                    "参数已写入。请在 Resolve 中运行原 Lua 脚本；它会自动读取这次 PySide6 参数。\n"
-                    + message,
-                )
-            return
-
-        self.progress.emit(100, "参数已准备好")
-        self.done.emit(
-            True,
-            "参数已写入。现在到 Resolve 里运行原 Lua 脚本，它会跳过旧 UI 并读取这次配置。",
-        )
+                self.bridge.open_resolve_page()
+            self.progress.emit(base + 48, f"检测 {timeline_name}")
+            ok, message = self.bridge.run_lua_entry_with_fuscript(params_path)
+            if not ok:
+                self.done.emit(False, f"{timeline_name} 检测启动失败：{message}")
+                return
+            messages.append(f"{timeline_name}: {message or '已完成'}")
+        self.progress.emit(100, "检测已提交")
+        self.done.emit(True, "\n".join(messages) if messages else "检测已提交。")
 
 
 class FeedbackDialog(QDialog):
@@ -409,6 +409,8 @@ class MainWindow(QMainWindow):
         self.result_records: list[dict] = []
         self.result_index = 0
         self._tab_animation: QPropertyAnimation | None = None
+        self._loading_timelines = False
+        self._loading_settings = False
         self.progress_timer = QTimer(self)
         self.progress_timer.setInterval(700)
         self.progress_timer.timeout.connect(self.poll_detection_progress)
@@ -449,6 +451,7 @@ class MainWindow(QMainWindow):
 
         self.refresh_timelines()
         self.load_settings()
+        self.update_fps_hint()
         self.on_complex_mode_changed(self.chk_complex.isChecked())
         self._log("Resolve API: " + ("已连接" if self.bridge.is_connected() else "未连接，使用离线参数模式"))
 
@@ -464,7 +467,7 @@ class MainWindow(QMainWindow):
 
         self.connection_badge = QLabel("已连接" if self.bridge.is_connected() else "离线参数")
         self.connection_badge.setObjectName("BadgeOk" if self.bridge.is_connected() else "BadgeWarn")
-        set_tip(self.connection_badge, "已连接表示 Python 能读到当前 Resolve 工程；离线参数仍可写入，稍后由 Lua 读取。")
+        set_tip(self.connection_badge, "已连接表示控制台能读到当前 Resolve 工程；离线时仍可保存参数，稍后由检测引擎读取。")
 
         layout.addLayout(title_box, 1)
         layout.addWidget(self.connection_badge)
@@ -478,6 +481,7 @@ class MainWindow(QMainWindow):
 
         self.timeline_combo = QComboBox()
         set_tip(self.timeline_combo, "选择要检测的 Resolve 时间线；默认会优先当前打开的时间线。")
+        self.timeline_combo.currentIndexChanged.connect(self.on_timeline_changed)
         refresh = QPushButton("刷新")
         refresh.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         set_tip(refresh, "重新读取 DaVinci Resolve 当前工程内的时间线列表。")
@@ -494,6 +498,16 @@ class MainWindow(QMainWindow):
         self.io_out.setPlaceholderText("可选，例如 01:02:30:00")
         set_tip(self.io_out, "限制检测终点。复杂模式必须填写出点，避免渲染整条时间线导致过慢。")
 
+        self.chk_batch_timelines = QCheckBox("批量检测时间线")
+        set_tip(self.chk_batch_timelines, "批量检测：勾选后可以选择多条时间线。开始检测会按列表顺序让 Resolve 自动切到每条时间线并写入对应标记。")
+        self.chk_batch_timelines.toggled.connect(self.on_batch_toggled)
+
+        self.batch_timeline_list = QListWidget()
+        self.batch_timeline_list.setMinimumHeight(76)
+        self.batch_timeline_list.setMaximumHeight(120)
+        self.batch_timeline_list.setEnabled(False)
+        set_tip(self.batch_timeline_list, "勾选要批量检测的时间线；每条时间线会使用自己的帧率换算阈值。")
+
         layout.addWidget(QLabel("目标时间线"), 0, 0)
         layout.addWidget(self.timeline_combo, 0, 1, 1, 3)
         layout.addWidget(refresh, 0, 4)
@@ -502,6 +516,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("手动出点"), 1, 2)
         layout.addWidget(self.io_out, 1, 3)
         layout.addWidget(self.read_marks_btn, 1, 4)
+        layout.addWidget(self.chk_batch_timelines, 2, 0)
+        layout.addWidget(self.batch_timeline_list, 2, 1, 1, 4)
         return box
 
     def _build_detection_group(self) -> QGroupBox:
@@ -514,7 +530,7 @@ class MainWindow(QMainWindow):
         self.chk_suspect = self._marker_check("可疑黑帧", "suspect", True, "黑场超过夹帧阈值但不超过可疑阈值，会打黄色 [BFD-SUS] 标记，建议人工确认。")
         self.chk_scene = self._marker_check("转场黑场", "scene", False, "超过可疑阈值的黑场更像正常转场，默认不标，避免时间线太乱。")
         self.chk_gap = self._marker_check("时间线空位", "gap", True, "检测片段之间的空洞，适合找不小心漏剪出的空白。")
-        self.chk_duplicate = self._marker_check("重复素材", "duplicate", True, "按源文件、轨道距离和时间距离找近距/远距重复，适合短剧误复制排查。")
+        self.chk_duplicate = self._marker_check("重复素材", "duplicate", True, "按源文件、轨道距离和时间距离找近距/远距重复，适合发布会多机位、纪录片素材误复制排查。")
         self.chk_content_dup = self._marker_check("内容重复", "content_dup", False, "用帧指纹比较画面内容，可找不同文件但画面重复的片段，耗时会增加。")
         self.chk_opacity = self._marker_check("透明度/禁用", "opacity", True, "直接读取时间线属性，找不透明度为 0、低透明、禁用和非标准合成。")
         self.chk_corrupt = self._marker_check("渲染坏帧", "corrupt", False, "必须先开启复杂模式：坏帧检测依赖渲染后的最终像素，再用 signalstats/熵/亮度离群分析。")
@@ -542,37 +558,36 @@ class MainWindow(QMainWindow):
         layout.setVerticalSpacing(10)
 
         self.severity = QComboBox()
-        self.severity.addItems(["短剧默认", "严格排雷", "极严复查"])
-        set_tip(self.severity, "一键调整夹帧阈值、可疑阈值和黑场像素阈值；仍可手动微调下面的数值。")
+        self.severity.addItems(["通用交付复查", "发布会/课程长线", "纪录片/访谈", "严格母版质检"])
+        set_tip(self.severity, "按使用场景套用一组 25fps 基准阈值，并按当前时间线帧率自动换算成对应帧数。")
         self.severity.currentIndexChanged.connect(self.apply_severity)
 
         self.stuck_frames = QSpinBox()
         self.stuck_frames.setRange(1, 999)
         self.stuck_frames.setValue(3)
-        set_tip(self.stuck_frames, "小于等于这个帧数的黑场/露出片段会被视为必须修复的夹帧。")
+        set_tip(self.stuck_frames, "按帧判断硬错误。25fps 默认 3 帧；切到 60fps 会按时长自动换算到约 8 帧，避免高帧率下误判。")
         self.stuck_slider = self._make_slider(1, 999, 3, self.stuck_frames)
 
         self.suspect_frames = QSpinBox()
         self.suspect_frames.setRange(1, 9999)
         self.suspect_frames.setValue(12)
-        set_tip(self.suspect_frames, "大于夹帧阈值且小于等于该值，会归为可疑黑帧；再长则归为转场。")
+        set_tip(self.suspect_frames, "按帧判断可疑黑场。大于夹帧阈值且小于等于此值会标为可疑；更长的黑场通常是转场或正常段落。")
         self.suspect_slider = self._make_slider(1, 9999, 12, self.suspect_frames)
 
         self.pixel_threshold = QDoubleSpinBox()
-        self.pixel_threshold.setRange(0.001, 1.0)
-        self.pixel_threshold.setSingleStep(0.01)
-        self.pixel_threshold.setDecimals(3)
-        self.pixel_threshold.setValue(0.010)
-        set_tip(self.pixel_threshold, "FFmpeg blackdetect 的 pix_th。越低越严格，越高越容易把暗画面判成黑。")
-        self.pixel_slider = self._make_float_slider(1, 1000, 10, self.pixel_threshold, 1000.0)
+        self.pixel_threshold.setRange(0.1, 100.0)
+        self.pixel_threshold.setSingleStep(0.1)
+        self.pixel_threshold.setDecimals(1)
+        self.pixel_threshold.setSuffix("%")
+        self.pixel_threshold.setValue(1.0)
+        set_tip(self.pixel_threshold, "黑色亮度容差。1% 表示只有接近纯黑的像素才算黑；发布会投影或暗场素材可提高到 2%-4%。")
+        self.pixel_slider = self._make_float_slider(1, 1000, 10, self.pixel_threshold, 10.0)
 
-        self.min_duration = QDoubleSpinBox()
-        self.min_duration.setRange(0.001, 60.0)
-        self.min_duration.setSingleStep(0.01)
-        self.min_duration.setDecimals(3)
-        self.min_duration.setValue(0.040)
-        set_tip(self.min_duration, "FFmpeg blackdetect 的 d 参数。短于这个时长的黑场会被忽略。")
-        self.min_duration_slider = self._make_float_slider(1, 60000, 40, self.min_duration, 1000.0)
+        self.min_black_frames = QSpinBox()
+        self.min_black_frames.setRange(1, 9999)
+        self.min_black_frames.setValue(1)
+        set_tip(self.min_black_frames, "FFmpeg 最短黑场时长，但用帧显示。25fps 的 1 帧约 0.04 秒；60fps 会自动换算为约 3 帧。")
+        self.min_black_slider = self._make_slider(1, 9999, 1, self.min_black_frames)
 
         self.content_sample_interval = QSpinBox()
         self.content_sample_interval.setRange(1, 9999)
@@ -591,12 +606,18 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("黑场像素阈值"), 3, 0)
         layout.addWidget(self.pixel_threshold, 3, 1)
         layout.addWidget(self.pixel_slider, 3, 2)
-        layout.addWidget(QLabel("最短黑帧/秒"), 4, 0)
-        layout.addWidget(self.min_duration, 4, 1)
-        layout.addWidget(self.min_duration_slider, 4, 2)
+        layout.addWidget(QLabel("最短黑场/帧"), 4, 0)
+        layout.addWidget(self.min_black_frames, 4, 1)
+        layout.addWidget(self.min_black_slider, 4, 2)
         layout.addWidget(QLabel("指纹采样/帧"), 5, 0)
         layout.addWidget(self.content_sample_interval, 5, 1)
         layout.addWidget(self.content_sample_slider, 5, 2)
+        self.fps_hint = QLabel("当前按 25fps 基准换算。")
+        self.fps_hint.setObjectName("Muted")
+        set_tip(self.fps_hint, "所有帧数阈值都会按当前时间线帧率换算；你看到和修改的始终是当前时间线下的帧数。")
+        layout.addWidget(self.fps_hint, 6, 0, 1, 3)
+        for widget in [self.stuck_frames, self.suspect_frames, self.min_black_frames]:
+            widget.valueChanged.connect(lambda _value: self.update_fps_hint())
         return box
 
     def _build_advanced_group(self) -> QGroupBox:
@@ -612,7 +633,6 @@ class MainWindow(QMainWindow):
         self.chk_merge = self._check("成片模式（合并分析）", True, "把时间线片段合并成连续流做 blackdetect，适合最终成片复查，通常更快。")
         self.chk_complex = self._check("复杂模式（渲染后分析）", False, "先渲染入出点范围，再分析最终画面。用于多轨、调色、OFX、Fusion、坏帧等普通逐文件模式看不到的问题。")
         self.chk_html = self._check("生成 HTML 报告", False, "检测完成后输出可阅读报告，适合发给协作者复核。")
-        self.chk_auto_run = self._check("开始后自动触发 Lua", False, "写入参数后直接调用 fuscript 启动检测；如果失败，仍可手动在 Resolve 里运行脚本。")
 
         self.chk_complex.toggled.connect(self.on_complex_mode_changed)
 
@@ -624,7 +644,6 @@ class MainWindow(QMainWindow):
             self.chk_merge,
             self.chk_complex,
             self.chk_html,
-            self.chk_auto_run,
         ]
         for index, check in enumerate(options):
             layout.addWidget(check, index // 2, index % 2)
@@ -651,7 +670,7 @@ class MainWindow(QMainWindow):
         self.start_btn = QPushButton("开始检测")
         self.start_btn.setObjectName("Primary")
         self.start_btn.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
-        set_tip(self.start_btn, "提交当前参数。若勾选自动触发，会直接尝试让 Resolve 执行 Lua 检测。")
+        set_tip(self.start_btn, "按当前设置开始检测。单条时间线会直接检测；勾选批量后会按列表顺序逐条检测并写入 Resolve 标记。")
         self.start_btn.clicked.connect(self.start_detection)
 
         self.clear_markers_btn = QPushButton("清除标记")
@@ -854,10 +873,79 @@ class MainWindow(QMainWindow):
         return slider
 
     def refresh_timelines(self) -> None:
+        self._loading_timelines = True
         self.timelines = self.bridge.list_timelines()
         self.timeline_combo.clear()
+        self.batch_timeline_list.clear()
         for tl in self.timelines:
-            self.timeline_combo.addItem(f"{tl.index}. {tl.name}  /  {tl.fps:g} fps", asdict(tl))
+            data = asdict(tl)
+            self.timeline_combo.addItem(f"{tl.index}. {tl.name}  /  {tl.fps:g} fps", data)
+            item = QListWidgetItem(f"{tl.index}. {tl.name}  /  {tl.fps:g} fps")
+            item.setData(Qt.UserRole, data)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked if "当前" in tl.name else Qt.Unchecked)
+            self.batch_timeline_list.addItem(item)
+        if self.batch_timeline_list.count() > 0 and not any(
+            self.batch_timeline_list.item(i).checkState() == Qt.Checked for i in range(self.batch_timeline_list.count())
+        ):
+            self.batch_timeline_list.item(0).setCheckState(Qt.Checked)
+        self._loading_timelines = False
+        self.update_fps_hint()
+
+    def on_timeline_changed(self) -> None:
+        if self._loading_timelines or self._loading_settings:
+            return
+        self.apply_severity()
+        self.update_fps_hint()
+
+    def on_batch_toggled(self, checked: bool) -> None:
+        self.batch_timeline_list.setEnabled(checked)
+
+    def selected_timeline_data(self) -> dict:
+        return self.timeline_combo.currentData() or {"index": 1, "name": "当前时间线", "fps": 25.0}
+
+    def selected_fps(self) -> float:
+        selected = self.selected_timeline_data()
+        try:
+            return float(selected.get("fps", 25.0))
+        except Exception:
+            return 25.0
+
+    @staticmethod
+    def scaled_frames(base_frames_at_25fps: int, fps: float) -> int:
+        return max(1, int(math.ceil(base_frames_at_25fps * float(fps or 25.0) / 25.0)))
+
+    def frames_for_timeline(self, current_frames: int, target_fps: float) -> int:
+        source_fps = self.selected_fps()
+        if abs(float(target_fps or 25.0) - source_fps) < 0.001:
+            return current_frames
+        base_frames = max(1, int(round(current_frames * 25.0 / max(1.0, source_fps))))
+        return self.scaled_frames(base_frames, target_fps)
+
+    def min_duration_seconds(self, fps: float | None = None) -> float:
+        fps = fps or self.selected_fps()
+        return self.min_black_frames.value() / max(1.0, float(fps))
+
+    def update_fps_hint(self) -> None:
+        if not hasattr(self, "fps_hint"):
+            return
+        fps = self.selected_fps()
+        self.fps_hint.setText(
+            f"当前 {fps:g}fps：夹帧≤{self.stuck_frames.value()}帧，可疑≤{self.suspect_frames.value()}帧，"
+            f"最短黑场 {self.min_black_frames.value()}帧≈{self.min_duration_seconds(fps):.3f}秒。"
+        )
+
+    def selected_batch_timelines(self) -> list[dict]:
+        if not self.chk_batch_timelines.isChecked():
+            return [self.selected_timeline_data()]
+        selected: list[dict] = []
+        for index in range(self.batch_timeline_list.count()):
+            item = self.batch_timeline_list.item(index)
+            if item.checkState() == Qt.Checked:
+                data = item.data(Qt.UserRole)
+                if isinstance(data, dict):
+                    selected.append(data)
+        return selected or [self.selected_timeline_data()]
 
     def save_settings(self) -> None:
         data = {
@@ -868,8 +956,15 @@ class MainWindow(QMainWindow):
             "stuck_frames": self.stuck_frames.value(),
             "suspect_frames": self.suspect_frames.value(),
             "pix_th": self.pixel_threshold.value(),
-            "min_duration": self.min_duration.value(),
+            "pix_th_unit": "percent",
+            "min_black_frames": self.min_black_frames.value(),
             "content_sample_interval": self.content_sample_interval.value(),
+            "batch_enabled": self.chk_batch_timelines.isChecked(),
+            "batch_timeline_indices": [
+                int((self.batch_timeline_list.item(i).data(Qt.UserRole) or {}).get("index", 0))
+                for i in range(self.batch_timeline_list.count())
+                if self.batch_timeline_list.item(i).checkState() == Qt.Checked
+            ],
             "checks": {
                 "error": self.chk_error.isChecked(),
                 "suspect": self.chk_suspect.isChecked(),
@@ -887,7 +982,6 @@ class MainWindow(QMainWindow):
                 "merge": self.chk_merge.isChecked(),
                 "complex": self.chk_complex.isChecked(),
                 "html": self.chk_html.isChecked(),
-                "auto_run": self.chk_auto_run.isChecked(),
             },
         }
         path = settings_path()
@@ -904,72 +998,89 @@ class MainWindow(QMainWindow):
             self._log(f"设置缓存读取失败：{exc}")
             return
 
-        if isinstance(data.get("severity_index"), int):
-            self.severity.setCurrentIndex(max(0, min(self.severity.count() - 1, data["severity_index"])))
-        for name, widget in [
-            ("manual_io_in", self.io_in),
-            ("manual_io_out", self.io_out),
-        ]:
-            if isinstance(data.get(name), str):
-                widget.setText(data[name])
-        for name, widget in [
-            ("stuck_frames", self.stuck_frames),
-            ("suspect_frames", self.suspect_frames),
-            ("content_sample_interval", self.content_sample_interval),
-        ]:
-            if isinstance(data.get(name), int):
-                widget.setValue(data[name])
-        for name, widget in [
-            ("pix_th", self.pixel_threshold),
-            ("min_duration", self.min_duration),
-        ]:
-            if isinstance(data.get(name), (int, float)):
-                widget.setValue(float(data[name]))
+        self._loading_settings = True
+        try:
+            if isinstance(data.get("severity_index"), int):
+                self.severity.setCurrentIndex(max(0, min(self.severity.count() - 1, data["severity_index"])))
+            for name, widget in [
+                ("manual_io_in", self.io_in),
+                ("manual_io_out", self.io_out),
+            ]:
+                if isinstance(data.get(name), str):
+                    widget.setText(data[name])
+            if isinstance(data.get("timeline_index"), int) and self.timeline_combo.count() > 0:
+                self.timeline_combo.setCurrentIndex(max(0, min(self.timeline_combo.count() - 1, data["timeline_index"])))
+            for name, widget in [
+                ("stuck_frames", self.stuck_frames),
+                ("suspect_frames", self.suspect_frames),
+                ("min_black_frames", self.min_black_frames),
+                ("content_sample_interval", self.content_sample_interval),
+            ]:
+                if isinstance(data.get(name), int):
+                    widget.setValue(data[name])
+            if "min_black_frames" not in data and isinstance(data.get("min_duration"), (int, float)):
+                self.min_black_frames.setValue(max(1, int(math.ceil(float(data["min_duration"]) * self.selected_fps()))))
+            for name, widget in [
+                ("pix_th", self.pixel_threshold),
+            ]:
+                if isinstance(data.get(name), (int, float)):
+                    value = float(data[name])
+                    if name == "pix_th" and data.get("pix_th_unit") != "percent" and value < 1.0:
+                        value *= 100.0
+                    widget.setValue(value)
 
-        checks = data.get("checks") if isinstance(data.get("checks"), dict) else {}
-        check_map = {
-            "error": self.chk_error,
-            "suspect": self.chk_suspect,
-            "scene": self.chk_scene,
-            "gap": self.chk_gap,
-            "duplicate": self.chk_duplicate,
-            "content_dup": self.chk_content_dup,
-            "opacity": self.chk_opacity,
-            "audio_mono": self.chk_audio_mono,
-            "clear": self.chk_clear,
-            "mark_hidden": self.chk_mark_hidden,
-            "partial_opacity": self.chk_partial_opacity,
-            "png_opaque": self.chk_png_opaque,
-            "merge": self.chk_merge,
-            "complex": self.chk_complex,
-            "html": self.chk_html,
-            "auto_run": self.chk_auto_run,
-        }
-        for key, widget in check_map.items():
-            if isinstance(checks.get(key), bool):
-                widget.setChecked(checks[key])
-        if isinstance(checks.get("corrupt"), bool) and self.chk_complex.isChecked():
-            self.chk_corrupt.setChecked(checks["corrupt"])
-        if isinstance(data.get("timeline_index"), int) and self.timeline_combo.count() > 0:
-            self.timeline_combo.setCurrentIndex(max(0, min(self.timeline_combo.count() - 1, data["timeline_index"])))
+            checks = data.get("checks") if isinstance(data.get("checks"), dict) else {}
+            check_map = {
+                "error": self.chk_error,
+                "suspect": self.chk_suspect,
+                "scene": self.chk_scene,
+                "gap": self.chk_gap,
+                "duplicate": self.chk_duplicate,
+                "content_dup": self.chk_content_dup,
+                "opacity": self.chk_opacity,
+                "audio_mono": self.chk_audio_mono,
+                "clear": self.chk_clear,
+                "mark_hidden": self.chk_mark_hidden,
+                "partial_opacity": self.chk_partial_opacity,
+                "png_opaque": self.chk_png_opaque,
+                "merge": self.chk_merge,
+                "complex": self.chk_complex,
+                "html": self.chk_html,
+            }
+            for key, widget in check_map.items():
+                if isinstance(checks.get(key), bool):
+                    widget.setChecked(checks[key])
+            if isinstance(checks.get("corrupt"), bool) and self.chk_complex.isChecked():
+                self.chk_corrupt.setChecked(checks["corrupt"])
+            self.chk_batch_timelines.setChecked(bool(data.get("batch_enabled", False)))
+            batch_indices = data.get("batch_timeline_indices")
+            if isinstance(batch_indices, list):
+                selected = {int(value) for value in batch_indices if isinstance(value, int)}
+                for index in range(self.batch_timeline_list.count()):
+                    item = self.batch_timeline_list.item(index)
+                    item_data = item.data(Qt.UserRole) or {}
+                    item.setCheckState(Qt.Checked if int(item_data.get("index", 0)) in selected else Qt.Unchecked)
+        finally:
+            self._loading_settings = False
+            self.update_fps_hint()
 
     def apply_severity(self) -> None:
+        if self._loading_settings:
+            return
         level = self.severity.currentText()
-        if level == "短剧默认":
-            self.stuck_frames.setValue(3)
-            self.suspect_frames.setValue(12)
-            self.pixel_threshold.setValue(0.010)
-            self.min_duration.setValue(0.040)
-        elif level == "严格排雷":
-            self.stuck_frames.setValue(2)
-            self.suspect_frames.setValue(8)
-            self.pixel_threshold.setValue(0.008)
-            self.min_duration.setValue(0.030)
-        else:
-            self.stuck_frames.setValue(1)
-            self.suspect_frames.setValue(6)
-            self.pixel_threshold.setValue(0.006)
-            self.min_duration.setValue(0.020)
+        fps = self.selected_fps()
+        presets = {
+            "通用交付复查": (3, 12, 1, 1.0),
+            "发布会/课程长线": (4, 18, 1, 1.5),
+            "纪录片/访谈": (3, 15, 1, 1.2),
+            "严格母版质检": (2, 8, 1, 0.8),
+        }
+        stuck, suspect, min_black, pixel_percent = presets.get(level, presets["通用交付复查"])
+        self.stuck_frames.setValue(self.scaled_frames(stuck, fps))
+        self.suspect_frames.setValue(self.scaled_frames(suspect, fps))
+        self.min_black_frames.setValue(self.scaled_frames(min_black, fps))
+        self.pixel_threshold.setValue(pixel_percent)
+        self.update_fps_hint()
 
     def on_complex_mode_changed(self, checked: bool) -> None:
         self.chk_corrupt.setEnabled(bool(checked))
@@ -979,18 +1090,20 @@ class MainWindow(QMainWindow):
         else:
             self.complex_hint.setText("复杂模式会先渲染入出点范围，再分析最终画面；坏帧检测现在可选。")
 
-    def collect_params(self) -> dict:
-        selected = self.timeline_combo.currentData() or {"index": 1, "name": "当前时间线", "fps": 24.0}
+    def collect_params(self, selected: dict | None = None) -> dict:
+        selected = selected or self.selected_timeline_data()
         complex_mode = self.chk_complex.isChecked()
+        timeline_fps = float(selected.get("fps", 25.0))
         return {
             "timeline_index": int(selected.get("index", 1)),
             "timeline_name": str(selected.get("name", "当前时间线")).replace("  (当前)", ""),
-            "timeline_fps": float(selected.get("fps", 24.0)),
+            "timeline_fps": timeline_fps,
             "severity": self.severity.currentText(),
-            "stuck_frames": self.stuck_frames.value(),
-            "suspect_frames": self.suspect_frames.value(),
-            "pix_th": self.pixel_threshold.value(),
-            "min_duration": self.min_duration.value(),
+            "stuck_frames": self.frames_for_timeline(self.stuck_frames.value(), timeline_fps),
+            "suspect_frames": self.frames_for_timeline(self.suspect_frames.value(), timeline_fps),
+            "pix_th": self.pixel_threshold.value() / 100.0,
+            "min_black_frames": self.frames_for_timeline(self.min_black_frames.value(), timeline_fps),
+            "min_duration": self.frames_for_timeline(self.min_black_frames.value(), timeline_fps) / max(1.0, timeline_fps),
             "content_sample_interval": self.content_sample_interval.value(),
             "manual_io_in": self.io_in.text().strip(),
             "manual_io_out": self.io_out.text().strip(),
@@ -1017,20 +1130,23 @@ class MainWindow(QMainWindow):
             "headless": True,
         }
 
+    def collect_batch_params(self) -> list[dict]:
+        return [self.collect_params(selected) for selected in self.selected_batch_timelines()]
+
     def start_detection(self) -> None:
-        params = self.collect_params()
-        if params["complex_mode"] and (not params["manual_io_in"] or not params["manual_io_out"]):
+        jobs = self.collect_batch_params()
+        if any(job["complex_mode"] and (not job["manual_io_in"] or not job["manual_io_out"]) for job in jobs):
             QMessageBox.warning(self, "复杂模式需要入出点", "复杂模式会先渲染检测范围，请填写手动入点和出点。")
             return
 
         self.start_btn.setEnabled(False)
         self.progress.setValue(0)
-        self.progress_label.setText("提交中")
-        self._log("开始提交参数")
+        self.progress_label.setText("检测中")
+        self._log(f"开始检测 {len(jobs)} 条时间线")
         self.save_settings()
         self.animate_widget(self.start_btn)
         self.progress_timer.start()
-        self.worker = SubmitWorker(self.bridge, params, self.chk_auto_run.isChecked())
+        self.worker = SubmitWorker(self.bridge, jobs)
         self.worker.progress.connect(self.on_progress)
         self.worker.done.connect(self.on_done)
         self.worker.start()

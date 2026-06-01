@@ -1,6 +1,6 @@
 # PySide6 UI bridge
 
-Current Windows plugin version: `1.9.57`.
+Current Windows plugin version: `1.9.58`.
 
 This folder contains an external PySide6 control panel for the DaVinci Resolve
 black-frame detector.
@@ -32,5 +32,5 @@ UI to control it.
 ## Important
 
 DaVinci Resolve external scripting must be enabled in Resolve preferences for
-full Python API access. If automatic Lua triggering fails, start the detection
+full Python API access. If automatic script launch fails, start the detection
 from Resolve's Workspace > Scripts menu after pressing Start in this UI.
