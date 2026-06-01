@@ -122,6 +122,53 @@ def run_resolve_bridge_worker() -> int:
     return 0
 
 
+def find_lua_entry() -> Path | None:
+    candidates: list[Path] = []
+
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.executable).resolve()
+        for root in [exe.parent, *exe.parents]:
+            candidates.extend(root.glob("QingheBFD_Plugin_Windows/*.lua"))
+    else:
+        candidates.append(LUA_ENTRY)
+
+    if platform.system().lower() == "windows":
+        appdata = Path(os.environ.get("APPDATA", ""))
+        if appdata:
+            edit_dir = (
+                appdata
+                / "Blackmagic Design"
+                / "DaVinci Resolve"
+                / "Support"
+                / "Fusion"
+                / "Scripts"
+                / "Edit"
+            )
+            candidates.extend(edit_dir.glob("*.lua"))
+    elif platform.system().lower() == "darwin":
+        edit_dir = (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "Blackmagic Design"
+            / "DaVinci Resolve"
+            / "Fusion"
+            / "Scripts"
+            / "Edit"
+        )
+        candidates.extend(edit_dir.glob("*.lua"))
+
+    for candidate in candidates:
+        if candidate.exists() and "黑帧" in candidate.name:
+            return candidate
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    if LUA_ENTRY.exists():
+        return LUA_ENTRY
+    return None
+
+
 def write_lua_params(params: dict[str, Any], target: Path | None = None) -> Path:
     target = target or runtime_dir() / "last_params.lua"
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -229,16 +276,46 @@ print(json.dumps({"ok": ok}))
         )
         return bool(data and data.get("ok"))
 
+    def clear_bfd_markers(self, timeline_index: int = 1) -> tuple[bool, str]:
+        data = self._run_resolve_python(
+            rf'''
+import json
+resolve = dvr_script.scriptapp("Resolve")
+project_manager = resolve.GetProjectManager() if resolve else None
+project = project_manager.GetCurrentProject() if project_manager else None
+timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+if not timeline:
+    print(json.dumps({{"ok": False, "message": "未找到目标时间线。"}}, ensure_ascii=False))
+    raise SystemExit(0)
+markers = timeline.GetMarkers() or {{}}
+removed = 0
+for frame, marker in list(markers.items()):
+    name = str(marker.get("name", ""))
+    note = str(marker.get("note", ""))
+    if name.startswith("[BFD") or "[BFD" in note:
+        try:
+            if timeline.DeleteMarkerAtFrame(frame):
+                removed += 1
+        except Exception:
+            pass
+print(json.dumps({{"ok": True, "message": f"已清除 {{removed}} 个 BFD 标记。"}}, ensure_ascii=False))
+'''
+        )
+        if not data:
+            return False, "清除失败：Resolve API 未返回结果。"
+        return bool(data.get("ok")), str(data.get("message", "清除完成。"))
+
     def run_lua_entry_with_fuscript(self, params_path: Path) -> tuple[bool, str]:
         fuscript = self._find_fuscript()
         if not fuscript:
             return False, "fuscript was not found."
-        if not LUA_ENTRY.exists():
-            return False, f"Lua entry was not found: {LUA_ENTRY}"
+        lua_entry = find_lua_entry()
+        if not lua_entry:
+            return False, "Lua entry was not found."
 
         env = os.environ.copy()
         env["BFD_PARAMS_FILE"] = str(params_path)
-        command = [str(fuscript), "-l", "lua", str(LUA_ENTRY)]
+        command = [str(fuscript), "-l", "lua", str(lua_entry)]
         try:
             completed = subprocess.run(
                 command,

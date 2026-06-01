@@ -1,6 +1,6 @@
 # PySide6 UI bridge
 
-Current Windows plugin version: `1.9.55`.
+Current Windows plugin version: `1.9.56`.
 
 This folder contains an external PySide6 control panel for the DaVinci Resolve
 black-frame detector.
