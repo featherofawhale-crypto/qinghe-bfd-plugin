@@ -25,19 +25,19 @@ class PySideUiTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_threshold_controls_have_sliders_and_large_ranges(self) -> None:
+    def test_threshold_controls_have_sliders_and_compact_ranges(self) -> None:
         window = MainWindow()
         sliders = window.findChildren(QSlider)
 
         self.assertGreaterEqual(len(sliders), 4)
-        self.assertGreaterEqual(window.stuck_frames.maximum(), 999)
-        self.assertGreaterEqual(window.suspect_frames.maximum(), 999)
-        self.assertGreaterEqual(window.content_sample_interval.maximum(), 999)
-        self.assertGreaterEqual(window.min_black_frames.maximum(), 999)
+        self.assertEqual(window.stuck_frames.maximum(), 100)
+        self.assertEqual(window.suspect_frames.maximum(), 100)
+        self.assertEqual(window.content_sample_interval.maximum(), 100)
+        self.assertEqual(window.min_black_frames.maximum(), 100)
         self.assertEqual(window.progress.format(), "%p%")
         self.assertEqual(window.progress_label.text(), "待机")
 
-    def test_presets_are_delivery_focused_and_scale_with_timeline_fps(self) -> None:
+    def test_threshold_defaults_can_be_restored_without_mode_combo(self) -> None:
         with patch.object(
             ui_app.ResolveBridge,
             "list_timelines",
@@ -48,27 +48,25 @@ class PySideUiTest(unittest.TestCase):
         ):
             window = MainWindow()
 
-        self.assertEqual(window.severity.itemText(0), "通用交付复查")
-        self.assertNotIn("短剧", " ".join(window.severity.itemText(i) for i in range(window.severity.count())))
+        self.assertFalse(hasattr(window, "severity"))
 
-        window.timeline_combo.setCurrentIndex(0)
-        window.apply_severity()
+        window.stuck_frames.setValue(40)
+        window.suspect_frames.setValue(70)
+        window.min_black_frames.setValue(9)
+        window.pixel_threshold.setValue(3.5)
+        window.content_sample_interval.setValue(20)
+        window.reset_threshold_defaults()
         self.assertEqual(window.stuck_frames.value(), 3)
         self.assertEqual(window.suspect_frames.value(), 12)
         self.assertEqual(window.min_black_frames.value(), 1)
-
-        window.timeline_combo.setCurrentIndex(1)
-        window.apply_severity()
-        self.assertEqual(window.stuck_frames.value(), 8)
-        self.assertEqual(window.suspect_frames.value(), 29)
-        self.assertEqual(window.min_black_frames.value(), 3)
+        self.assertEqual(window.content_sample_interval.value(), 3)
+        self.assertAlmostEqual(window.pixel_threshold.value(), 1.0)
         self.assertIn("25fps", window.stuck_frames.toolTip())
-        self.assertIn("60fps", window.fps_hint.text())
 
     def test_collect_params_includes_extended_detection_options(self) -> None:
         window = MainWindow()
-        window.content_sample_interval.setValue(120)
-        window.stuck_frames.setValue(123)
+        window.content_sample_interval.setValue(60)
+        window.stuck_frames.setValue(80)
         window.min_black_frames.setValue(5)
         window.chk_scene.setChecked(True)
         window.chk_mark_hidden.setChecked(True)
@@ -78,8 +76,8 @@ class PySideUiTest(unittest.TestCase):
         window.chk_complex.setChecked(False)
         params = window.collect_params()
 
-        self.assertEqual(params["stuck_frames"], 123)
-        self.assertEqual(params["content_sample_interval"], 120)
+        self.assertEqual(params["stuck_frames"], 80)
+        self.assertEqual(params["content_sample_interval"], 60)
         self.assertEqual(params["min_black_frames"], 5)
         self.assertAlmostEqual(params["min_duration"], 5 / params["timeline_fps"], places=5)
         self.assertIn("detect_content_dup", params)
@@ -94,7 +92,7 @@ class PySideUiTest(unittest.TestCase):
     def test_bad_frame_detection_requires_complex_mode(self) -> None:
         window = MainWindow()
 
-        self.assertFalse(window.chk_corrupt.isEnabled())
+        self.assertTrue(window.chk_corrupt.isEnabled())
         self.assertIn("复杂模式", window.chk_corrupt.toolTip())
 
         window.chk_complex.setChecked(True)
@@ -102,7 +100,6 @@ class PySideUiTest(unittest.TestCase):
         window.chk_corrupt.setChecked(True)
         params = window.collect_params()
 
-        self.assertTrue(window.chk_corrupt.isEnabled())
         self.assertTrue(params["complex_mode"])
         self.assertTrue(params["detect_corrupt"])
 
@@ -111,7 +108,6 @@ class PySideUiTest(unittest.TestCase):
         params = window.collect_params()
 
         self.assertFalse(window.chk_corrupt.isChecked())
-        self.assertFalse(window.chk_corrupt.isEnabled())
         self.assertFalse(params["detect_corrupt"])
 
     def test_feedback_controls_and_tooltips_are_present(self) -> None:
@@ -173,6 +169,7 @@ class PySideUiTest(unittest.TestCase):
         self.assertEqual(window.audio_list.minimumHeight(), 230)
         self.assertEqual(window.log.minimumHeight(), 300)
         self.assertIn("#f59e0b", ui_app.APP_STYLE.lower())
+        self.assertIn("#2563eb", ui_app.APP_STYLE.lower())
         self.assertIn("qpushbutton#primary", ui_app.APP_STYLE.lower())
 
     def test_visible_ui_labels_are_readable_chinese(self) -> None:
@@ -258,6 +255,7 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("UTF8Encoding $false", installer)
         self.assertIn("pyside_ui", installer)
         self.assertIn("InstalledUiDir", installer)
+        self.assertIn("run_ui_hidden.vbs", installer)
 
     def test_settings_cache_roundtrip_restores_options_and_in_out(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -336,6 +334,27 @@ class PySideUiTest(unittest.TestCase):
         self.assertEqual(window.result_values["total"].text(), "2")
         self.assertIn("01:00:01:00", window.result_list.toPlainText())
 
+    def test_zero_result_progress_shows_in_out_hint_once(self) -> None:
+        window = MainWindow()
+
+        with patch.object(
+            ui_app,
+            "read_progress_file",
+            return_value={
+                "percent": 100,
+                "stage": "complete",
+                "state": "complete",
+                "counts": {"total": 0},
+                "records": [],
+            },
+        ), patch.object(ui_app.QMessageBox, "information") as info:
+            window.poll_detection_progress()
+            window.poll_detection_progress()
+
+        self.assertEqual(info.call_count, 1)
+        self.assertIn("入出点", window.log.toPlainText())
+        self.assertIn("入出点", window.result_list.toPlainText())
+
     def test_current_timeline_marks_fill_manual_in_out(self) -> None:
         window = MainWindow()
         window.bridge.current_timeline_marks = lambda timeline_index: {
@@ -394,7 +413,7 @@ class PySideUiTest(unittest.TestCase):
 
         window.chk_batch_timelines.setChecked(True)
         window.timeline_combo.setCurrentIndex(0)
-        window.apply_severity()
+        window.reset_threshold_defaults()
         for index in range(window.batch_timeline_list.count()):
             item = window.batch_timeline_list.item(index)
             item.setCheckState(ui_app.Qt.Checked if index in {0, 2} else ui_app.Qt.Unchecked)

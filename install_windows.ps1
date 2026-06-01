@@ -54,12 +54,16 @@ if (Test-Path $SourceFfmpeg) {
 }
 
 $PackagedUiExe = Join-Path $InstalledUiDir "QingheBFDControl\QingheBFDControl.exe"
+$HiddenRunUi = Join-Path $InstalledUiDir "run_ui_hidden.vbs"
 $RunUi = Join-Path $InstalledUiDir "run_ui.bat"
 $ShortcutTarget = $null
 $ShortcutWorkDir = $null
 if (Test-Path $PackagedUiExe) {
     $ShortcutTarget = $PackagedUiExe
     $ShortcutWorkDir = Split-Path $PackagedUiExe -Parent
+} elseif (Test-Path $HiddenRunUi) {
+    $ShortcutTarget = $HiddenRunUi
+    $ShortcutWorkDir = Split-Path $HiddenRunUi -Parent
 } elseif (Test-Path $RunUi) {
     $ShortcutTarget = $RunUi
     $ShortcutWorkDir = Split-Path $RunUi -Parent
@@ -78,6 +82,8 @@ if ($ShortcutTarget) {
     $shortcut = $wsh.CreateShortcut($linkPath)
     $shortcut.TargetPath = $ShortcutTarget
     $shortcut.WorkingDirectory = $ShortcutWorkDir
+    $iconPath = Join-Path $InstalledUiDir "icon.svg"
+    if (Test-Path $iconPath) { $shortcut.IconLocation = $iconPath }
     $shortcut.Description = "Qinghe Black Frame Detector PySide6 Control"
     $shortcut.Save()
 }

@@ -20,6 +20,7 @@ class TimelineInfo:
     index: int
     name: str
     fps: float
+    uid: str = ""
 
 
 def runtime_dir() -> Path:
@@ -110,6 +111,11 @@ import json
 import os
 import platform
 import sys
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 def add_default_module_path():
     system = platform.system().lower()
@@ -214,6 +220,18 @@ def write_lua_params(params: dict[str, Any], target: Path | None = None) -> Path
     return target
 
 
+def clean_resolve_text(value: Any) -> str:
+    text = str(value or "")
+    replacements = {
+        "��ǰ": "当前",
+        "褰撳墠": "当前",
+        "锛": "：",
+    }
+    for bad, good in replacements.items():
+        text = text.replace(bad, good)
+    return text
+
+
 def configure_resolve_python_path() -> None:
     system = platform.system().lower()
     candidates: list[Path] = []
@@ -243,7 +261,7 @@ def configure_resolve_python_path() -> None:
 
 class ResolveBridge:
     def __init__(self) -> None:
-        self._connected = self._probe_connected()
+        self._connected = False
 
     def is_connected(self) -> bool:
         return self._connected
@@ -260,28 +278,47 @@ if not project:
     raise SystemExit(0)
 current = project.GetCurrentTimeline()
 current_name = current.GetName() if current else ""
+current_uid = ""
+try:
+    current_uid = current.GetUniqueId() if current else ""
+except Exception:
+    current_uid = ""
 items = []
 count = int(project.GetTimelineCount() or 0)
+seen = set()
 for index in range(1, count + 1):
     timeline = project.GetTimelineByIndex(index)
     if not timeline:
         continue
     name = timeline.GetName() or f"Timeline {index}"
+    try:
+        uid = timeline.GetUniqueId() or name
+    except Exception:
+        uid = name
+    if uid in seen:
+        continue
+    seen.add(uid)
     fps_raw = timeline.GetSetting("timelineFrameRate") or 25
     try:
         fps = float(fps_raw)
     except Exception:
         fps = 25.0
-    if name == current_name:
+    if (uid and uid == current_uid) or name == current_name:
         name = name + "  (当前)"
-    items.append({"index": index, "name": name, "fps": fps})
+    items.append({"index": index, "name": name, "fps": fps, "uid": uid})
 print(json.dumps({"connected": True, "timelines": items}, ensure_ascii=False))
 '''
         )
         if not data:
             return [TimelineInfo(1, "当前时间线", 25.0)]
+        self._connected = bool(data.get("connected", True))
         timelines = [
-            TimelineInfo(int(item["index"]), str(item["name"]), float(item["fps"]))
+            TimelineInfo(
+                int(item["index"]),
+                clean_resolve_text(item.get("name")),
+                float(item["fps"]),
+                clean_resolve_text(item.get("uid")),
+            )
             for item in data.get("timelines", [])
         ]
         return timelines or [TimelineInfo(1, "当前时间线", 25.0)]
@@ -451,6 +488,37 @@ print(json.dumps({{
     def fix_mono_audio_to_stereo(self, timeline_index: int = 1) -> dict[str, Any]:
         return self._audio_action(timeline_index, "fix")
 
+    def jump_to_timecode(self, timeline_index: int, timecode: str) -> tuple[bool, str]:
+        data = self._run_resolve_python(
+            rf'''
+import json
+resolve = dvr_script.scriptapp("Resolve")
+project_manager = resolve.GetProjectManager() if resolve else None
+project = project_manager.GetCurrentProject() if project_manager else None
+timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+ok = False
+message = "未找到目标时间线。"
+if project and timeline:
+    project.SetCurrentTimeline(timeline)
+    try:
+        ok = bool(timeline.SetCurrentTimecode({json.dumps(timecode)}))
+    except Exception:
+        ok = False
+    if not ok:
+        try:
+            ok = bool(timeline.SetCurrentTimecode(str({json.dumps(timecode)})))
+        except Exception:
+            ok = False
+    if resolve:
+        resolve.OpenPage("edit")
+    message = "已跳转到 " + {json.dumps(timecode)} if ok else "Resolve 未接受该时间码。"
+print(json.dumps({{"ok": ok, "message": message}}, ensure_ascii=False))
+'''
+        )
+        if not data:
+            return False, "跳转失败：Resolve API 未返回结果。"
+        return bool(data.get("ok")), str(data.get("message", "跳转完成。"))
+
     def _audio_action(self, timeline_index: int, action: str) -> dict[str, Any]:
         action = action if action in {"scan", "mark", "fix"} else "scan"
         data = self._run_resolve_python(
@@ -516,6 +584,7 @@ track_count = int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0)
 tracks = []
 clips = []
 mono_track_indices = []
+markers_added = 0
 for track_index in range(1, track_count + 1):
     subtype = str(safe(lambda idx=track_index: timeline.GetTrackSubType("audio", idx), "") or "")
     track_name = str(safe(lambda idx=track_index: timeline.GetTrackName("audio", idx), f"Audio {{track_index}}") or f"Audio {{track_index}}")
@@ -540,6 +609,22 @@ for track_index in range(1, track_count + 1):
         if track_is_mono or source_is_mono:
             if ACTION in {{"mark", "fix"}}:
                 safe(lambda item=item: item.SetClipColor("Orange"))
+                start_frame = safe(lambda item=item: item.GetStart(), 0) or 0
+                duration = max(1, int((safe(lambda item=item: item.GetEnd(), 0) or 0) - int(start_frame or 0)))
+                marker_ok = safe(
+                    lambda sf=start_frame, dur=duration, nm=item_name(item), reason=("mono track" if track_is_mono else "mono source"):
+                        timeline.AddMarker(
+                            int(sf),
+                            "Orange",
+                            "[BFD-AUDIO] 单声道音频",
+                            f"{{nm}} / {{reason}}",
+                            int(dur),
+                            "BFD_AUDIO_MONO",
+                        ),
+                    False,
+                )
+                if marker_ok:
+                    markers_added += 1
             reason = "mono track" if track_is_mono else "mono source"
             clips.append({{
                 "track_index": track_index,
@@ -558,10 +643,10 @@ if ACTION == "fix":
             created_tracks += 1
 
 if ACTION == "mark":
-    message = f"已标记 {{len(clips)}} 个单声道音频片段为 Orange。"
+    message = f"已标记 {{len(clips)}} 个单声道音频片段为 Orange，并写入 {{markers_added}} 个时间线标记。"
 elif ACTION == "fix":
     message = (
-        f"已创建 {{created_tracks}} 条 stereo 音轨，并标记 {{len(clips)}} 个单声道片段。"
+        f"已创建 {{created_tracks}} 条 stereo 音轨，并标记 {{len(clips)}} 个单声道片段、{{markers_added}} 个时间线标记。"
         " Resolve 公开 API 未提供直接改片段声道映射的接口。"
     )
 else:
@@ -574,6 +659,7 @@ print(json.dumps({{
         "tracks": track_count,
         "mono_tracks": len(mono_track_indices),
         "mono_clips": len(clips),
+        "markers_added": markers_added,
         "created_stereo_tracks": created_tracks,
     }},
     "tracks": tracks,
@@ -594,6 +680,7 @@ print(json.dumps({{
             return False, "检测入口未找到。"
 
         env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
         env["BFD_PARAMS_FILE"] = str(params_path)
         command = [str(fuscript), "-l", "lua", str(lua_entry)]
         try:
@@ -646,14 +733,17 @@ print(json.dumps({"connected": bool(resolve)}))
     def _run_resolve_python(body: str) -> dict[str, Any] | None:
         command, stdin_script = build_resolve_python_process(body)
         try:
+            env = os.environ.copy()
+            env["PYTHONIOENCODING"] = "utf-8"
             completed = subprocess.run(
                 command,
                 input=stdin_script,
+                env=env,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
                 capture_output=True,
-                timeout=8,
+                timeout=4,
                 check=False,
             )
         except Exception:
