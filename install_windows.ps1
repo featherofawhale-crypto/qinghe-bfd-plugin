@@ -17,16 +17,22 @@ if (!(Test-Path $SourceModules)) { throw "Missing module folder: $SourceModules"
 
 $ScriptsRoot = Join-Path $env:APPDATA "Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts"
 $EditDir = Join-Path $ScriptsRoot "Edit"
+$UtilityDir = Join-Path $ScriptsRoot "Utility"
 $ModulesDir = Join-Path $ScriptsRoot "Modules\black_frame_detector"
 $BundledFfmpegDir = Join-Path $ModulesDir "ffmpeg\windows"
 $BackupRoot = Join-Path $ModulesDir ("backup_" + (Get-Date -Format "yyyyMMdd_HHmmss"))
 
-New-Item -ItemType Directory -Force -Path $EditDir, $ModulesDir, $BundledFfmpegDir | Out-Null
+New-Item -ItemType Directory -Force -Path $EditDir, $UtilityDir, $ModulesDir, $BundledFfmpegDir | Out-Null
 
 $ExistingMain = Join-Path $EditDir $SourceMain.Name
 if (Test-Path $ExistingMain) {
     New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
     Copy-Item $ExistingMain (Join-Path $BackupRoot $SourceMain.Name) -Force
+}
+$ExistingUtilityMain = Join-Path $UtilityDir $SourceMain.Name
+if (Test-Path $ExistingUtilityMain) {
+    New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
+    Copy-Item $ExistingUtilityMain (Join-Path $BackupRoot ("Utility_" + $SourceMain.Name)) -Force
 }
 
 Get-ChildItem $ModulesDir -File -Filter "*.lua" -ErrorAction SilentlyContinue | ForEach-Object {
@@ -35,6 +41,7 @@ Get-ChildItem $ModulesDir -File -Filter "*.lua" -ErrorAction SilentlyContinue | 
 }
 
 Copy-Item $SourceMain.FullName (Join-Path $EditDir $SourceMain.Name) -Force
+Copy-Item $SourceMain.FullName (Join-Path $UtilityDir $SourceMain.Name) -Force
 Copy-Item (Join-Path $SourceModules "*.lua") $ModulesDir -Force
 
 if (Test-Path $SourceFfmpeg) {
@@ -119,6 +126,7 @@ if ($selectedExe -and -not (Test-Path $PackagedUiExe)) {
 
 Write-Host "Installed Resolve script:"
 Write-Host "  $EditDir"
+Write-Host "  $UtilityDir"
 Write-Host "Installed modules:"
 Write-Host "  $ModulesDir"
 Write-Host "Bundled FFmpeg:"
