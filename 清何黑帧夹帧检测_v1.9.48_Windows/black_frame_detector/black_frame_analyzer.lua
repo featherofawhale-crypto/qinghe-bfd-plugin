@@ -268,6 +268,9 @@ function Analyzer.generate_note(segment, clip_info, timeline_fps, params, durati
         if segment.scene_score then
             table.insert(parts, string.format("scene score: %.3f", segment.scene_score))
         end
+        if segment.edge_visible then
+            table.insert(parts, "位置: 源内切点靠近时间线实际可见窗口边界")
+        end
         table.insert(parts, "判定: 时间线上可见镜头内部存在极短源内切点，疑似混剪漏帧/夹帧")
         return table.concat(parts, "\n")
     end
@@ -355,6 +358,10 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
                 timeline_fps,
                 clip.left_offset or 0
             )
+            if segment.timeline_frame then
+                frames.start_frame = segment.timeline_frame
+                frames.end_frame = segment.timeline_frame + math.max(1, math.floor(segment.duration * timeline_fps + 0.5))
+            end
             if results.summary.total_segments <= 3 then
                 dlog(string.format(
                     "  seg#%d: clip_start=%d seg.start=%.3f seg.end=%.3f fps=%.0f lo=%d -> tl_frame=%d..%d tc=%s",
