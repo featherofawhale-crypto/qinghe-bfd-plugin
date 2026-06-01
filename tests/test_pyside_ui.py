@@ -256,8 +256,15 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("pyside_ui", installer)
         self.assertIn("InstalledUiDir", installer)
         self.assertIn("run_ui_hidden.vbs", installer)
+        self.assertIn("wscript.exe //B", source)
+        self.assertNotIn("cmd.exe /C start", source)
 
-    def test_settings_cache_roundtrip_restores_options_and_in_out(self) -> None:
+        hidden_launcher = (ROOT / "pyside_ui" / "run_ui_hidden.vbs").read_text(encoding="utf-8")
+        self.assertIn("pyw.exe", hidden_launcher)
+        self.assertNotIn("powershell", hidden_launcher.lower())
+        self.assertNotIn("ExecutionPolicy", hidden_launcher)
+
+    def test_settings_cache_roundtrip_restores_options_but_defaults_to_full_timeline(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings_file = Path(tmp) / "ui_settings.json"
             with patch.object(ui_app, "settings_path", return_value=settings_file, create=True):
@@ -275,8 +282,8 @@ class PySideUiTest(unittest.TestCase):
                 second = MainWindow()
                 second.load_settings()
 
-        self.assertEqual(second.io_in.text(), "01:00:01:00")
-        self.assertEqual(second.io_out.text(), "01:00:05:12")
+        self.assertEqual(second.io_in.text(), "")
+        self.assertEqual(second.io_out.text(), "")
         self.assertTrue(second.chk_scene.isChecked())
         self.assertTrue(second.chk_content_dup.isChecked())
         self.assertTrue(second.chk_audio_mono.isChecked())

@@ -45,7 +45,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.71"
+APP_VERSION = "1.9.72"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -981,8 +981,6 @@ class MainWindow(QMainWindow):
     def save_settings(self) -> None:
         data = {
             "timeline_index": self.timeline_combo.currentIndex(),
-            "manual_io_in": self.io_in.text().strip(),
-            "manual_io_out": self.io_out.text().strip(),
             "stuck_frames": self.stuck_frames.value(),
             "suspect_frames": self.suspect_frames.value(),
             "pix_th": self.pixel_threshold.value(),
@@ -1030,12 +1028,6 @@ class MainWindow(QMainWindow):
 
         self._loading_settings = True
         try:
-            for name, widget in [
-                ("manual_io_in", self.io_in),
-                ("manual_io_out", self.io_out),
-            ]:
-                if isinstance(data.get(name), str):
-                    widget.setText(data[name])
             if isinstance(data.get("timeline_index"), int) and self.timeline_combo.count() > 0:
                 self.timeline_combo.setCurrentIndex(max(0, min(self.timeline_combo.count() - 1, data["timeline_index"])))
             for name, widget in [

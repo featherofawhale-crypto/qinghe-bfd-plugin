@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.71
+-- 版本: v1.9.72
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.71 启动 ===")
+dlog("=== BFD v1.9.72 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -211,7 +211,7 @@ local function try_launch_external_ui()
     dlog("Launching PySide UI: " .. launcher)
     local ok = false
     if sep == "\\" then
-        ok = os.execute('cmd.exe /C start "" "' .. launcher .. '"')
+        ok = os.execute('wscript.exe //B "' .. launcher .. '"')
     else
         ok = os.execute('sh "' .. launcher .. '" >/dev/null 2>&1 &')
     end
