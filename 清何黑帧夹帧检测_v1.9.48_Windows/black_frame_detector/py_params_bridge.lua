@@ -93,6 +93,7 @@ function Bridge.load_pending_params(timeline_list)
         detect_duplicate = raw.detect_duplicate ~= false,
         detect_content_dup = raw.detect_content_dup == true,
         detect_corrupt = raw.detect_corrupt == true,
+        detect_mono_audio = raw.detect_mono_audio == true,
         complex_mode = raw.complex_mode == true,
         merge_mode = raw.merge_mode == true,
         html_report = raw.html_report == true,

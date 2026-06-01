@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from dataclasses import asdict
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,10 +28,12 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QGraphicsOpacityEffect,
     QProgressBar,
     QSlider,
     QSpinBox,
     QStyle,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -40,146 +42,171 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.56"
+APP_VERSION = "1.9.57"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 
 APP_STYLE = """
 QToolTip {
-    background: #10151c;
-    color: #eef5ff;
-    border: 1px solid #3d5164;
+    background: #18212f;
+    color: #f8fbff;
+    border: 1px solid #6b7d93;
     padding: 8px;
-    border-radius: 4px;
+    border-radius: 7px;
 }
 QWidget {
-    background: #101317;
-    color: #e7edf3;
+    background: #eef4fb;
+    color: #142033;
     font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI";
     font-size: 13px;
 }
-QMainWindow { background: #101317; }
+QLabel, QCheckBox, QSlider {
+    background: transparent;
+}
+QMainWindow { background: #e8f0f9; }
 QFrame#Shell {
-    background: #151a20;
-    border: 1px solid #28313b;
-    border-radius: 8px;
+    background: #f8fbff;
+    border: 1px solid #d7e2ee;
+    border-radius: 10px;
 }
 QFrame#Panel {
-    background: #171d24;
-    border: 1px solid #2a3440;
+    background: #ffffff;
+    border: 1px solid #d7e2ee;
     border-radius: 8px;
 }
 QFrame#StatCard {
-    background: #121820;
-    border: 1px solid #2a3440;
-    border-top: 3px solid #35c4a1;
-    border-radius: 6px;
+    background: #fbfdff;
+    border: 1px solid #dae5f0;
+    border-top: 3px solid #18a999;
+    border-radius: 8px;
 }
 QLabel#Title {
     font-size: 24px;
     font-weight: 700;
-    color: #f5f7fa;
+    color: #10243f;
 }
-QLabel#Subtitle, QLabel#Muted { color: #93a4b5; }
+QLabel#Subtitle, QLabel#Muted { color: #607089; }
 QLabel#BadgeOk {
-    color: #bff4d2;
-    background: #153323;
-    border: 1px solid #2d8a51;
-    border-radius: 5px;
+    color: #047857;
+    background: #dff7ec;
+    border: 1px solid #9ae6c3;
+    border-radius: 7px;
     padding: 4px 9px;
     font-weight: 700;
 }
 QLabel#BadgeWarn {
-    color: #ffd48a;
-    background: #332817;
-    border: 1px solid #8a651f;
-    border-radius: 5px;
+    color: #995d00;
+    background: #fff3cf;
+    border: 1px solid #f5cf75;
+    border-radius: 7px;
     padding: 4px 9px;
     font-weight: 700;
 }
 QGroupBox {
-    border: 1px solid #2a3440;
+    border: 1px solid #d7e2ee;
     border-radius: 8px;
     margin-top: 22px;
     padding: 16px 14px 14px 14px;
-    background: #171d24;
+    background: #ffffff;
     font-weight: 700;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 12px;
     padding: 0 6px;
-    color: #cbd8e3;
+    color: #334155;
 }
 QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit, QPlainTextEdit {
     min-height: 34px;
-    border-radius: 6px;
-    border: 1px solid #33404d;
-    background: #0e1116;
-    color: #f0f4f8;
+    border-radius: 8px;
+    border: 1px solid #cbd8e6;
+    background: #f9fcff;
+    color: #122033;
     padding: 4px 9px;
 }
 QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover, QLineEdit:hover {
-    border-color: #4d6072;
+    border-color: #82a7cf;
 }
-QCheckBox { spacing: 8px; color: #d7e0ea; }
+QCheckBox { spacing: 8px; color: #26384f; }
 QCheckBox::indicator {
     width: 16px;
     height: 16px;
 }
-QCheckBox:disabled { color: #667481; }
+QCheckBox:disabled { color: #9aa8b7; }
 QPushButton {
     min-height: 34px;
-    border-radius: 7px;
-    border: 1px solid #344252;
-    background: #202832;
-    color: #eaf1f8;
+    border-radius: 8px;
+    border: 1px solid #c8d5e2;
+    background: #ffffff;
+    color: #1d314d;
     padding: 6px 12px;
     font-weight: 700;
 }
-QPushButton:hover { background: #2a3542; border-color: #4a5c70; }
+QPushButton:hover { background: #f1f7ff; border-color: #7fa7d7; }
 QPushButton#Primary {
     min-height: 42px;
-    background: #d97925;
-    border-color: #f29a3b;
+    background: #1769e0;
+    border-color: #1769e0;
     color: white;
 }
-QPushButton#Primary:hover { background: #e98731; }
-QPushButton#Primary:disabled { background: #4a3a2b; color: #9b8b7a; }
+QPushButton#Primary:hover { background: #0f5aca; }
+QPushButton#Primary:disabled { background: #a9bfdc; color: #eef4ff; }
+QTabWidget::pane {
+    border: 1px solid #d7e2ee;
+    border-radius: 8px;
+    background: #ffffff;
+}
+QTabBar::tab {
+    min-width: 72px;
+    min-height: 30px;
+    padding: 5px 12px;
+    margin-right: 4px;
+    border: 1px solid #d7e2ee;
+    border-bottom: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    background: #edf4fb;
+    color: #52647d;
+    font-weight: 700;
+}
+QTabBar::tab:selected {
+    background: #ffffff;
+    color: #1769e0;
+}
 QProgressBar {
     min-height: 16px;
     border-radius: 8px;
-    background: #0d1014;
-    border: 1px solid #2b3541;
+    background: #e6eef7;
+    border: 1px solid #cfdae8;
     text-align: center;
-    color: #dff8f1;
+    color: #22364f;
 }
 QProgressBar::chunk {
     border-radius: 7px;
-    background: #35c4a1;
+    background: #18a999;
 }
 QSlider::groove:horizontal {
     height: 6px;
     border-radius: 3px;
-    background: #26313c;
+    background: #d9e5f1;
 }
 QSlider::sub-page:horizontal {
     border-radius: 3px;
-    background: #d97925;
+    background: #1769e0;
 }
 QSlider::handle:horizontal {
     width: 16px;
     height: 16px;
     margin: -5px 0;
     border-radius: 8px;
-    background: #ffe2c4;
-    border: 1px solid #f29a3b;
+    background: #ffffff;
+    border: 1px solid #1769e0;
 }
 QTextEdit {
-    background: #0c0f13;
-    border: 1px solid #2a3440;
+    background: #f9fcff;
+    border: 1px solid #d7e2ee;
     border-radius: 8px;
-    color: #b7c5d1;
+    color: #31445d;
     padding: 8px;
 }
 """
@@ -194,7 +221,12 @@ MARKER_COLORS = {
     "content_dup": "#f15bb5",
     "opacity": "#63d7a4",
     "corrupt": "#72d3ff",
+    "audio": "#14b8a6",
 }
+
+
+def settings_path() -> Path:
+    return Path.home() / ".qinghe_bfd" / "ui_settings.json"
 
 
 def set_tip(widget: QWidget, text: str) -> QWidget:
@@ -374,6 +406,9 @@ class MainWindow(QMainWindow):
         self.timelines: list[TimelineInfo] = []
         self.worker: SubmitWorker | None = None
         self.result_values: dict[str, QLabel] = {}
+        self.result_records: list[dict] = []
+        self.result_index = 0
+        self._tab_animation: QPropertyAnimation | None = None
         self.progress_timer = QTimer(self)
         self.progress_timer.setInterval(700)
         self.progress_timer.timeout.connect(self.poll_detection_progress)
@@ -385,7 +420,12 @@ class MainWindow(QMainWindow):
         root.setSpacing(12)
 
         root.addLayout(self._build_header())
-        root.addWidget(self._build_timeline_group())
+        body = QHBoxLayout()
+        body.setSpacing(12)
+
+        controls = QVBoxLayout()
+        controls.setSpacing(10)
+        controls.addWidget(self._build_timeline_group())
 
         main_grid = QGridLayout()
         main_grid.setHorizontalSpacing(12)
@@ -393,16 +433,13 @@ class MainWindow(QMainWindow):
         main_grid.addWidget(self._build_detection_group(), 0, 0)
         main_grid.addWidget(self._build_threshold_group(), 0, 1)
         main_grid.addWidget(self._build_advanced_group(), 1, 0, 1, 2)
-        root.addLayout(main_grid)
+        controls.addLayout(main_grid)
+        controls.addWidget(self._build_action_group())
+        controls.addStretch(1)
 
-        root.addWidget(self._build_action_group())
-        root.addWidget(self._build_result_group())
-
-        self.log = QTextEdit()
-        self.log.setReadOnly(True)
-        self.log.setMinimumHeight(118)
-        set_tip(self.log, "这里显示参数提交、Resolve 执行和进度文件回传的信息。")
-        root.addWidget(self.log)
+        body.addLayout(controls, 2)
+        body.addWidget(self._build_side_tabs(), 1)
+        root.addLayout(body, 1)
 
         wrapper = QWidget()
         wrapper_layout = QVBoxLayout(wrapper)
@@ -411,6 +448,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(wrapper)
 
         self.refresh_timelines()
+        self.load_settings()
         self.on_complex_mode_changed(self.chk_complex.isChecked())
         self._log("Resolve API: " + ("已连接" if self.bridge.is_connected() else "未连接，使用离线参数模式"))
 
@@ -444,6 +482,10 @@ class MainWindow(QMainWindow):
         refresh.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         set_tip(refresh, "重新读取 DaVinci Resolve 当前工程内的时间线列表。")
         refresh.clicked.connect(self.refresh_timelines)
+        self.read_marks_btn = QPushButton("读取入出点")
+        self.read_marks_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowDown))
+        set_tip(self.read_marks_btn, "读取 Resolve 当前时间线的入点/出点，自动填入复杂模式需要的检测范围。")
+        self.read_marks_btn.clicked.connect(self.fill_in_out_from_current_timeline_marks)
 
         self.io_in = QLineEdit()
         self.io_in.setPlaceholderText("可选，例如 01:00:00:00")
@@ -459,6 +501,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.io_in, 1, 1)
         layout.addWidget(QLabel("手动出点"), 1, 2)
         layout.addWidget(self.io_out, 1, 3)
+        layout.addWidget(self.read_marks_btn, 1, 4)
         return box
 
     def _build_detection_group(self) -> QGroupBox:
@@ -475,6 +518,7 @@ class MainWindow(QMainWindow):
         self.chk_content_dup = self._marker_check("内容重复", "content_dup", False, "用帧指纹比较画面内容，可找不同文件但画面重复的片段，耗时会增加。")
         self.chk_opacity = self._marker_check("透明度/禁用", "opacity", True, "直接读取时间线属性，找不透明度为 0、低透明、禁用和非标准合成。")
         self.chk_corrupt = self._marker_check("渲染坏帧", "corrupt", False, "必须先开启复杂模式：坏帧检测依赖渲染后的最终像素，再用 signalstats/熵/亮度离群分析。")
+        self.chk_audio_mono = self._marker_check("单声道音频", "audio", True, "扫描音频轨道和片段源声道映射，发现 mono 轨道/片段后可一键改色并生成可复核的双声道修正轨道。")
 
         checks = [
             self.chk_error,
@@ -485,6 +529,7 @@ class MainWindow(QMainWindow):
             self.chk_content_dup,
             self.chk_opacity,
             self.chk_corrupt,
+            self.chk_audio_mono,
         ]
         for index, check in enumerate(checks):
             layout.addWidget(check, index // 2, index % 2)
@@ -626,6 +671,102 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.feedback_btn)
         return panel
 
+    def _build_side_tabs(self) -> QTabWidget:
+        self.side_tabs = QTabWidget()
+        self.side_tabs.setObjectName("SideTabs")
+        self.results_tab = self._build_results_tab()
+        self.audio_tab = self._build_audio_tab()
+        self.log_tab = self._build_log_tab()
+        self.side_tabs.addTab(self.results_tab, "结果")
+        self.side_tabs.addTab(self.audio_tab, "音频")
+        self.side_tabs.addTab(self.log_tab, "日志")
+        self.side_tabs.setCurrentWidget(self.results_tab)
+        self.side_tabs.currentChanged.connect(self.animate_current_tab)
+        set_tip(self.side_tabs, "结果、音频扫描和执行日志会一直留在主界面右侧，检测完成后自动回到结果页。")
+        return self.side_tabs
+
+    def _build_results_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        layout.addWidget(self._build_result_group())
+        self.result_list = QTextEdit()
+        self.result_list.setReadOnly(True)
+        self.result_list.setMinimumHeight(260)
+        self.result_list.setPlaceholderText("检测完成后，这里会显示所有问题、颜色标签、时间码和跳转顺序。")
+        set_tip(self.result_list, "结果按时间线顺序显示；颜色名对应 Resolve 时间线标记颜色。")
+        layout.addWidget(self.result_list, 1)
+
+        nav = QHBoxLayout()
+        self.prev_result_btn = QPushButton("上一条")
+        self.prev_result_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
+        self.next_result_btn = QPushButton("下一条")
+        self.next_result_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+        self.result_position_label = QLabel("0 / 0")
+        self.result_position_label.setObjectName("Muted")
+        set_tip(self.prev_result_btn, "定位到上一条结果，配合 Resolve 标记快捷键复核。")
+        set_tip(self.next_result_btn, "定位到下一条结果，配合 Resolve 标记快捷键复核。")
+        self.prev_result_btn.clicked.connect(lambda: self.move_result_cursor(-1))
+        self.next_result_btn.clicked.connect(lambda: self.move_result_cursor(1))
+        nav.addWidget(self.prev_result_btn)
+        nav.addWidget(self.next_result_btn)
+        nav.addWidget(self.result_position_label)
+        nav.addStretch(1)
+        layout.addLayout(nav)
+        return tab
+
+    def _build_audio_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        self.audio_summary = QLabel("未扫描音频。")
+        self.audio_summary.setObjectName("Muted")
+        set_tip(self.audio_summary, "扫描会读取音频轨道类型和片段源声道映射，识别 mono 音轨或 mono 素材。")
+        layout.addWidget(self.audio_summary)
+
+        actions = QHBoxLayout()
+        self.scan_audio_btn = QPushButton("扫描单声道")
+        self.scan_audio_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogContentsView))
+        set_tip(self.scan_audio_btn, "只读取时间线并列出单声道轨道/片段，不修改工程。")
+        self.scan_audio_btn.clicked.connect(self.scan_mono_audio)
+
+        self.mark_audio_btn = QPushButton("标记单声道")
+        self.mark_audio_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogApplyButton))
+        set_tip(self.mark_audio_btn, "把识别出的单声道音频片段改为醒目的 Orange 颜色，便于人工复核。")
+        self.mark_audio_btn.clicked.connect(self.mark_mono_audio)
+
+        self.fix_audio_btn = QPushButton("一键修正双声道")
+        self.fix_audio_btn.setIcon(self.style().standardIcon(QStyle.SP_DriveHDIcon))
+        set_tip(self.fix_audio_btn, "Resolve 公开 API 不能直接改片段属性声道映射；这里会创建 stereo 轨道并标记 mono 片段，避免破坏原工程。")
+        self.fix_audio_btn.clicked.connect(self.fix_mono_audio)
+        actions.addWidget(self.scan_audio_btn)
+        actions.addWidget(self.mark_audio_btn)
+        actions.addWidget(self.fix_audio_btn)
+        layout.addLayout(actions)
+
+        self.audio_list = QTextEdit()
+        self.audio_list.setReadOnly(True)
+        self.audio_list.setMinimumHeight(320)
+        self.audio_list.setPlaceholderText("扫描结果会列出轨道、片段、起止帧和识别原因。")
+        set_tip(self.audio_list, "单声道识别依据：音轨 subtype=mono、源文件 embedded_audio_channels=1、或 source channel mapping 为 mono。")
+        layout.addWidget(self.audio_list, 1)
+        return tab
+
+    def _build_log_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(10, 10, 10, 10)
+        self.log = QTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setMinimumHeight(420)
+        set_tip(self.log, "这里显示参数提交、Resolve 执行和进度文件回传的信息。")
+        layout.addWidget(self.log)
+        return tab
+
     def _build_result_group(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("Panel")
@@ -641,6 +782,7 @@ class MainWindow(QMainWindow):
             ("scene", "转场", "蓝色标记，通常是正常转场黑场。", MARKER_COLORS["scene"]),
             ("gap", "空位", "紫色标记，时间线片段间隙。", MARKER_COLORS["gap"]),
             ("duplicate", "重复", "重复素材或内容指纹重复。", MARKER_COLORS["duplicate"]),
+            ("content_dup", "指纹", "不同文件或跨片段的画面指纹重复。", MARKER_COLORS["content_dup"]),
             ("opacity", "透明", "透明度、禁用或合成问题。", MARKER_COLORS["opacity"]),
             ("corrupt", "坏帧", "复杂模式下 signalstats/熵分析发现的渲染异常。", MARKER_COLORS["corrupt"]),
         ]
@@ -649,8 +791,8 @@ class MainWindow(QMainWindow):
             card.setObjectName("StatCard")
             card.setStyleSheet(
                 "QFrame#StatCard {"
-                "background: #121820; border: 1px solid #2a3440;"
-                f"border-top: 3px solid {color}; border-radius: 6px;"
+                "background: #fbfdff; border: 1px solid #dae5f0;"
+                f"border-top: 3px solid {color}; border-radius: 8px;"
                 "}"
             )
             card_layout = QVBoxLayout(card)
@@ -663,7 +805,7 @@ class MainWindow(QMainWindow):
             card_layout.addWidget(name)
             set_tip(card, tip)
             self.result_values[key] = value
-            layout.addWidget(card, 0, index)
+            layout.addWidget(card, index // 2, index % 2)
         return panel
 
     def _check(self, text: str, checked: bool, tooltip: str) -> QCheckBox:
@@ -680,7 +822,7 @@ class MainWindow(QMainWindow):
             f"color: {color};"
             "font-weight: 700;"
             "}"
-            "QCheckBox:disabled { color: #667481; }"
+            "QCheckBox:disabled { color: #9aa8b7; }"
         )
         return check
 
@@ -716,6 +858,100 @@ class MainWindow(QMainWindow):
         self.timeline_combo.clear()
         for tl in self.timelines:
             self.timeline_combo.addItem(f"{tl.index}. {tl.name}  /  {tl.fps:g} fps", asdict(tl))
+
+    def save_settings(self) -> None:
+        data = {
+            "timeline_index": self.timeline_combo.currentIndex(),
+            "severity_index": self.severity.currentIndex(),
+            "manual_io_in": self.io_in.text().strip(),
+            "manual_io_out": self.io_out.text().strip(),
+            "stuck_frames": self.stuck_frames.value(),
+            "suspect_frames": self.suspect_frames.value(),
+            "pix_th": self.pixel_threshold.value(),
+            "min_duration": self.min_duration.value(),
+            "content_sample_interval": self.content_sample_interval.value(),
+            "checks": {
+                "error": self.chk_error.isChecked(),
+                "suspect": self.chk_suspect.isChecked(),
+                "scene": self.chk_scene.isChecked(),
+                "gap": self.chk_gap.isChecked(),
+                "duplicate": self.chk_duplicate.isChecked(),
+                "content_dup": self.chk_content_dup.isChecked(),
+                "opacity": self.chk_opacity.isChecked(),
+                "corrupt": self.chk_corrupt.isChecked(),
+                "audio_mono": self.chk_audio_mono.isChecked(),
+                "clear": self.chk_clear.isChecked(),
+                "mark_hidden": self.chk_mark_hidden.isChecked(),
+                "partial_opacity": self.chk_partial_opacity.isChecked(),
+                "png_opaque": self.chk_png_opaque.isChecked(),
+                "merge": self.chk_merge.isChecked(),
+                "complex": self.chk_complex.isChecked(),
+                "html": self.chk_html.isChecked(),
+                "auto_run": self.chk_auto_run.isChecked(),
+            },
+        }
+        path = settings_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def load_settings(self) -> None:
+        path = settings_path()
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            self._log(f"设置缓存读取失败：{exc}")
+            return
+
+        if isinstance(data.get("severity_index"), int):
+            self.severity.setCurrentIndex(max(0, min(self.severity.count() - 1, data["severity_index"])))
+        for name, widget in [
+            ("manual_io_in", self.io_in),
+            ("manual_io_out", self.io_out),
+        ]:
+            if isinstance(data.get(name), str):
+                widget.setText(data[name])
+        for name, widget in [
+            ("stuck_frames", self.stuck_frames),
+            ("suspect_frames", self.suspect_frames),
+            ("content_sample_interval", self.content_sample_interval),
+        ]:
+            if isinstance(data.get(name), int):
+                widget.setValue(data[name])
+        for name, widget in [
+            ("pix_th", self.pixel_threshold),
+            ("min_duration", self.min_duration),
+        ]:
+            if isinstance(data.get(name), (int, float)):
+                widget.setValue(float(data[name]))
+
+        checks = data.get("checks") if isinstance(data.get("checks"), dict) else {}
+        check_map = {
+            "error": self.chk_error,
+            "suspect": self.chk_suspect,
+            "scene": self.chk_scene,
+            "gap": self.chk_gap,
+            "duplicate": self.chk_duplicate,
+            "content_dup": self.chk_content_dup,
+            "opacity": self.chk_opacity,
+            "audio_mono": self.chk_audio_mono,
+            "clear": self.chk_clear,
+            "mark_hidden": self.chk_mark_hidden,
+            "partial_opacity": self.chk_partial_opacity,
+            "png_opaque": self.chk_png_opaque,
+            "merge": self.chk_merge,
+            "complex": self.chk_complex,
+            "html": self.chk_html,
+            "auto_run": self.chk_auto_run,
+        }
+        for key, widget in check_map.items():
+            if isinstance(checks.get(key), bool):
+                widget.setChecked(checks[key])
+        if isinstance(checks.get("corrupt"), bool) and self.chk_complex.isChecked():
+            self.chk_corrupt.setChecked(checks["corrupt"])
+        if isinstance(data.get("timeline_index"), int) and self.timeline_combo.count() > 0:
+            self.timeline_combo.setCurrentIndex(max(0, min(self.timeline_combo.count() - 1, data["timeline_index"])))
 
     def apply_severity(self) -> None:
         level = self.severity.currentText()
@@ -770,6 +1006,7 @@ class MainWindow(QMainWindow):
             "detect_duplicate": self.chk_duplicate.isChecked(),
             "detect_content_dup": self.chk_content_dup.isChecked(),
             "detect_corrupt": complex_mode and self.chk_corrupt.isChecked(),
+            "detect_mono_audio": self.chk_audio_mono.isChecked(),
             "html_report": self.chk_html.isChecked(),
             "clear_existing": self.chk_clear.isChecked(),
             "complex_mode": complex_mode,
@@ -777,6 +1014,7 @@ class MainWindow(QMainWindow):
             "mark_hidden_clips": self.chk_mark_hidden.isChecked(),
             "mark_partial_opacity": self.chk_partial_opacity.isChecked(),
             "png_as_opaque": self.chk_png_opaque.isChecked(),
+            "headless": True,
         }
 
     def start_detection(self) -> None:
@@ -789,6 +1027,8 @@ class MainWindow(QMainWindow):
         self.progress.setValue(0)
         self.progress_label.setText("提交中")
         self._log("开始提交参数")
+        self.save_settings()
+        self.animate_widget(self.start_btn)
         self.progress_timer.start()
         self.worker = SubmitWorker(self.bridge, params, self.chk_auto_run.isChecked())
         self.worker.progress.connect(self.on_progress)
@@ -809,6 +1049,66 @@ class MainWindow(QMainWindow):
     def open_feedback_dialog(self) -> None:
         FeedbackDialog(self).exec()
 
+    def fill_in_out_from_current_timeline_marks(self) -> None:
+        selected = self.timeline_combo.currentData() or {"index": 1}
+        result = self.bridge.current_timeline_marks(int(selected.get("index", 1)))
+        if not result.get("ok"):
+            self._log(str(result.get("message", "未读取到入出点。")))
+            return
+        self.io_in.setText(str(result.get("in_tc", "")))
+        self.io_out.setText(str(result.get("out_tc", "")))
+        self.save_settings()
+        self._log(str(result.get("message", "已读取当前时间线入出点。")))
+
+    def scan_mono_audio(self) -> None:
+        selected = self.timeline_combo.currentData() or {"index": 1}
+        result = self.bridge.scan_mono_audio(int(selected.get("index", 1)))
+        self.render_audio_scan(result)
+        self.side_tabs.setCurrentWidget(self.audio_tab)
+
+    def mark_mono_audio(self) -> None:
+        selected = self.timeline_combo.currentData() or {"index": 1}
+        result = self.bridge.mark_mono_audio(int(selected.get("index", 1)))
+        self.render_audio_scan(result)
+        self.side_tabs.setCurrentWidget(self.audio_tab)
+
+    def fix_mono_audio(self) -> None:
+        selected = self.timeline_combo.currentData() or {"index": 1}
+        result = self.bridge.fix_mono_audio_to_stereo(int(selected.get("index", 1)))
+        self.render_audio_scan(result)
+        self.side_tabs.setCurrentWidget(self.audio_tab)
+
+    def render_audio_scan(self, result: dict) -> None:
+        summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+        clips = result.get("clips") if isinstance(result.get("clips"), list) else []
+        tracks = result.get("tracks") if isinstance(result.get("tracks"), list) else []
+        message = str(result.get("message", "音频扫描完成。"))
+        self.audio_summary.setText(
+            f"{message}  单声道片段 {summary.get('mono_clips', len(clips))} 个 / "
+            f"单声道轨道 {summary.get('mono_tracks', 0)} 条"
+        )
+        lines = []
+        if tracks:
+            lines.append("轨道")
+            for track in tracks:
+                lines.append(
+                    f"  A{track.get('index')}  {track.get('name', '')}  "
+                    f"{track.get('subtype', 'unknown')}  clips={track.get('item_count', 0)}"
+                )
+        if clips:
+            lines.append("")
+            lines.append("单声道片段")
+            for idx, clip in enumerate(clips, 1):
+                lines.append(
+                    f"{idx:03d}  A{clip.get('track_index')}  "
+                    f"{clip.get('start_frame')}->{clip.get('end_frame')}  "
+                    f"{clip.get('name', '未命名')}  [{clip.get('reason', 'mono')}]"
+                )
+        if not lines:
+            lines.append(message)
+        self.audio_list.setPlainText("\n".join(lines))
+        self._log(message)
+
     def on_progress(self, value: int, message: str) -> None:
         self.progress.setValue(value)
         self.progress_label.setText(message[:20])
@@ -819,6 +1119,7 @@ class MainWindow(QMainWindow):
         self.progress_label.setText("已提交" if ok else "失败")
         self._log(message)
         if ok:
+            self.side_tabs.setCurrentWidget(self.results_tab)
             QMessageBox.information(self, "完成", message)
         else:
             QMessageBox.warning(self, "失败", message)
@@ -837,17 +1138,69 @@ class MainWindow(QMainWindow):
             self._log(f"检测进度 {percent}%：{stage}")
         if state in {"complete", "failed", "cancelled"} or percent >= 100:
             self.progress_timer.stop()
+            if state == "complete" or percent >= 100:
+                self.side_tabs.setCurrentWidget(self.results_tab)
 
     def _update_result_cards(self, progress: dict) -> None:
         counts = progress.get("counts")
-        if not isinstance(counts, dict):
+        if isinstance(counts, dict):
+            for key, label in self.result_values.items():
+                if key in counts:
+                    label.setText(str(counts[key]))
+        records = progress.get("records")
+        if isinstance(records, list):
+            self.render_result_records(records)
+
+    def render_result_records(self, records: list) -> None:
+        self.result_records = [record for record in records if isinstance(record, dict)]
+        lines = []
+        for idx, record in enumerate(self.result_records, 1):
+            timecode = record.get("timecode") or record.get("timeline_start_tc") or "??:??:??:??"
+            classification = record.get("classification") or "info"
+            name = record.get("name") or record.get("marker_name") or classification
+            color = record.get("color") or record.get("marker_color") or "-"
+            lines.append(f"{idx:03d}  {timecode}  {color}  {classification}  {name}")
+        if not lines:
+            lines.append("未检测到问题。")
+        self.result_list.setPlainText("\n".join(lines))
+        self.result_index = 0 if self.result_records else -1
+        self.update_result_position()
+
+    def move_result_cursor(self, offset: int) -> None:
+        if not self.result_records:
+            self.update_result_position()
             return
-        for key, label in self.result_values.items():
-            if key in counts:
-                label.setText(str(counts[key]))
+        self.result_index = max(0, min(len(self.result_records) - 1, self.result_index + offset))
+        self.update_result_position()
+
+    def update_result_position(self) -> None:
+        total = len(self.result_records)
+        current = 0 if total == 0 else self.result_index + 1
+        self.result_position_label.setText(f"{current} / {total}")
+
+    def animate_current_tab(self) -> None:
+        widget = self.side_tabs.currentWidget()
+        if widget:
+            self.animate_widget(widget, 180)
+
+    def animate_widget(self, widget: QWidget, duration: int = 220) -> None:
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+        animation = QPropertyAnimation(effect, b"opacity", self)
+        animation.setDuration(duration)
+        animation.setStartValue(0.72)
+        animation.setEndValue(1.0)
+        animation.setEasingCurve(QEasingCurve.OutCubic)
+        animation.finished.connect(lambda: widget.setGraphicsEffect(None))
+        self._tab_animation = animation
+        animation.start()
 
     def _log(self, message: str) -> None:
         self.log.append(message)
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self.save_settings()
+        super().closeEvent(event)
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "pyside_ui"))
 
-from PySide6.QtWidgets import QApplication, QCheckBox, QSlider  # noqa: E402
+from PySide6.QtWidgets import QApplication, QCheckBox, QPushButton, QSlider, QTabWidget  # noqa: E402
 
 import app as ui_app  # noqa: E402
 import resolve_bridge  # noqa: E402
@@ -175,6 +175,103 @@ class PySideUiTest(unittest.TestCase):
                     sys.frozen = old_frozen
                 else:
                     delattr(sys, "frozen")
+
+    def test_settings_cache_roundtrip_restores_options_and_in_out(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings_file = Path(tmp) / "ui_settings.json"
+            with patch.object(ui_app, "settings_path", return_value=settings_file, create=True):
+                first = MainWindow()
+                first.io_in.setText("01:00:01:00")
+                first.io_out.setText("01:00:05:12")
+                first.chk_scene.setChecked(True)
+                first.chk_content_dup.setChecked(True)
+                first.chk_audio_mono.setChecked(True)
+                first.content_sample_interval.setValue(24)
+                first.save_settings()
+
+                second = MainWindow()
+                second.load_settings()
+
+        self.assertEqual(second.io_in.text(), "01:00:01:00")
+        self.assertEqual(second.io_out.text(), "01:00:05:12")
+        self.assertTrue(second.chk_scene.isChecked())
+        self.assertTrue(second.chk_content_dup.isChecked())
+        self.assertTrue(second.chk_audio_mono.isChecked())
+        self.assertEqual(second.content_sample_interval.value(), 24)
+
+    def test_results_tab_is_visible_and_completion_switches_to_results(self) -> None:
+        window = MainWindow()
+        tabs = window.findChildren(QTabWidget)
+
+        self.assertTrue(tabs)
+        self.assertIs(window.side_tabs, tabs[0])
+        self.assertIn("结果", [window.side_tabs.tabText(i) for i in range(window.side_tabs.count())])
+        self.assertIn("音频", [window.side_tabs.tabText(i) for i in range(window.side_tabs.count())])
+
+        window.side_tabs.setCurrentWidget(window.log_tab)
+        with patch.object(
+            ui_app,
+            "read_progress_file",
+            return_value={
+                "percent": 100,
+                "stage": "检测完成",
+                "state": "complete",
+                "counts": {"total": 2, "error": 1, "duplicate": 1},
+                "records": [
+                    {
+                        "timecode": "01:00:01:00",
+                        "classification": "error",
+                        "name": "[BFD-ERR] 夹帧错误",
+                        "color": "Red",
+                    }
+                ],
+            },
+        ):
+            window.poll_detection_progress()
+
+        self.assertIs(window.side_tabs.currentWidget(), window.results_tab)
+        self.assertEqual(window.result_values["total"].text(), "2")
+        self.assertIn("01:00:01:00", window.result_list.toPlainText())
+
+    def test_current_timeline_marks_fill_manual_in_out(self) -> None:
+        window = MainWindow()
+        window.bridge.current_timeline_marks = lambda timeline_index: {
+            "ok": True,
+            "in_tc": "01:00:00:00",
+            "out_tc": "01:00:08:12",
+            "message": "已读取当前时间线入出点。",
+        }
+
+        window.fill_in_out_from_current_timeline_marks()
+
+        self.assertEqual(window.io_in.text(), "01:00:00:00")
+        self.assertEqual(window.io_out.text(), "01:00:08:12")
+
+    def test_audio_mono_controls_and_params_are_present(self) -> None:
+        window = MainWindow()
+        buttons = {button.text(): button for button in window.findChildren(QPushButton)}
+
+        self.assertTrue(window.chk_audio_mono.isChecked())
+        self.assertIn("扫描单声道", buttons)
+        self.assertIn("标记单声道", buttons)
+        self.assertIn("一键修正双声道", buttons)
+        self.assertTrue(window.scan_audio_btn.toolTip())
+        self.assertTrue(window.fix_audio_btn.toolTip())
+        self.assertTrue(window.collect_params()["detect_mono_audio"])
+
+    def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
+        mono_mapping = {
+            "embedded_audio_channels": 1,
+            "track_mapping": {"1": {"type": "mono", "channel_idx": [1]}},
+        }
+        stereo_mapping = {
+            "embedded_audio_channels": 2,
+            "track_mapping": {"1": {"type": "stereo", "channel_idx": [1, 2]}},
+        }
+
+        self.assertTrue(resolve_bridge.is_mono_audio_mapping(mono_mapping))
+        self.assertFalse(resolve_bridge.is_mono_audio_mapping(stereo_mapping))
+        self.assertEqual(resolve_bridge.frames_to_timecode(1500, 25), "00:01:00:00")
 
 
 if __name__ == "__main__":

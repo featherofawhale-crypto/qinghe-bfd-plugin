@@ -1,6 +1,6 @@
 # Lua bytecode protection and PySide6 bridge
 
-Current Windows plugin version: `1.9.56`.
+Current Windows plugin version: `1.9.57`.
 
 ## LuaJIT bytecode build
 

@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.56
+-- 版本: v1.9.57
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -120,7 +120,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.56 启动 ===")
+dlog("=== BFD v1.9.57 启动 ===")
 setup_module_path()
 
 -- ============================================================
@@ -1671,8 +1671,58 @@ function Main()
         dlog("阶段11: HTML报告已跳过（用户未勾选）")
     end
 
+    local function build_progress_payload(records)
+        local counts = {
+            total = #records,
+            error = 0,
+            suspect = 0,
+            scene = 0,
+            gap = 0,
+            duplicate = 0,
+            content_dup = 0,
+            opacity = 0,
+            corrupt = 0,
+        }
+        local compact_records = {}
+        for i, r in ipairs(records) do
+            local cls = r.classification or "info"
+            local marker_name = r.marker_name or cls
+            if tostring(marker_name):find("%[BFD%-COR%]") then
+                counts.corrupt = counts.corrupt + 1
+            elseif cls == "error" then
+                counts.error = counts.error + 1
+            elseif cls == "suspect" then
+                counts.suspect = counts.suspect + 1
+            elseif cls == "scene" then
+                counts.scene = counts.scene + 1
+            elseif cls == "gap" then
+                counts.gap = counts.gap + 1
+            elseif cls == "duplicate" then
+                counts.duplicate = counts.duplicate + 1
+            elseif cls == "content_dup" then
+                counts.content_dup = counts.content_dup + 1
+                counts.duplicate = counts.duplicate + 1
+            elseif cls == "opacity" then
+                counts.opacity = counts.opacity + 1
+            end
+            if i <= 500 then
+                table.insert(compact_records, {
+                    timecode = r.timeline_start_tc or "",
+                    classification = cls,
+                    name = marker_name,
+                    color = r.marker_color or "",
+                    note = r.note or "",
+                })
+            end
+        end
+        return {
+            counts = counts,
+            records = compact_records,
+        }
+    end
+
     print("========== 检测完成 ==========")
-    if ProgressBridge then ProgressBridge.complete(params, "检测完成") end
+    if ProgressBridge then ProgressBridge.complete(params, "检测完成", build_progress_payload(selected_records)) end
     print(string.format("  共 %d 个问题（夹帧:%d 可疑:%d 转场:%d 空位:%d）",
         #selected_records,
         analyzed_results.summary.error_count or 0,
@@ -1684,7 +1734,12 @@ function Main()
     print("")
 
     end  -- has_problems: 有问题时执行阶段7-11
-    if not has_problems and ProgressBridge then ProgressBridge.complete(params, "未检测到问题") end
+    if not has_problems and ProgressBridge then
+        ProgressBridge.complete(params, "未检测到问题", {
+            counts = { total = 0, error = 0, suspect = 0, scene = 0, gap = 0, duplicate = 0, content_dup = 0, opacity = 0, corrupt = 0 },
+            records = {},
+        })
+    end
     if external_single_run then
         print("[BFD] 外部参数模式：单次检测完成，退出")
         break
