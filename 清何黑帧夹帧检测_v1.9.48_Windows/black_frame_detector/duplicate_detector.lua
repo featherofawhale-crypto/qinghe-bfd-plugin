@@ -38,7 +38,7 @@ end
 -- ============================================================
 function DuplicateDetector.detect(clips, timeline_fps, params)
     params = params or {}
-    timeline_fps = timeline_fps or 24
+    timeline_fps = timeline_fps or 25
 
     local near_threshold_sec = params.dup_near_threshold or config.DUPLICATE.NEAR_THRESHOLD_SEC
     local far_threshold_sec = params.dup_far_threshold or config.DUPLICATE.FAR_THRESHOLD_SEC
@@ -376,7 +376,7 @@ end
 -- ============================================================
 function DuplicateDetector.to_marker_records(dup_results, timeline_fps)
     local Analyzer = require("black_frame_analyzer")
-    local fps = timeline_fps or 24
+    local fps = timeline_fps or 25
     local records = {}
 
     local function add_dup_records(dup, color, name_a, name_b)
@@ -504,7 +504,7 @@ end
 --   hash = 块均值哈希(8 hex) 用于精确匹配
 --   edge_hash = 边缘哈希(120 hex) 用于调色后汉明距离匹配
 function DuplicateDetector._extract_fingerprints(file_path, interval_frames, thumb_size, fps, clip_start_sec, clip_duration_sec)
-    fps = fps or 24
+    fps = fps or 25
     if not file_path then return {} end
 
     local f = io.open(file_path, "r")
@@ -873,7 +873,7 @@ end
 -- 主入口：检测所有片段的内容重复（双哈希策略）
 function DuplicateDetector.detect_content(clips, timeline_fps, params)
     params = params or {}
-    timeline_fps = timeline_fps or 24
+    timeline_fps = timeline_fps or 25
 
     local interval_frames = params.content_sample_interval or config.DUPLICATE.CONTENT_SAMPLE_INTERVAL
     local thumb_size = params.content_thumb_size or config.DUPLICATE.CONTENT_THUMB_SIZE
@@ -1072,7 +1072,7 @@ end
 -- io_in_frame: IO入点的绝对帧号（渲染帧0 = 时间线io_in_frame）
 -- 返回格式与detect_content一致
 function DuplicateDetector.detect_content_render(render_path, io_in_frame, timeline_fps, params)
-    timeline_fps = timeline_fps or 24
+    timeline_fps = timeline_fps or 25
     local interval = params.content_sample_interval or config.DUPLICATE.CONTENT_SAMPLE_INTERVAL
     local thumb_size = config.DUPLICATE.CONTENT_THUMB_SIZE
     local min_gap_sec = config.DUPLICATE.CONTENT_MIN_GAP_SEC
@@ -1168,7 +1168,7 @@ end
 function DuplicateDetector.content_to_marker_records(content_results, timeline_fps)
     local Analyzer = require("black_frame_analyzer")
     local records = {}
-    timeline_fps = timeline_fps or 24
+    timeline_fps = timeline_fps or 25
 
     for _, file_result in ipairs(content_results.results) do
         local clip = file_result.clip

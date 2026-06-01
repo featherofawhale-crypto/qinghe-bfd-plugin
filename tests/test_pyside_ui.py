@@ -89,6 +89,29 @@ class PySideUiTest(unittest.TestCase):
         self.assertTrue(params["merge_mode"])
         self.assertFalse(params["complex_mode"])
 
+    def test_collect_params_uses_selected_timeline_fps_for_thresholds(self) -> None:
+        with patch.object(
+            ui_app.ResolveBridge,
+            "list_timelines",
+            return_value=[
+                TimelineInfo(1, "25fps 主时间线", 25.0),
+                TimelineInfo(2, "60fps 发布会", 60.0),
+            ],
+        ):
+            window = MainWindow()
+
+        window.timeline_combo.setCurrentIndex(1)
+        window.reset_threshold_defaults()
+
+        params = window.collect_params()
+
+        self.assertEqual(params["timeline_index"], 2)
+        self.assertEqual(params["timeline_fps"], 60.0)
+        self.assertEqual(params["stuck_frames"], 8)
+        self.assertEqual(params["suspect_frames"], 29)
+        self.assertEqual(params["min_black_frames"], 3)
+        self.assertAlmostEqual(params["min_duration"], 3 / 60.0, places=5)
+
     def test_bad_frame_detection_requires_complex_mode(self) -> None:
         window = MainWindow()
 

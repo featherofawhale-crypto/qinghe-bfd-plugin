@@ -46,12 +46,13 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.76"
+APP_VERSION = "1.9.77"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
 DEFAULT_SUSPECT_FRAMES = 12
 DEFAULT_MIN_BLACK_FRAMES = 1
+BASELINE_FPS = 25.0
 DEFAULT_PIXEL_THRESHOLD = 1.0
 DEFAULT_CONTENT_SAMPLE_INTERVAL = 3
 MAX_FRAME_THRESHOLD = 100
@@ -446,6 +447,7 @@ class MainWindow(QMainWindow):
         self._active_animations: list[QPropertyAnimation] = []
         self._loading_timelines = False
         self._loading_settings = False
+        self._control_fps = BASELINE_FPS
         self.progress_timer = QTimer(self)
         self.progress_timer.setInterval(700)
         self.progress_timer.timeout.connect(self.poll_detection_progress)
@@ -977,11 +979,13 @@ class MainWindow(QMainWindow):
         ):
             self.batch_timeline_list.item(0).setCheckState(Qt.Checked)
         self._loading_timelines = False
+        self._rescale_threshold_controls(self._control_fps, self.selected_fps())
         self.update_fps_hint()
 
     def on_timeline_changed(self) -> None:
         if self._loading_timelines or self._loading_settings:
             return
+        self._rescale_threshold_controls(self._control_fps, self.selected_fps())
         self.update_fps_hint()
 
     def on_batch_toggled(self, checked: bool) -> None:
@@ -999,14 +1003,30 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def scaled_frames(base_frames_at_25fps: int, fps: float) -> int:
-        return max(1, int(math.ceil(base_frames_at_25fps * float(fps or 25.0) / 25.0)))
+        return max(1, int(math.ceil(base_frames_at_25fps * float(fps or BASELINE_FPS) / BASELINE_FPS)))
+
+    def _frames_between_fps(self, frames: int, source_fps: float, target_fps: float) -> int:
+        source = max(1.0, float(source_fps or BASELINE_FPS))
+        base_frames = max(1, int(round(frames * BASELINE_FPS / source)))
+        return self.scaled_frames(base_frames, target_fps)
+
+    def _rescale_threshold_controls(self, source_fps: float, target_fps: float) -> None:
+        target = max(1.0, float(target_fps or BASELINE_FPS))
+        source = max(1.0, float(source_fps or BASELINE_FPS))
+        if abs(target - source) < 0.001:
+            self._control_fps = target
+            return
+        for widget in (self.stuck_frames, self.suspect_frames, self.min_black_frames):
+            widget.blockSignals(True)
+            widget.setValue(self._frames_between_fps(widget.value(), source, target))
+            widget.blockSignals(False)
+        self._control_fps = target
 
     def frames_for_timeline(self, current_frames: int, target_fps: float) -> int:
-        source_fps = self.selected_fps()
-        if abs(float(target_fps or 25.0) - source_fps) < 0.001:
+        source_fps = max(1.0, float(getattr(self, "_control_fps", self.selected_fps()) or BASELINE_FPS))
+        if abs(float(target_fps or BASELINE_FPS) - source_fps) < 0.001:
             return current_frames
-        base_frames = max(1, int(round(current_frames * 25.0 / max(1.0, source_fps))))
-        return self.scaled_frames(base_frames, target_fps)
+        return self._frames_between_fps(current_frames, source_fps, target_fps)
 
     def min_duration_seconds(self, fps: float | None = None) -> float:
         fps = fps or self.selected_fps()
@@ -1140,9 +1160,11 @@ class MainWindow(QMainWindow):
             self.update_fps_hint()
 
     def reset_threshold_defaults(self) -> None:
-        self.stuck_frames.setValue(DEFAULT_STUCK_FRAMES)
-        self.suspect_frames.setValue(DEFAULT_SUSPECT_FRAMES)
-        self.min_black_frames.setValue(DEFAULT_MIN_BLACK_FRAMES)
+        fps = self.selected_fps()
+        self.stuck_frames.setValue(self.scaled_frames(DEFAULT_STUCK_FRAMES, fps))
+        self.suspect_frames.setValue(self.scaled_frames(DEFAULT_SUSPECT_FRAMES, fps))
+        self.min_black_frames.setValue(self.scaled_frames(DEFAULT_MIN_BLACK_FRAMES, fps))
+        self._control_fps = fps
         self.pixel_threshold.setValue(DEFAULT_PIXEL_THRESHOLD)
         self.content_sample_interval.setValue(DEFAULT_CONTENT_SAMPLE_INTERVAL)
         self.update_fps_hint()
@@ -1481,21 +1503,21 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def result_sort_key(record: dict) -> tuple[int, str]:
-        for key in ("frame", "timeline_start_frame", "marker_frame"):
-            try:
-                value = record.get(key)
-                if value is not None and value != "":
-                    return int(float(value)), str(record.get("timecode") or record.get("timeline_start_tc") or "")
-            except Exception:
-                pass
         timecode = str(record.get("timecode") or record.get("timeline_start_tc") or "")
         parts = timecode.split(":")
         if len(parts) == 4:
             try:
                 hh, mm, ss, ff = [int(part) for part in parts]
-                fps = int(round(float(record.get("fps") or record.get("timeline_fps") or 24)))
+                fps = int(round(float(record.get("fps") or record.get("timeline_fps") or BASELINE_FPS)))
                 fps = max(1, fps)
                 return (((hh * 60 + mm) * 60 + ss) * fps + ff), timecode
+            except Exception:
+                pass
+        for key in ("frame", "timeline_start_frame", "marker_frame"):
+            try:
+                value = record.get(key)
+                if value is not None and value != "":
+                    return int(float(value)), str(record.get("timecode") or record.get("timeline_start_tc") or "")
             except Exception:
                 pass
         return 10**12, timecode

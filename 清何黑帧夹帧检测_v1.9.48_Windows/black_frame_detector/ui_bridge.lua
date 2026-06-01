@@ -151,7 +151,7 @@ function UIBridge.get_params_uimanager(version_compat, timeline_list)
         end
         timeline_count = #timeline_list
     else
-        table.insert(timeline_map, { name = "当前时间线", fps = 24, timeline = nil })
+        table.insert(timeline_map, { name = "当前时间线", fps = 25, timeline = nil })
         timeline_count = 1
     end
 
@@ -335,7 +335,7 @@ function UIBridge.get_params_uimanager(version_compat, timeline_list)
             selected_tl_index = idx
             selected_tl = timeline_map[idx]
             print(string.format("[BFD] 已选择时间线: [%d/%d] %s (%.0ffps)",
-                idx, timeline_count, selected_tl.name or "?", selected_tl.fps or 24))
+                idx, timeline_count, selected_tl.name or "?", selected_tl.fps or 25))
             dlog("时间线SpinBox: " .. idx)
         end
     end
@@ -377,7 +377,7 @@ function UIBridge.get_params_uimanager(version_compat, timeline_list)
     win.On.StartBtn.Clicked = function(ev)
         local tl = selected_tl or timeline_map[1]
         local tl_idx = selected_tl_index
-        local tl_fps = tl.fps or 24
+        local tl_fps = tl.fps or 25
         dlog("StartBtn: idx=" .. tl_idx .. " timeline=" .. (tl.name or "?") .. " fps=" .. tl_fps .. " html_report=" .. tostring(chk_html_report))
 
         -- 复杂模式校验：必须填写IO出入点
@@ -939,7 +939,7 @@ function UIBridge.get_params_askuser(version_compat, timeline_list)
         verbose          = true,
         -- 时间线选择
         timeline_name    = selected_tl and selected_tl.name or "当前时间线",
-        timeline_fps     = selected_tl and selected_tl.fps or 24,
+        timeline_fps     = selected_tl and selected_tl.fps or 25,
         timeline_obj     = selected_tl and selected_tl.timeline,
     }
 

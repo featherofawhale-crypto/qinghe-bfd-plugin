@@ -1,5 +1,5 @@
 -- config.lua - 清何黑帧夹帧检测小工具 全局配置
--- 版本: v1.9.76
+-- 版本: v1.9.77
 
 local config = {}
 
@@ -7,7 +7,7 @@ local config = {}
 -- 插件元信息
 -- ============================================================
 config.PLUGIN_NAME = "清何黑帧夹帧检测小工具"
-config.PLUGIN_VERSION = "1.9.76"
+config.PLUGIN_VERSION = "1.9.77"
 config.PLUGIN_AUTHOR = "qinghe"
 config.MARKER_PREFIX = "[BFD]"  -- Black Frame Detection 标记前缀
 
@@ -16,7 +16,7 @@ config.MARKER_PREFIX = "[BFD]"  -- Black Frame Detection 标记前缀
 -- ============================================================
 config.FFMPEG = {
     -- 最小黑帧检测时长（秒），低于此值的黑帧不报告
-    MIN_BLACK_DURATION = 0.04,   -- d参数，约等于1帧@24fps
+    MIN_BLACK_DURATION = 0.04,   -- d参数兜底；UI/Lua会按实际时间线帧率换算帧数
 
     -- 黑色像素亮度阈值 (0.0-1.0)，值越小越严格
     PIXEL_THRESHOLD = 0.01,
@@ -45,8 +45,8 @@ config.CLASSIFICATION = {
     SUSPECT_FRAMES = 12,     -- 默认 ≤12帧 = 可疑
 
     -- 秒数模式阈值（当 USE_FRAMES=false 时使用，作为fallback）
-    STUCK_FRAME_THRESHOLD = 0.12,   -- ≈3帧@24fps
-    SUSPECT_THRESHOLD = 0.50,       -- ≈12帧@24fps
+    STUCK_FRAME_THRESHOLD = 0.12,   -- 秒数模式兜底；帧数模式按实际时间线帧率换算
+    SUSPECT_THRESHOLD = 0.50,       -- 秒数模式兜底；帧数模式按实际时间线帧率换算
 
     -- 超过此值的黑帧视为纯黑素材，不标记（单位：秒）
     IGNORE_ABOVE = 30.0,
@@ -136,7 +136,7 @@ config.DUPLICATE = {
     CONTENT_DETECT_ENABLED = true,
 
     -- 采样间隔（帧数），默认每3帧采样一次
-    -- 3帧@24fps≈0.125s, 3帧@25fps≈0.12s, 3帧@30fps≈0.1s
+    -- 按实际时间线帧率换算，例如3帧@25fps≈0.12s，3帧@30fps≈0.1s
     CONTENT_SAMPLE_INTERVAL = 3,
 
     -- 指纹缩略图尺寸（像素），16x16用于分块均值哈希

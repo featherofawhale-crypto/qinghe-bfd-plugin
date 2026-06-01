@@ -15,7 +15,7 @@ local Analyzer = {}
 -- 帧数 → 秒数 换算
 -- ============================================================
 function Analyzer.frames_to_seconds(frames, fps)
-    fps = fps or 24
+    fps = fps or 25
     return frames / fps
 end
 
@@ -23,7 +23,7 @@ end
 -- 秒数 → 帧数 换算
 -- ============================================================
 function Analyzer.seconds_to_frames(seconds, fps)
-    fps = fps or 24
+    fps = fps or 25
     return seconds * fps
 end
 
@@ -36,7 +36,7 @@ end
 -- ============================================================
 function Analyzer.classify_segment(duration_sec, params, fps)
     params = params or {}
-    fps = fps or 24
+    fps = fps or 25
 
     local ignore_above = params.ignore_above or config.CLASSIFICATION.IGNORE_ABOVE
 
@@ -131,7 +131,7 @@ end
 -- 时间码格式化（帧号 → HH:MM:SS:FF）
 -- ============================================================
 function Analyzer.frame_to_timecode(frame, fps)
-    fps = fps or 24
+    fps = fps or 25
     local total_seconds = math.floor(frame / fps)
     local hours = math.floor(total_seconds / 3600)
     local minutes = math.floor((total_seconds % 3600) / 60)
@@ -144,7 +144,7 @@ end
 -- 帧数文本（用于标记备注）
 -- ============================================================
 function Analyzer.frames_text(duration_sec, fps)
-    fps = fps or 24
+    fps = fps or 25
     local exact_frames = duration_sec * fps
     return string.format("%.1f帧 @%dfps", exact_frames, fps)
 end
@@ -316,7 +316,7 @@ end
 -- ============================================================
 function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
     params = params or {}
-    timeline_fps = timeline_fps or 24
+    timeline_fps = timeline_fps or 25
 
     -- 构建片段覆盖表用于空位检测
     local coverage_table = nil

@@ -247,7 +247,7 @@ end
 
 -- ============================================================
 -- 获取项目中所有时间线列表
--- 返回: {{name="xx", timeline=obj, fps=24, index=1}, ...}, error
+-- 返回: {{name="xx", timeline=obj, fps=25, index=1}, ...}, error
 -- ============================================================
 function VersionCompat:get_all_timelines()
     local pm = self.resolve:GetProjectManager()
@@ -273,11 +273,18 @@ function VersionCompat:get_all_timelines()
             pcall(function() name = tl:GetName() end)
 
             -- 自动检测帧率
-            local fps = 24
+            local fps = nil
             pcall(function()
                 local v = tonumber(tl:GetSetting("timelineFrameRate"))
                 if v then fps = v end
             end)
+            if not fps then
+                pcall(function()
+                    local v = tonumber(project:GetSetting("timelineFrameRate"))
+                    if v then fps = v end
+                end)
+            end
+            fps = fps or 25
 
             table.insert(timelines, {
                 name = name,
@@ -576,7 +583,7 @@ end
 -- ============================================================
 function VersionCompat:get_timeline_start_offset(timeline, fps)
     if not timeline then return 0 end
-    fps = fps or 24
+    fps = fps or 25
     local tc_str = nil
     pcall(function()
         tc_str = timeline:GetStartTimecode()

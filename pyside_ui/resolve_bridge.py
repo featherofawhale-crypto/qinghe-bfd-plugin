@@ -44,7 +44,7 @@ def read_progress_file(path: Path | None = None) -> dict[str, Any] | None:
 
 
 def frames_to_timecode(frame: int | float, fps: int | float) -> str:
-    fps_int = max(1, int(round(float(fps or 24))))
+    fps_int = max(1, int(round(float(fps or 25))))
     total_frames = max(0, int(round(float(frame or 0))))
     frames = total_frames % fps_int
     total_seconds = total_frames // fps_int
@@ -565,7 +565,7 @@ def safe(callable_obj, default=None):
         return default
 
 def tc_from_frame(frame, fps):
-    fps_int = max(1, int(round(float(fps or 24))))
+    fps_int = max(1, int(round(float(fps or 25))))
     total = max(0, int(round(float(frame or 0))))
     ff = total % fps_int
     total_seconds = total // fps_int
@@ -574,11 +574,11 @@ def tc_from_frame(frame, fps):
     hh = total_seconds // 3600
     return f"{{hh:02d}}:{{mm:02d}}:{{ss:02d}}:{{ff:02d}}"
 
-fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), 24) or 24
+fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), None) or safe(lambda: project.GetSetting("timelineFrameRate"), None) or 25
 try:
     fps = float(fps_raw)
 except Exception:
-    fps = 24.0
+    fps = 25.0
 start_frame = safe(lambda: timeline.GetStartFrame(), 0) or 0
 markers = timeline.GetMarkers() or {{}}
 records = []
@@ -687,7 +687,7 @@ def safe(callable_obj, default=None):
         return default
 
 def tc_from_frame(frame, fps):
-    fps_int = max(1, int(round(float(fps or 24))))
+    fps_int = max(1, int(round(float(fps or 25))))
     total = max(0, int(round(float(frame or 0))))
     ff = total % fps_int
     total_seconds = total // fps_int
@@ -696,11 +696,11 @@ def tc_from_frame(frame, fps):
     hh = total_seconds // 3600
     return f"{{hh:02d}}:{{mm:02d}}:{{ss:02d}}:{{ff:02d}}"
 
-fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), 24) or 24
+fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), None) or safe(lambda: project.GetSetting("timelineFrameRate"), None) or 25
 try:
     fps = float(fps_raw)
 except Exception:
-    fps = 24.0
+    fps = 25.0
 start_frame = safe(lambda: timeline.GetStartFrame(), 0) or 0
 TEXT_KEYS = ["Text", "StyledText", "Text+", "Title", "Subtitle", "Caption", "Name", "Clip Name", "CustomName", "Comments"]
 TITLE_HINT_KEYS = {"Text", "StyledText", "Text+", "Title", "Subtitle", "Caption", "CustomName"}

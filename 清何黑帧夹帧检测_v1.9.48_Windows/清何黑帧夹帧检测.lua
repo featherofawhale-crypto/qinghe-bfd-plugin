@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.76
+-- 版本: v1.9.77
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.76 启动 ===")
+dlog("=== BFD v1.9.77 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -522,7 +522,7 @@ function Main()
     -- 使用用户选择的时间线（或fallback到当前）
     local timeline = params.timeline_obj
     local timeline_name = params.timeline_name or "未命名"
-    local timeline_fps = params.timeline_fps or 25
+    local timeline_fps = tonumber(params.timeline_fps)
     dlog("阶段4入口: timeline_obj=" .. tostring(timeline) .. " name=" .. timeline_name .. " fps=" .. timeline_fps)
 
     if not timeline then
@@ -538,10 +538,20 @@ function Main()
         timeline = current_tl
         timeline_name = current_tl:GetName() or "未命名"
         dlog("fallback成功: " .. timeline_name)
-        pcall(function()
-            local v = tonumber(current_tl:GetSetting("timelineFrameRate"))
-            if v then timeline_fps = v end
-        end)
+    end
+    local api_timeline_fps = nil
+    pcall(function()
+        api_timeline_fps = tonumber(timeline:GetSetting("timelineFrameRate"))
+    end)
+    if api_timeline_fps and api_timeline_fps > 0 then
+        if timeline_fps and math.abs(api_timeline_fps - timeline_fps) > 0.001 then
+            dlog(string.format("时间线帧率以Resolve实际值为准: params=%.3f actual=%.3f", timeline_fps, api_timeline_fps))
+        end
+        timeline_fps = api_timeline_fps
+    end
+    if not timeline_fps or timeline_fps <= 0 then
+        timeline_fps = 25
+        dlog("WARN: 无法读取时间线帧率，使用25fps兜底")
     end
 
     dlog("时间线已确认: " .. timeline_name .. " (" .. timeline_fps .. "fps)")

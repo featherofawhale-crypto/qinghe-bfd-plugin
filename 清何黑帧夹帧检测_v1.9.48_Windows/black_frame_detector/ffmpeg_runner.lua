@@ -239,7 +239,7 @@ function FFmpegRunner:_get_video_info_ffprobe(file_path)
     local output = f:read("*a")
     f:close()
 
-    local info = { duration = 0, fps = 24, width = 1920, height = 1080, codec = "unknown" }
+    local info = { duration = 0, fps = 25, width = 1920, height = 1080, codec = "unknown" }
 
     local duration_str = output:match('"duration"%s*:%s*"([%d%.]+)"')
     if duration_str then
@@ -289,7 +289,7 @@ function FFmpegRunner:_get_video_info_ffmpeg_fallback(file_path)
     local output = f:read("*a")
     f:close()
 
-    local info = { duration = 0, fps = 24, width = 1920, height = 1080, codec = "unknown" }
+    local info = { duration = 0, fps = 25, width = 1920, height = 1080, codec = "unknown" }
 
     -- 解析 Duration: 00:01:23.45
     local h, m, s = output:match("Duration:%s*(%d+):(%d+):([%d%.]+)")
