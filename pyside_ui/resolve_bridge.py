@@ -519,6 +519,268 @@ print(json.dumps({{"ok": ok, "message": message}}, ensure_ascii=False))
             return False, "跳转失败：Resolve API 未返回结果。"
         return bool(data.get("ok")), str(data.get("message", "跳转完成。"))
 
+    def bfd_marker_records(self, timeline_index: int = 1) -> dict[str, Any]:
+        data = self._run_resolve_python(
+            rf'''
+import json
+resolve = dvr_script.scriptapp("Resolve")
+project_manager = resolve.GetProjectManager() if resolve else None
+project = project_manager.GetCurrentProject() if project_manager else None
+timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+if not timeline:
+    print(json.dumps({{"ok": False, "message": "未找到目标时间线。", "records": []}}, ensure_ascii=False))
+    raise SystemExit(0)
+
+def safe(callable_obj, default=None):
+    try:
+        return callable_obj()
+    except Exception:
+        return default
+
+def tc_from_frame(frame, fps):
+    fps_int = max(1, int(round(float(fps or 24))))
+    total = max(0, int(round(float(frame or 0))))
+    ff = total % fps_int
+    total_seconds = total // fps_int
+    ss = total_seconds % 60
+    mm = (total_seconds // 60) % 60
+    hh = total_seconds // 3600
+    return f"{{hh:02d}}:{{mm:02d}}:{{ss:02d}}:{{ff:02d}}"
+
+fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), 24) or 24
+try:
+    fps = float(fps_raw)
+except Exception:
+    fps = 24.0
+start_frame = safe(lambda: timeline.GetStartFrame(), 0) or 0
+markers = timeline.GetMarkers() or {{}}
+records = []
+counts = {{"total": 0, "error": 0, "suspect": 0, "scene": 0, "gap": 0, "duplicate": 0, "content_dup": 0, "opacity": 0, "corrupt": 0}}
+
+def classify(name, color):
+    text = str(name or "").upper()
+    if "OPC" in text:
+        return "opacity"
+    if "GAP" in text:
+        return "gap"
+    if "DUP" in text:
+        return "duplicate"
+    if "COR" in text:
+        return "corrupt"
+    if "SUS" in text:
+        return "suspect"
+    if "SCN" in text or "SCENE" in text:
+        return "scene"
+    if "FP" in text or "FINGER" in text:
+        return "content_dup"
+    if "OVL" in text or "ERR" in text or "BFD" in text:
+        return "error"
+    return "info"
+
+for frame, marker in markers.items():
+    name = str(marker.get("name", "") or "")
+    note = str(marker.get("note", "") or "")
+    if "[BFD" not in name and "[BFD" not in note:
+        continue
+    try:
+        relative_frame = int(float(frame))
+    except Exception:
+        relative_frame = 0
+    abs_frame = int(start_frame) + relative_frame
+    color = str(marker.get("color", "") or "")
+    classification = classify(name, color)
+    counts["total"] += 1
+    if classification in counts:
+        counts[classification] += 1
+    records.append({{
+        "timeline_index": {int(timeline_index)},
+        "frame": abs_frame,
+        "marker_frame": relative_frame,
+        "timecode": tc_from_frame(abs_frame, fps),
+        "color": color,
+        "classification": classification,
+        "name": name,
+        "note": note,
+        "duration_frames": marker.get("duration", 1),
+    }})
+
+records.sort(key=lambda item: int(item.get("frame") or 0))
+print(json.dumps({{
+    "ok": True,
+    "message": f"已从时间线读取 {{len(records)}} 条 BFD 标记。",
+    "records": records,
+    "counts": counts,
+}}, ensure_ascii=False))
+'''
+        )
+        if not data:
+            return {"ok": False, "message": "读取时间线标记失败：Resolve API 未返回结果。", "records": [], "counts": {}}
+        return data
+
+    def scan_text_items(self, timeline_index: int = 1, query: str = "") -> dict[str, Any]:
+        return self._text_action(timeline_index, "scan", query=query)
+
+    def jump_to_text_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        return self._text_action(int(item.get("timeline_index", 1)), "jump", item=item)
+
+    def replace_text_item(self, item: dict[str, Any], text: str) -> dict[str, Any]:
+        return self._text_action(int(item.get("timeline_index", 1)), "replace", item=item, text=text)
+
+    def delete_text_item(self, item: dict[str, Any]) -> dict[str, Any]:
+        return self._text_action(int(item.get("timeline_index", 1)), "delete", item=item)
+
+    def _text_action(
+        self,
+        timeline_index: int,
+        action: str,
+        query: str = "",
+        item: dict[str, Any] | None = None,
+        text: str = "",
+    ) -> dict[str, Any]:
+        action = action if action in {"scan", "jump", "replace", "delete"} else "scan"
+        data = self._run_resolve_python(
+            rf'''
+import json
+ACTION = {json.dumps(action)}
+QUERY = {json.dumps(query)}
+ITEM = {json.dumps(item or {}, ensure_ascii=False)}
+NEW_TEXT = {json.dumps(text, ensure_ascii=False)}
+resolve = dvr_script.scriptapp("Resolve")
+project_manager = resolve.GetProjectManager() if resolve else None
+project = project_manager.GetCurrentProject() if project_manager else None
+timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+if not timeline:
+    print(json.dumps({{"ok": False, "message": "未找到目标时间线。", "items": []}}, ensure_ascii=False))
+    raise SystemExit(0)
+
+def safe(callable_obj, default=None):
+    try:
+        return callable_obj()
+    except Exception:
+        return default
+
+def tc_from_frame(frame, fps):
+    fps_int = max(1, int(round(float(fps or 24))))
+    total = max(0, int(round(float(frame or 0))))
+    ff = total % fps_int
+    total_seconds = total // fps_int
+    ss = total_seconds % 60
+    mm = (total_seconds // 60) % 60
+    hh = total_seconds // 3600
+    return f"{{hh:02d}}:{{mm:02d}}:{{ss:02d}}:{{ff:02d}}"
+
+fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), 24) or 24
+try:
+    fps = float(fps_raw)
+except Exception:
+    fps = 24.0
+start_frame = safe(lambda: timeline.GetStartFrame(), 0) or 0
+TEXT_KEYS = ["Text", "StyledText", "Text+", "Title", "Subtitle", "Caption", "Name", "Clip Name", "CustomName", "Comments"]
+TITLE_HINT_KEYS = {"Text", "StyledText", "Text+", "Title", "Subtitle", "Caption", "CustomName"}
+
+def get_item(track_type, track_index, item_index):
+    clips = safe(lambda: timeline.GetItemListInTrack(track_type, track_index), []) or []
+    if item_index < 0 or item_index >= len(clips):
+        return None
+    return clips[item_index]
+
+def item_text(clip):
+    props = safe(lambda: clip.GetProperty(), {{}}) or {{}}
+    for key in TEXT_KEYS:
+        value = props.get(key)
+        if value not in (None, ""):
+            return str(value), key, "property"
+    fusion_count = int(safe(lambda: clip.GetFusionCompCount(), 0) or 0)
+    for comp_index in range(1, fusion_count + 1):
+        comp = safe(lambda ci=comp_index: clip.GetFusionCompByIndex(ci))
+        tools = safe(lambda c=comp: c.GetToolList(False), {{}}) if comp else {{}}
+        iterable = tools.items() if isinstance(tools, dict) else []
+        for tool_name, tool in iterable:
+            for input_key in ("StyledText", "Text", "Input"):
+                value = safe(lambda t=tool, k=input_key: t.GetInput(k))
+                if value not in (None, ""):
+                    return str(value), str(tool_name) + ":" + input_key, "fusion"
+    return str(safe(lambda: clip.GetName(), "") or ""), "Name", "name"
+
+def set_item_text(clip, key, source, new_text):
+    if source == "fusion" and ":" in str(key):
+        tool_name, input_key = str(key).split(":", 1)
+        fusion_count = int(safe(lambda: clip.GetFusionCompCount(), 0) or 0)
+        for comp_index in range(1, fusion_count + 1):
+            comp = safe(lambda ci=comp_index: clip.GetFusionCompByIndex(ci))
+            tools = safe(lambda c=comp: c.GetToolList(False), {{}}) if comp else {{}}
+            tool = tools.get(tool_name) if isinstance(tools, dict) else None
+            if tool and safe(lambda: tool.SetInput(input_key, new_text), False) is not False:
+                return True
+    for prop_key in [key, "Text", "StyledText", "Name", "Clip Name", "Comments"]:
+        if prop_key and safe(lambda pk=prop_key: clip.SetProperty(pk, new_text), False):
+            return True
+    return False
+
+def collect_items():
+    found = []
+    for track_type in ("subtitle", "video"):
+        track_count = int(safe(lambda tt=track_type: timeline.GetTrackCount(tt), 0) or 0)
+        for track_index in range(1, track_count + 1):
+            clips = safe(lambda tt=track_type, ti=track_index: timeline.GetItemListInTrack(tt, ti), []) or []
+            for item_index, clip in enumerate(clips):
+                text_value, text_key, source = item_text(clip)
+                if track_type == "video":
+                    has_fusion = int(safe(lambda c=clip: c.GetFusionCompCount(), 0) or 0) > 0
+                    item_name = str(safe(lambda c=clip: c.GetName(), "") or "")
+                    props = safe(lambda c=clip: c.GetProperty(), {{}}) or {{}}
+                    maybe_title = has_fusion or any(str(k) in TITLE_HINT_KEYS for k in props.keys()) or "title" in item_name.lower() or "text" in item_name.lower()
+                    if not maybe_title:
+                        continue
+                haystack = (text_value or "") + " " + str(safe(lambda c=clip: c.GetName(), "") or "")
+                if QUERY and QUERY.lower() not in haystack.lower():
+                    continue
+                rel_start = int(safe(lambda c=clip: c.GetStart(), 0) or 0)
+                rel_end = int(safe(lambda c=clip: c.GetEnd(), rel_start) or rel_start)
+                abs_start = int(start_frame) + rel_start
+                found.append({{
+                    "timeline_index": {int(timeline_index)},
+                    "track_type": track_type,
+                    "track_index": track_index,
+                    "item_index": item_index,
+                    "timecode": tc_from_frame(abs_start, fps),
+                    "start_frame": abs_start,
+                    "end_frame": int(start_frame) + rel_end,
+                    "text": text_value,
+                    "text_key": text_key,
+                    "text_source": source,
+                    "name": str(safe(lambda c=clip: c.GetName(), "") or ""),
+                }})
+    return found
+
+if ACTION == "scan":
+    items = collect_items()
+    print(json.dumps({{"ok": True, "message": f"找到 {{len(items)}} 条文字/字幕素材。", "items": items}}, ensure_ascii=False))
+    raise SystemExit(0)
+
+target = get_item(str(ITEM.get("track_type", "video")), int(ITEM.get("track_index", 1)), int(ITEM.get("item_index", -1)))
+if not target:
+    print(json.dumps({{"ok": False, "message": "目标文字素材不存在。"}}, ensure_ascii=False))
+    raise SystemExit(0)
+
+if ACTION == "jump":
+    tc = str(ITEM.get("timecode", ""))
+    ok = bool(tc and timeline.SetCurrentTimecode(tc))
+    if resolve:
+        resolve.OpenPage("edit")
+    print(json.dumps({{"ok": ok, "message": ("已跳转到 " + tc) if ok else "跳转失败。"}}, ensure_ascii=False))
+elif ACTION == "replace":
+    ok = set_item_text(target, str(ITEM.get("text_key", "")), str(ITEM.get("text_source", "")), NEW_TEXT)
+    print(json.dumps({{"ok": ok, "message": "文字已替换。" if ok else "该文字层未暴露可写文字属性。"}}, ensure_ascii=False))
+elif ACTION == "delete":
+    ok = bool(safe(lambda: timeline.DeleteClips([target], False), False))
+    print(json.dumps({{"ok": ok, "message": "文字层已删除。" if ok else "删除失败，Resolve 未接受该文字层。"}}, ensure_ascii=False))
+'''
+        )
+        if not data:
+            return {"ok": False, "message": "文字层操作失败：Resolve API 未返回结果。", "items": []}
+        return data
+
     def _audio_action(self, timeline_index: int, action: str) -> dict[str, Any]:
         action = action if action in {"scan", "mark", "fix"} else "scan"
         data = self._run_resolve_python(

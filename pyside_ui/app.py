@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sys
 import time
 import urllib.error
@@ -45,7 +46,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.72"
+APP_VERSION = "1.9.73"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -435,7 +436,10 @@ class MainWindow(QMainWindow):
         self.result_values: dict[str, QLabel] = {}
         self.result_records: list[dict] = []
         self.result_index = 0
+        self.text_records: list[dict] = []
+        self.text_index = -1
         self._zero_result_notice_shown = False
+        self._marker_refresh_after_complete = False
         self._tab_animation: QPropertyAnimation | None = None
         self._active_animations: list[QPropertyAnimation] = []
         self._loading_timelines = False
@@ -727,10 +731,12 @@ class MainWindow(QMainWindow):
         self.side_tabs.setObjectName("SideTabs")
         self.results_tab = self._build_results_tab()
         self.audio_tab = self._build_audio_tab()
+        self.text_tab = self._build_text_tab()
         self.log_tab = self._build_log_tab()
         self.side_tabs.addTab(self.results_tab, "结果")
         self.side_tabs.addTab(self.audio_tab, "音频")
         self.side_tabs.addTab(self.log_tab, "日志")
+        self.side_tabs.addTab(self.text_tab, "文字")
         self.side_tabs.setCurrentWidget(self.results_tab)
         self.side_tabs.currentChanged.connect(self.animate_current_tab)
         set_tip(self.side_tabs, "结果、音频扫描和执行日志会一直留在主界面右侧，检测完成后自动回到结果页。")
@@ -758,15 +764,62 @@ class MainWindow(QMainWindow):
         self.next_result_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
         self.result_position_label = QLabel("0 / 0")
         self.result_position_label.setObjectName("Muted")
+        self.refresh_results_btn = QPushButton("刷新标记")
+        self.refresh_results_btn.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
+        set_tip(self.refresh_results_btn, "从当前 Resolve 时间线重新读取 [BFD] 标记，并显示到结果列表。")
         set_tip(self.prev_result_btn, "定位到上一条结果，配合 Resolve 标记快捷键复核。")
         set_tip(self.next_result_btn, "定位到下一条结果，配合 Resolve 标记快捷键复核。")
         self.prev_result_btn.clicked.connect(lambda: self.move_result_cursor(-1))
         self.next_result_btn.clicked.connect(lambda: self.move_result_cursor(1))
+        self.refresh_results_btn.clicked.connect(self.refresh_results_from_markers)
         nav.addWidget(self.prev_result_btn)
         nav.addWidget(self.next_result_btn)
+        nav.addWidget(self.refresh_results_btn)
         nav.addWidget(self.result_position_label)
         nav.addStretch(1)
         layout.addLayout(nav)
+        return tab
+
+    def _build_text_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        search_row = QHBoxLayout()
+        self.text_search = QLineEdit()
+        self.text_search.setPlaceholderText("搜索 SRT / 字幕 / 文字层")
+        self.text_scan_btn = QPushButton("查找")
+        self.text_scan_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogContentsView))
+        self.text_scan_btn.clicked.connect(self.scan_text_layers)
+        self.text_search.returnPressed.connect(self.scan_text_layers)
+        search_row.addWidget(self.text_search, 1)
+        search_row.addWidget(self.text_scan_btn)
+        layout.addLayout(search_row)
+
+        self.text_list = QListWidget()
+        self.text_list.setMinimumHeight(180)
+        self.text_list.itemDoubleClicked.connect(self.jump_to_selected_text_item)
+        layout.addWidget(self.text_list, 1)
+
+        edit_row = QHBoxLayout()
+        self.text_replace = QLineEdit()
+        self.text_replace.setPlaceholderText("替换为")
+        self.text_replace_btn = QPushButton("替换")
+        self.text_replace_btn.clicked.connect(self.replace_selected_text_item)
+        self.text_delete_btn = QPushButton("删除")
+        self.text_delete_btn.clicked.connect(self.delete_selected_text_item)
+        self.text_filler_btn = QPushButton("去语气词")
+        self.text_filler_btn.clicked.connect(self.remove_fillers_from_selected_text_item)
+        edit_row.addWidget(self.text_replace, 1)
+        edit_row.addWidget(self.text_replace_btn)
+        edit_row.addWidget(self.text_filler_btn)
+        edit_row.addWidget(self.text_delete_btn)
+        layout.addLayout(edit_row)
+
+        self.text_status = QLabel("未扫描文字层。")
+        self.text_status.setObjectName("Muted")
+        layout.addWidget(self.text_status)
         return tab
 
     def _build_audio_tab(self) -> QWidget:
@@ -1168,6 +1221,7 @@ class MainWindow(QMainWindow):
         self.progress_label.setText("检测中")
         self._zero_result_notice_shown = False
         self._log(f"开始检测 {len(jobs)} 条时间线")
+        self._marker_refresh_after_complete = False
         self.save_settings()
         self.animate_widget(self.start_btn)
         self.progress_timer.start()
@@ -1218,6 +1272,118 @@ class MainWindow(QMainWindow):
         result = self.bridge.fix_mono_audio_to_stereo(int(selected.get("index", 1)))
         self.render_audio_scan(result)
         self.side_tabs.setCurrentWidget(self.audio_tab)
+
+    def refresh_results_from_markers(self) -> None:
+        selected = self.timeline_combo.currentData() or {"index": 1}
+        result = self.bridge.bfd_marker_records(int(selected.get("index", 1)))
+        records = result.get("records") if isinstance(result.get("records"), list) else []
+        counts = result.get("counts") if isinstance(result.get("counts"), dict) else {}
+        if counts:
+            self._update_result_cards({"counts": counts, "records": records})
+        else:
+            self.render_result_records(records)
+        self.side_tabs.setCurrentWidget(self.results_tab)
+        self._log(str(result.get("message", "已刷新时间线标记。")))
+
+    def scan_text_layers(self) -> None:
+        selected = self.timeline_combo.currentData() or {"index": 1}
+        result = self.bridge.scan_text_items(int(selected.get("index", 1)), self.text_search.text().strip())
+        self.text_records = result.get("items") if isinstance(result.get("items"), list) else []
+        self.text_list.clear()
+        for idx, item in enumerate(self.text_records, 1):
+            text = str(item.get("text", "")).replace("\n", " ")
+            if len(text) > 80:
+                text = text[:77] + "..."
+            label = (
+                f"{idx:03d}  {item.get('timecode', '')}  "
+                f"{str(item.get('track_type', '')).upper()}{item.get('track_index', '')}  {text}"
+            )
+            row = QListWidgetItem(label)
+            row.setData(Qt.UserRole, idx - 1)
+            self.text_list.addItem(row)
+        self.text_status.setText(str(result.get("message", f"找到 {len(self.text_records)} 条文字/字幕素材。")))
+        self.side_tabs.setCurrentWidget(self.text_tab)
+        self._log(self.text_status.text())
+
+    def selected_text_item_record(self) -> dict | None:
+        row = self.text_list.currentItem()
+        if not row:
+            return None
+        index = int(row.data(Qt.UserRole))
+        if index < 0 or index >= len(self.text_records):
+            return None
+        self.text_index = index
+        return self.text_records[index]
+
+    def jump_to_selected_text_item(self, *_args) -> None:
+        item = self.selected_text_item_record()
+        if not item:
+            return
+        result = self.bridge.jump_to_text_item(item)
+        self.text_status.setText(str(result.get("message", "")))
+        self._log(self.text_status.text())
+
+    def replace_selected_text_item(self) -> None:
+        item = self.selected_text_item_record()
+        if not item:
+            return
+        new_text = self.text_replace.text()
+        result = self.bridge.replace_text_item(item, new_text)
+        self.text_status.setText(str(result.get("message", "")))
+        self._log(self.text_status.text())
+        if result.get("ok"):
+            self.scan_text_layers()
+
+    def delete_selected_text_item(self) -> None:
+        item = self.selected_text_item_record()
+        if not item:
+            return
+        if QMessageBox.question(self, "删除文字层", "确认删除选中的字幕/文字层吗？") != QMessageBox.Yes:
+            return
+        result = self.bridge.delete_text_item(item)
+        self.text_status.setText(str(result.get("message", "")))
+        self._log(self.text_status.text())
+        if result.get("ok"):
+            self.scan_text_layers()
+
+    def remove_fillers_from_selected_text_item(self) -> None:
+        item = self.selected_text_item_record()
+        if not item:
+            return
+        source_text = str(item.get("text", ""))
+        cleaned = self.remove_filler_words(source_text)
+        self.text_replace.setText(cleaned)
+        if cleaned == source_text:
+            self.text_status.setText("未发现可去除的语气词。")
+            return
+        result = self.bridge.replace_text_item(item, cleaned)
+        self.text_status.setText(str(result.get("message", "")))
+        self._log(self.text_status.text())
+        if result.get("ok"):
+            self.scan_text_layers()
+
+    @staticmethod
+    def remove_filler_words(text: str) -> str:
+        fillers = [
+            r"\buh+\b",
+            r"\bum+\b",
+            r"\ber+\b",
+            r"\bah+\b",
+            r"嗯+",
+            r"呃+",
+            r"额+",
+            r"啊+",
+            r"这个",
+            r"那个",
+            r"就是",
+            r"然后",
+        ]
+        cleaned = text
+        for pattern in fillers:
+            cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+        cleaned = re.sub(r"\s+([，。！？、,.!?])", r"\1", cleaned)
+        return cleaned.strip()
 
     def render_audio_scan(self, result: dict) -> None:
         summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
@@ -1282,6 +1448,11 @@ class MainWindow(QMainWindow):
             self.progress_timer.stop()
             if state == "complete" or percent >= 100:
                 self.side_tabs.setCurrentWidget(self.results_tab)
+                progress_records = progress.get("records")
+                needs_marker_refresh = not isinstance(progress_records, list) or not progress_records
+                if needs_marker_refresh and not self._marker_refresh_after_complete:
+                    self._marker_refresh_after_complete = True
+                    self.refresh_results_from_markers()
                 QApplication.beep()
                 if self._progress_has_zero_results(progress) and not self._zero_result_notice_shown:
                     self._zero_result_notice_shown = True
@@ -1331,7 +1502,7 @@ class MainWindow(QMainWindow):
             self.update_result_position()
             return
         self.result_index = max(0, min(len(self.result_records) - 1, self.result_index + offset))
-        self.update_result_position()
+        self.jump_to_result_row(self.result_index)
 
     def jump_to_result_row(self, row: int) -> None:
         if row < 0 or row >= len(self.result_records):
