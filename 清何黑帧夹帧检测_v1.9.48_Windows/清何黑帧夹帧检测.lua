@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.53
+-- 版本: v1.9.55
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -120,7 +120,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.53 启动 ===")
+dlog("=== BFD v1.9.55 启动 ===")
 setup_module_path()
 
 -- ============================================================

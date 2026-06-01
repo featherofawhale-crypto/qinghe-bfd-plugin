@@ -41,14 +41,25 @@ if (Test-Path $SourceFfmpeg) {
     Copy-Item (Join-Path $SourceFfmpeg "*.exe") $BundledFfmpegDir -Force
 }
 
+$PackagedUiExe = Join-Path $Root "pyside_ui\QingheBFDControl\QingheBFDControl.exe"
 $RunUi = Join-Path $Root "pyside_ui\run_ui.bat"
-if (Test-Path $RunUi) {
+$ShortcutTarget = $null
+$ShortcutWorkDir = $null
+if (Test-Path $PackagedUiExe) {
+    $ShortcutTarget = $PackagedUiExe
+    $ShortcutWorkDir = Split-Path $PackagedUiExe -Parent
+} elseif (Test-Path $RunUi) {
+    $ShortcutTarget = $RunUi
+    $ShortcutWorkDir = Split-Path $RunUi -Parent
+}
+
+if ($ShortcutTarget) {
     $desktop = [Environment]::GetFolderPath("Desktop")
     $linkPath = Join-Path $desktop "Qinghe BFD Control.lnk"
     $wsh = New-Object -ComObject WScript.Shell
     $shortcut = $wsh.CreateShortcut($linkPath)
-    $shortcut.TargetPath = $RunUi
-    $shortcut.WorkingDirectory = Split-Path $RunUi -Parent
+    $shortcut.TargetPath = $ShortcutTarget
+    $shortcut.WorkingDirectory = $ShortcutWorkDir
     $shortcut.Description = "Qinghe Black Frame Detector PySide6 Control"
     $shortcut.Save()
 }
@@ -77,7 +88,7 @@ foreach ($candidate in $pythonCandidates) {
     } catch {}
 }
 
-if ($selectedExe) {
+if ($selectedExe -and -not (Test-Path $PackagedUiExe)) {
     $requirements = Join-Path $Root "pyside_ui\requirements.txt"
     if (Test-Path $requirements) {
         if ($selectedArg) { & $selectedExe $selectedArg -c "import PySide6" *> $null }

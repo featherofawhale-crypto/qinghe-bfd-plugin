@@ -1,6 +1,6 @@
 # 清何黑帧检测 UI 优化和加密
 
-当前 Windows 插件版本：`1.9.53`
+当前 Windows 插件版本：`1.9.55`
 
 ## Windows 一键安装
 
@@ -11,6 +11,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install_windows.ps1
 ```
 
 安装器会复制 Resolve 脚本、模块、内置 FFmpeg，安装 PySide6 依赖，生成核心 Lua 字节码，并创建 PySide6 控制台桌面快捷方式。
+
+## Windows 发行包构建
+
+在开发机上运行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_release_windows.ps1
+```
+
+构建产物位于 `release/`。发行包会包含 PySide6 控制台 exe、Resolve Lua 脚本、受保护核心字节码、FFmpeg、安装器和说明文件。普通用户解压后双击 `install_windows.bat` 即可安装。
 
 ## PySide6 控制台
 

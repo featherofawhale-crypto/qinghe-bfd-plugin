@@ -28,10 +28,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from resolve_bridge import ResolveBridge, TimelineInfo, read_progress_file
+from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.53"
+APP_VERSION = "1.9.55"
 
 
 APP_STYLE = """
@@ -484,8 +484,12 @@ class MainWindow(QMainWindow):
         self.log.append(message)
 
 
-def main() -> int:
-    app = QApplication(sys.argv)
+def main(argv: list[str] | None = None) -> int:
+    argv = argv or sys.argv
+    if BRIDGE_WORKER_ARG in argv[1:]:
+        return run_resolve_bridge_worker()
+
+    app = QApplication(argv)
     app.setStyleSheet(APP_STYLE)
     app.setFont(QFont("Microsoft YaHei", 10))
     window = MainWindow()

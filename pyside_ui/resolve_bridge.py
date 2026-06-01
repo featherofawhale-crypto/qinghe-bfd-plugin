@@ -12,6 +12,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LUA_ENTRY = REPO_ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑帧夹帧检测.lua"
+BRIDGE_WORKER_ARG = "--resolve-bridge"
 
 
 @dataclass
@@ -66,6 +67,59 @@ def lua_value(value: Any) -> str:
     if value is None:
         return "nil"
     return lua_string(str(value))
+
+
+def resolve_python_script(body: str) -> str:
+    bootstrap = r'''
+import importlib.util
+import json
+import os
+import platform
+import sys
+
+def add_default_module_path():
+    system = platform.system().lower()
+    if system == "windows":
+        base = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+        path = os.path.join(base, "Blackmagic Design", "DaVinci Resolve", "Support", "Developer", "Scripting", "Modules")
+    elif system == "darwin":
+        path = "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Modules"
+    else:
+        path = "/opt/resolve/Developer/Scripting/Modules"
+    if os.path.isdir(path):
+        sys.path.insert(0, path)
+
+add_default_module_path()
+import DaVinciResolveScript as dvr_script
+'''
+    return bootstrap + "\n" + body
+
+
+def build_resolve_python_process(body: str) -> tuple[list[str], str | None]:
+    script = resolve_python_script(body)
+    if getattr(sys, "frozen", False):
+        return [sys.executable, BRIDGE_WORKER_ARG], script
+    return [sys.executable, "-c", script], None
+
+
+def run_resolve_bridge_worker() -> int:
+    script = sys.stdin.read()
+    if not script:
+        return 2
+    namespace: dict[str, Any] = {"__name__": "__resolve_bridge_worker__"}
+    try:
+        exec(compile(script, "<resolve-bridge-worker>", "exec"), namespace, namespace)
+    except SystemExit as exc:
+        if exc.code is None:
+            return 0
+        if isinstance(exc.code, int):
+            return exc.code
+        print(exc.code, file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Resolve bridge worker failed: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def write_lua_params(params: dict[str, Any], target: Path | None = None) -> Path:
@@ -231,32 +285,11 @@ print(json.dumps({"connected": bool(resolve)}))
 
     @staticmethod
     def _run_resolve_python(body: str) -> dict[str, Any] | None:
-        bootstrap = r'''
-import importlib.util
-import json
-import os
-import platform
-import sys
-
-def add_default_module_path():
-    system = platform.system().lower()
-    if system == "windows":
-        base = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
-        path = os.path.join(base, "Blackmagic Design", "DaVinci Resolve", "Support", "Developer", "Scripting", "Modules")
-    elif system == "darwin":
-        path = "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Modules"
-    else:
-        path = "/opt/resolve/Developer/Scripting/Modules"
-    if os.path.isdir(path):
-        sys.path.insert(0, path)
-
-add_default_module_path()
-import DaVinciResolveScript as dvr_script
-'''
-        script = bootstrap + "\n" + body
+        command, stdin_script = build_resolve_python_process(body)
         try:
             completed = subprocess.run(
-                [sys.executable, "-c", script],
+                command,
+                input=stdin_script,
                 text=True,
                 capture_output=True,
                 timeout=8,
