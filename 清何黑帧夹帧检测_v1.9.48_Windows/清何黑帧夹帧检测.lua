@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.73
+-- 版本: v1.9.74
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.73 启动 ===")
+dlog("=== BFD v1.9.74 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -168,6 +168,122 @@ local UIBridge = safe_require("ui_bridge")
 local ProgressBridge = safe_require("progress_bridge")
 local ReportGenerator = safe_require("report_generator")
 local DuplicateDetector = safe_require("duplicate_detector")
+
+local function append_unique_number(list, value, fps)
+    if not value then return end
+    local frame = math.floor(value * fps + 0.5)
+    for _, existing in ipairs(list) do
+        if math.abs(math.floor(existing * fps + 0.5) - frame) <= 1 then
+            return
+        end
+    end
+    table.insert(list, value)
+end
+
+local function detect_source_mixed_cuts(ffmpeg, clips, timeline_fps, params)
+    local records = {}
+    if not ffmpeg or not ffmpeg.ffmpeg_path then return records end
+    if params and params.detect_mixed_cut == false then return records end
+
+    local stuck_frames = params.stuck_frames or config.CLASSIFICATION.STUCK_FRAMES
+    local threshold = params.mixed_cut_scene_threshold or 0.06
+    local timeout = params.mixed_cut_timeout or 12
+    local max_duration_sec = params.mixed_cut_max_clip_sec or 180
+    local scanned, nested_skipped = 0, 0
+    local seen = {}
+
+    for _, clip in ipairs(clips or {}) do
+        if clip.is_enabled == false then goto continue_clip end
+        if (clip.opacity or 100) <= 0 then goto continue_clip end
+        if clip.media_type == "nested" then
+            nested_skipped = nested_skipped + 1
+            goto continue_clip
+        end
+        if clip.skip_ffmpeg or not clip.file_path or clip.file_path == "" then goto continue_clip end
+
+        local dur_frames = clip.source_duration_frames or 0
+        local left_offset = clip.left_offset or 0
+        if dur_frames <= stuck_frames then goto continue_clip end
+
+        local start_sec = left_offset / timeline_fps
+        local duration_sec = dur_frames / timeline_fps
+        local scan_duration = math.min(duration_sec, max_duration_sec)
+        if scan_duration <= 0 then goto continue_clip end
+
+        scanned = scanned + 1
+        local scene_times = {0, scan_duration}
+        local scene_scores = {}
+        local prefix = ""
+        if ffmpeg._bundled_lib_dir then
+            prefix = 'DYLD_LIBRARY_PATH="' .. ffmpeg._bundled_lib_dir .. '" '
+        end
+        local cmd = string.format(
+            "%s%s -timelimit %d -ss %.3f -t %.3f -i %s -vf \"select='gt(scene\\,%.3f)',showinfo\" -an -f null - 2>&1",
+            prefix,
+            ffmpeg:_quote_path(ffmpeg.ffmpeg_path),
+            timeout,
+            start_sec,
+            scan_duration,
+            ffmpeg:_quote_path(clip.file_path),
+            threshold
+        )
+        local handle = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
+        if handle then
+            for line in handle:lines() do
+                local t = line:match("pts_time:(%d+%.?%d*)")
+                local score = line:match("lavfi%.scene_score=(%d+%.?%d*)") or line:match("scene_score[:=](%d+%.?%d*)")
+                if t then
+                    local rel = tonumber(t)
+                    if rel and rel > scan_duration + 1 and rel >= start_sec then
+                        rel = rel - start_sec
+                    end
+                    if rel and rel > 0 and rel < scan_duration then
+                        append_unique_number(scene_times, rel, timeline_fps)
+                        scene_scores[math.floor(rel * timeline_fps + 0.5)] = tonumber(score or "0") or 0
+                    end
+                end
+            end
+            handle:close()
+        end
+
+        table.sort(scene_times)
+        for i = 1, #scene_times - 1 do
+            local rel_start = scene_times[i]
+            local rel_end = scene_times[i + 1]
+            local span_frames = math.max(1, math.floor((rel_end - rel_start) * timeline_fps + 0.5))
+            if span_frames > 0 and span_frames <= stuck_frames then
+                local tl_start = (clip.timeline_start_frame or 0) + math.floor(rel_start * timeline_fps + 0.5)
+                local tl_end = (clip.timeline_start_frame or 0) + math.floor(rel_end * timeline_fps + 0.5)
+                local key = tostring(clip.file_path) .. ":" .. tostring(tl_start) .. ":" .. tostring(tl_end)
+                if not seen[key] then
+                    seen[key] = true
+                    local source_start = start_sec + rel_start
+                    local source_end = start_sec + rel_end
+                    table.insert(records, {
+                        clip = clip,
+                        segments = {{
+                            start = source_start,
+                            end_ = source_end,
+                            duration = math.max(1 / timeline_fps, source_end - source_start),
+                            is_mixed_cut = true,
+                            scene_score = scene_scores[math.floor(rel_start * timeline_fps + 0.5)] or
+                                scene_scores[math.floor(rel_end * timeline_fps + 0.5)] or 0,
+                        }},
+                        is_mixed_cut = true,
+                    })
+                end
+            end
+        end
+        ::continue_clip::
+    end
+
+    dlog(string.format("混剪源内筛查: scanned=%d records=%d nested_skipped=%d threshold=%.3f",
+        scanned, #records, nested_skipped, threshold))
+    if nested_skipped > 0 then
+        print(string.format("[BFD] 混剪筛查: %d 个复合/Fusion片段无源文件路径，需用复杂模式渲染检查", nested_skipped))
+    end
+    return records
+end
 
 -- 检查关键模块
 if not UIBridge then dlog("FATAL: ui_bridge 加载失败，退出"); return end
@@ -1399,6 +1515,16 @@ function Main()
             end
         end
     end  -- else: 逐文件模式结束
+
+    local mixed_cut_records = detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, timeline_fps, params)
+    if #mixed_cut_records > 0 then
+        for _, mixed in ipairs(mixed_cut_records) do
+            table.insert(ffmpeg_results, mixed)
+        end
+        print(string.format("[BFD] 混剪源内夹帧: 发现 %d 个可见短镜头", #mixed_cut_records))
+    else
+        dlog("混剪源内夹帧: 未发现可见短镜头")
+    end
 
     if #ffmpeg_errors > 0 then
         print(string.format("[BFD] 警告: %d 个文件分析失败", #ffmpeg_errors))

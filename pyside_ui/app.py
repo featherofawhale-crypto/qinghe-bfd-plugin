@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.73"
+APP_VERSION = "1.9.74"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -1195,6 +1195,7 @@ class MainWindow(QMainWindow):
             },
             "detect_duplicate": self.chk_duplicate.isChecked(),
             "detect_content_dup": self.chk_content_dup.isChecked(),
+            "detect_mixed_cut": True,
             "detect_corrupt": complex_mode and self.chk_corrupt.isChecked(),
             "detect_mono_audio": self.chk_audio_mono.isChecked(),
             "html_report": self.chk_html.isChecked(),

@@ -257,6 +257,21 @@ end
 function Analyzer.generate_note(segment, clip_info, timeline_fps, params, duration_frames)
     local parts = {}
 
+    if segment.is_mixed_cut then
+        table.insert(parts, string.format("混剪源内短镜头: %d帧", duration_frames or math.floor(segment.duration * timeline_fps)))
+        table.insert(parts, string.format("持续: %.3fs (%d帧)", segment.duration,
+            duration_frames or math.floor(segment.duration * timeline_fps)))
+        if clip_info.source_file then
+            local filename = clip_info.source_file:match("([^\\/]+)$") or clip_info.source_file
+            table.insert(parts, string.format("来源: %s", filename))
+        end
+        if segment.scene_score then
+            table.insert(parts, string.format("scene score: %.3f", segment.scene_score))
+        end
+        table.insert(parts, "判定: 时间线上可见镜头内部存在极短源内切点，疑似混剪漏帧/夹帧")
+        return table.concat(parts, "\n")
+    end
+
     local frame_text = Analyzer.frames_text(segment.duration, timeline_fps)
     table.insert(parts, string.format("黑帧: %s", frame_text))
     table.insert(parts, string.format("持续: %.3fs (%d帧)", segment.duration,
@@ -364,7 +379,7 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
             local record = {
                 classification = classification,
                 marker_color = Analyzer.get_marker_color(classification),
-                marker_name = Analyzer.get_marker_name(classification),
+                marker_name = segment.is_mixed_cut and "[BFD-MIX] 混剪源内夹帧" or Analyzer.get_marker_name(classification),
 
                 timeline_start_frame = frames.start_frame,
                 timeline_end_frame = frames.end_frame,
