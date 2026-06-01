@@ -20,6 +20,7 @@ $EditDir = Join-Path $ScriptsRoot "Edit"
 $UtilityDir = Join-Path $ScriptsRoot "Utility"
 $ModulesDir = Join-Path $ScriptsRoot "Modules\black_frame_detector"
 $BundledFfmpegDir = Join-Path $ModulesDir "ffmpeg\windows"
+$InstalledUiDir = Join-Path $ModulesDir "pyside_ui"
 $BackupRoot = Join-Path $ModulesDir ("backup_" + (Get-Date -Format "yyyyMMdd_HHmmss"))
 
 New-Item -ItemType Directory -Force -Path $EditDir, $UtilityDir, $ModulesDir, $BundledFfmpegDir | Out-Null
@@ -27,12 +28,13 @@ New-Item -ItemType Directory -Force -Path $EditDir, $UtilityDir, $ModulesDir, $B
 $ExistingMain = Join-Path $EditDir $SourceMain.Name
 if (Test-Path $ExistingMain) {
     New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
-    Copy-Item $ExistingMain (Join-Path $BackupRoot $SourceMain.Name) -Force
+    Copy-Item $ExistingMain (Join-Path $BackupRoot ("Edit_" + $SourceMain.Name)) -Force
 }
 $ExistingUtilityMain = Join-Path $UtilityDir $SourceMain.Name
 if (Test-Path $ExistingUtilityMain) {
     New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
     Copy-Item $ExistingUtilityMain (Join-Path $BackupRoot ("Utility_" + $SourceMain.Name)) -Force
+    Remove-Item -LiteralPath $ExistingUtilityMain -Force
 }
 
 Get-ChildItem $ModulesDir -File -Filter "*.lua" -ErrorAction SilentlyContinue | ForEach-Object {
@@ -41,15 +43,18 @@ Get-ChildItem $ModulesDir -File -Filter "*.lua" -ErrorAction SilentlyContinue | 
 }
 
 Copy-Item $SourceMain.FullName (Join-Path $EditDir $SourceMain.Name) -Force
-Copy-Item $SourceMain.FullName (Join-Path $UtilityDir $SourceMain.Name) -Force
 Copy-Item (Join-Path $SourceModules "*.lua") $ModulesDir -Force
+if (Test-Path (Join-Path $Root "pyside_ui")) {
+    New-Item -ItemType Directory -Force -Path $InstalledUiDir | Out-Null
+    Copy-Item (Join-Path $Root "pyside_ui\*") $InstalledUiDir -Recurse -Force
+}
 
 if (Test-Path $SourceFfmpeg) {
     Copy-Item (Join-Path $SourceFfmpeg "*.exe") $BundledFfmpegDir -Force
 }
 
-$PackagedUiExe = Join-Path $Root "pyside_ui\QingheBFDControl\QingheBFDControl.exe"
-$RunUi = Join-Path $Root "pyside_ui\run_ui.bat"
+$PackagedUiExe = Join-Path $InstalledUiDir "QingheBFDControl\QingheBFDControl.exe"
+$RunUi = Join-Path $InstalledUiDir "run_ui.bat"
 $ShortcutTarget = $null
 $ShortcutWorkDir = $null
 if (Test-Path $PackagedUiExe) {
@@ -61,6 +66,12 @@ if (Test-Path $PackagedUiExe) {
 }
 
 if ($ShortcutTarget) {
+    [System.IO.File]::WriteAllText(
+        (Join-Path $ModulesDir "ui_launcher_path.txt"),
+        $ShortcutTarget,
+        (New-Object System.Text.UTF8Encoding $false)
+    )
+
     $desktop = [Environment]::GetFolderPath("Desktop")
     $linkPath = Join-Path $desktop "Qinghe BFD Control.lnk"
     $wsh = New-Object -ComObject WScript.Shell
@@ -126,7 +137,6 @@ if ($selectedExe -and -not (Test-Path $PackagedUiExe)) {
 
 Write-Host "Installed Resolve script:"
 Write-Host "  $EditDir"
-Write-Host "  $UtilityDir"
 Write-Host "Installed modules:"
 Write-Host "  $ModulesDir"
 Write-Host "Bundled FFmpeg:"

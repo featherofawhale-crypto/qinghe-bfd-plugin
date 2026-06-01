@@ -13,7 +13,6 @@ $RequiredPaths = @{
     "Resolve Python API" = "C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Developer\Scripting\Modules\DaVinciResolveScript.py"
     "Project FFmpeg" = $ProjectFfmpeg
     "Installed Edit Script" = Join-Path $env:APPDATA "Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Edit\清何黑帧夹帧检测.lua"
-    "Installed Utility Script" = Join-Path $env:APPDATA "Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility\清何黑帧夹帧检测.lua"
     "Installed Modules" = Join-Path $env:APPDATA "Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Modules\black_frame_detector"
     "Managed Resolve MCP" = Join-Path $env:LOCALAPPDATA "davinci-resolve-mcp\src\server.py"
 }

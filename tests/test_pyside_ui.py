@@ -234,6 +234,19 @@ class PySideUiTest(unittest.TestCase):
                 else:
                     delattr(sys, "frozen")
 
+    def test_resolve_menu_entry_launches_external_pyside_ui(self) -> None:
+        lua_entry = ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑帧夹帧检测.lua"
+        source = lua_entry.read_text(encoding="utf-8")
+        self.assertIn("ui_launcher_path.txt", source)
+        self.assertIn("BFD_PARAMS_FILE", source)
+        self.assertIn("try_launch_external_ui", source)
+
+        installer = (ROOT / "install_windows.ps1").read_text(encoding="utf-8")
+        self.assertIn("ui_launcher_path.txt", installer)
+        self.assertIn("UTF8Encoding $false", installer)
+        self.assertIn("pyside_ui", installer)
+        self.assertIn("InstalledUiDir", installer)
+
     def test_settings_cache_roundtrip_restores_options_and_in_out(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings_file = Path(tmp) / "ui_settings.json"

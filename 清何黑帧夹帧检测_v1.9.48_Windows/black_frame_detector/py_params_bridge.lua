@@ -50,7 +50,13 @@ function Bridge.has_pending_params()
         return false
     end
     local params = load_table(path)
-    return type(params) == "table" and params.enabled == true
+    if type(params) ~= "table" or params.enabled ~= true then
+        return false
+    end
+
+    -- Menu launches should open the Resolve UI. Headless parameter files are
+    -- only honored when the PySide bridge starts fuscript with BFD_PARAMS_FILE.
+    return os.getenv("BFD_PARAMS_FILE") ~= nil
 end
 
 function Bridge.load_pending_params(timeline_list)

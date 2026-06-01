@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.60
+-- 版本: v1.9.69
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -71,6 +71,8 @@ end
 -- ============================================================
 -- 模块路径设置（多重回退策略）
 -- ============================================================
+local BFD_MODULE_DIR = nil
+
 local function setup_module_path()
     local home = os.getenv("HOME") or os.getenv("USERPROFILE")
     local sep = package.config:sub(1, 1)
@@ -93,6 +95,7 @@ local function setup_module_path()
     for _, p in ipairs(known_paths) do
         local fname = is_win and (p .. "\\config.lua") or (p .. "/config.lua")
         if file_exists(fname) then
+            BFD_MODULE_DIR = p
             package.path = p .. (is_win and "\\?.lua;" or "/?.lua;") .. package.path
             dlog("模块路径(已知): " .. p)
             return true
@@ -108,6 +111,7 @@ local function setup_module_path()
         local module_dir = scripts_dir .. (is_win and "\\Modules\\black_frame_detector" or "/Modules/black_frame_detector")
         local fname = is_win and (module_dir .. "\\config.lua") or (module_dir .. "/config.lua")
         if file_exists(fname) then
+            BFD_MODULE_DIR = module_dir
             package.path = module_dir .. (is_win and "\\?.lua;" or "/?.lua;") .. package.path
             dlog("模块路径(动态): " .. module_dir)
             return true
@@ -115,13 +119,30 @@ local function setup_module_path()
     end
 
     -- 方案3: 相对路径（脚本工作目录）
+    BFD_MODULE_DIR = is_win and ".\\Modules\\black_frame_detector" or "./Modules/black_frame_detector"
     package.path = (is_win and ".\\Modules\\black_frame_detector\\?.lua;" or "./Modules/black_frame_detector/?.lua;") .. package.path
     dlog("模块路径(相对): " .. (is_win and ".\\Modules\\black_frame_detector\\" or "./Modules/black_frame_detector/"))
     return true
 end
 
-dlog("=== BFD v1.9.60 启动 ===")
+dlog("=== BFD v1.9.69 启动 ===")
 setup_module_path()
+
+local MODULES_TO_RELOAD = {
+    "config",
+    "version_compat",
+    "ffmpeg_runner",
+    "black_frame_analyzer",
+    "marker_manager",
+    "ui_bridge",
+    "progress_bridge",
+    "report_generator",
+    "duplicate_detector",
+    "py_params_bridge",
+}
+for _, module_name in ipairs(MODULES_TO_RELOAD) do
+    package.loaded[module_name] = nil
+end
 
 -- ============================================================
 -- 安全加载模块（pcall 保护，避免静默崩溃）
@@ -157,11 +178,58 @@ dlog("所有模块加载完成")
 -- ============================================================
 -- 主函数
 -- ============================================================
+local function read_first_line(path)
+    local f = io.open(path, "r")
+    if not f then return nil end
+    local line = f:read("*l")
+    f:close()
+    if line then
+        line = line:gsub("^\239\187\191", "")
+        line = line:gsub("^%s+", ""):gsub("%s+$", "")
+    end
+    if line == "" then return nil end
+    return line
+end
+
+local function try_launch_external_ui()
+    if os.getenv("BFD_PARAMS_FILE") or os.getenv("BFD_DISABLE_EXTERNAL_UI") then
+        return false
+    end
+    if not BFD_MODULE_DIR then
+        dlog("PySide UI launcher skipped: module dir unknown")
+        return false
+    end
+
+    local sep = package.config:sub(1, 1)
+    local launcher = read_first_line(BFD_MODULE_DIR .. sep .. "ui_launcher_path.txt")
+    if not launcher or not file_exists(launcher) then
+        dlog("PySide UI launcher missing: " .. tostring(launcher))
+        return false
+    end
+
+    print("[BFD] Opening PySide UI control panel...")
+    dlog("Launching PySide UI: " .. launcher)
+    local ok = false
+    if sep == "\\" then
+        ok = os.execute('cmd.exe /C start "" "' .. launcher .. '"')
+    else
+        ok = os.execute('sh "' .. launcher .. '" >/dev/null 2>&1 &')
+    end
+    dlog("PySide UI launch result: " .. tostring(ok))
+    return ok ~= false and ok ~= nil
+end
+
 function Main()
     dlog("Main() 进入")
     print("\n" .. string.rep("=", 55))
     print("  [BFD] 清何黑帧夹帧检测小工具 v" .. config.PLUGIN_VERSION)
     print(string.rep("=", 55))
+
+    if try_launch_external_ui() then
+        print("[BFD] PySide UI opened; start detection in the external control panel.")
+        dlog("Menu launch handed off to PySide UI")
+        return
+    end
 
     -- ----------------------------------------------------------
     -- 阶段1: 版本检测与兼容性适配
@@ -497,7 +565,7 @@ function Main()
                 dlog("复杂模式：临时文件路径=" .. temp_path)
 
                 -- 获取Project用于渲染
-                local r_resolve = Resolve()
+                local r_resolve = compat.resolve
                 if not r_resolve then error("Resolve()返回nil") end
                 local r_pm = r_resolve:GetProjectManager()
                 if not r_pm then error("GetProjectManager()返回nil") end
@@ -1742,8 +1810,10 @@ function Main()
     end
     if external_single_run then
         print("[BFD] 外部参数模式：单次检测完成，退出")
-        break
+    else
+        print("[BFD] 菜单启动模式：单次检测完成，退出")
     end
+    break
     end  -- while true: 循环回阶段3，重新打开参数窗口
 end  -- Main()
 

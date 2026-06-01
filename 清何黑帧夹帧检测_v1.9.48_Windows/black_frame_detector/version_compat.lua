@@ -6,6 +6,80 @@ local config = require("config")
 local VersionCompat = {}
 VersionCompat.__index = VersionCompat
 
+local function compat_log(msg)
+    local home = os.getenv("HOME") or os.getenv("USERPROFILE") or "."
+    local sep = package.config:sub(1, 1)
+    local path = home .. (sep == "\\" and "\\bfd_debug.log" or "/bfd_debug.log")
+    local f = io.open(path, "a")
+    if f then
+        f:write(os.date("%Y-%m-%d %H:%M:%S") .. " [VersionCompat] " .. tostring(msg) .. "\n")
+        f:close()
+    end
+end
+
+local function try_resolve_source(label, fn)
+    local ok, app = pcall(fn)
+    if ok and app then
+        compat_log("Resolve source OK: " .. label)
+        return app, label
+    end
+    compat_log("Resolve source failed: " .. label .. " ok=" .. tostring(ok) .. " value=" .. tostring(app))
+    return nil, nil
+end
+
+local function get_resolve_app()
+    compat_log("global types: Resolve=" .. tostring(type(Resolve)) ..
+        " Fusion=" .. tostring(type(Fusion)) ..
+        " fusion=" .. tostring(type(fusion)) ..
+        " bmd=" .. tostring(type(bmd)) ..
+        " bmd.scriptapp=" .. tostring(bmd and type(bmd.scriptapp) or nil) ..
+        " resolve=" .. tostring(type(resolve)))
+
+    local app, label = try_resolve_source("global Resolve()", function() return Resolve() end)
+    if app then return app, label end
+
+    app, label = try_resolve_source("global resolve", function() return resolve end)
+    if app then return app, label end
+
+    app, label = try_resolve_source("bmd.scriptapp('Resolve')", function()
+        if bmd and bmd.scriptapp then
+            return bmd.scriptapp("Resolve")
+        end
+        return nil
+    end)
+    if app then return app, label end
+
+    app, label = try_resolve_source("fusion:GetResolve()", function()
+        if fusion and fusion.GetResolve then
+            return fusion:GetResolve()
+        end
+        return nil
+    end)
+    if app then return app, label end
+
+    app, label = try_resolve_source("Fusion():GetResolve()", function()
+        local fu = Fusion and Fusion()
+        if fu and fu.GetResolve then
+            return fu:GetResolve()
+        end
+        return nil
+    end)
+    if app then return app, label end
+
+    app, label = try_resolve_source("bmd.scriptapp('Fusion'):GetResolve()", function()
+        if bmd and bmd.scriptapp then
+            local fu = bmd.scriptapp("Fusion")
+            if fu and fu.GetResolve then
+                return fu:GetResolve()
+            end
+        end
+        return nil
+    end)
+    if app then return app, label end
+
+    return nil, nil
+end
+
 -- ============================================================
 -- 构造函数
 -- ============================================================
@@ -26,11 +100,13 @@ end
 -- 初始化：连接达芬奇API并检测版本
 -- ============================================================
 function VersionCompat:init()
-    local ok, resolve_or_err = pcall(function() return Resolve() end)
-    if not ok or not resolve_or_err then
+    local resolve_or_err, resolve_source = get_resolve_app()
+    if not resolve_or_err then
+        compat_log("Resolve connection unavailable after all probes")
         return false, "无法连接到 DaVinci Resolve，请确保在达芬奇内部运行此脚本"
     end
     self.resolve = resolve_or_err
+    compat_log("Using Resolve source: " .. tostring(resolve_source))
 
     -- 获取版本号
     local version = self.resolve:GetVersion()
