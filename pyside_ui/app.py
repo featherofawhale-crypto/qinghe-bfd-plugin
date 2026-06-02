@@ -65,7 +65,7 @@ from resolve_bridge import (
 )
 
 
-APP_VERSION = "1.9.96"
+APP_VERSION = "1.9.97"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -925,7 +925,26 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
-        search_row = QHBoxLayout()
+        self.text_initial_panel = QWidget()
+        initial_row = QHBoxLayout(self.text_initial_panel)
+        initial_row.setContentsMargins(0, 0, 0, 0)
+        self.text_scan_srt = QCheckBox("SRT")
+        self.text_scan_srt.setChecked(True)
+        self.text_scan_text = QCheckBox("Text")
+        self.text_scan_textplus = QCheckBox("TXT+")
+        self.text_initial_scan_btn = QPushButton("检测时间线文本")
+        self.text_initial_scan_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogContentsView))
+        self.text_initial_scan_btn.clicked.connect(self.scan_text_layers)
+        initial_row.addWidget(self.text_scan_srt)
+        initial_row.addWidget(self.text_scan_text)
+        initial_row.addWidget(self.text_scan_textplus)
+        initial_row.addStretch(1)
+        initial_row.addWidget(self.text_initial_scan_btn)
+        layout.addWidget(self.text_initial_panel)
+
+        self.text_search_panel = QWidget()
+        search_row = QHBoxLayout(self.text_search_panel)
+        search_row.setContentsMargins(0, 0, 0, 0)
         self.text_search = QLineEdit()
         self.text_search.setPlaceholderText("搜索 SRT / 字幕 / 文字层")
         self.text_scan_btn = QPushButton("查找")
@@ -937,9 +956,11 @@ class MainWindow(QMainWindow):
         search_row.addWidget(self.text_search, 1)
         search_row.addWidget(self.text_scan_btn)
         search_row.addWidget(self.text_next_match_btn)
-        layout.addLayout(search_row)
+        layout.addWidget(self.text_search_panel)
 
-        replace_row = QHBoxLayout()
+        self.text_replace_panel = QWidget()
+        replace_row = QHBoxLayout(self.text_replace_panel)
+        replace_row.setContentsMargins(0, 0, 0, 0)
         self.text_replace = QLineEdit()
         self.text_replace.setPlaceholderText("\u66ff\u6362\u4e3a")
         self.text_replace_btn = QPushButton("\u66ff\u6362\u9009\u4e2d")
@@ -952,7 +973,7 @@ class MainWindow(QMainWindow):
         replace_row.addWidget(self.text_replace_btn)
         replace_row.addWidget(self.text_replace_all_btn)
         replace_row.addWidget(self.text_delete_btn)
-        layout.addLayout(replace_row)
+        layout.addWidget(self.text_replace_panel)
 
         self.text_table = QTableWidget(0, 4)
         self.text_table.setHorizontalHeaderLabels(["#", "Timecode", "Track", "Text"])
@@ -976,6 +997,8 @@ class MainWindow(QMainWindow):
         self.text_status = QLabel("未扫描文字层。")
         self.text_status.setObjectName("Muted")
         layout.addWidget(self.text_status)
+        for widget in (self.text_search_panel, self.text_replace_panel, self.text_table, self.text_status):
+            widget.hide()
         return tab
 
     def _build_audio_tab(self) -> QWidget:
@@ -1538,7 +1561,7 @@ class MainWindow(QMainWindow):
         selected = self.timeline_combo.currentData() or {"index": 1}
         query = self.text_search.text().strip()
         self.text_highlight_delegate.set_query(query)
-        result = self.bridge.scan_text_items(int(selected.get("index", 1)), "")
+        result = self.bridge.scan_text_items(int(selected.get("index", 1)), "", self.selected_text_scan_types())
         self.text_records = result.get("items") if isinstance(result.get("items"), list) else []
         self.text_match_indices = []
         self.text_match_cursor = -1
@@ -1575,8 +1598,21 @@ class MainWindow(QMainWindow):
         if query:
             base_message += f"  匹配 {len(self.text_match_indices)} 处。"
         self.text_status.setText(base_message)
+        self.text_initial_panel.hide()
+        for widget in (self.text_search_panel, self.text_replace_panel, self.text_table, self.text_status):
+            widget.show()
         self.side_tabs.setCurrentWidget(self.text_tab)
         self._log(self.text_status.text())
+
+    def selected_text_scan_types(self) -> list[str]:
+        types: list[str] = []
+        if self.text_scan_srt.isChecked():
+            types.append("srt")
+        if self.text_scan_text.isChecked():
+            types.append("text")
+        if self.text_scan_textplus.isChecked():
+            types.append("text_plus")
+        return types or ["srt"]
 
     def selected_text_item_record(self) -> dict | None:
         row = self.text_table.currentRow()
@@ -1676,6 +1712,7 @@ class MainWindow(QMainWindow):
         fail_count = 0
         self._updating_text_table = True
         for index in targets:
+            QApplication.processEvents()
             if index < 0 or index >= len(self.text_records):
                 continue
             item = self.text_records[index]

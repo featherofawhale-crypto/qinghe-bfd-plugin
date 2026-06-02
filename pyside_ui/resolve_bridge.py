@@ -922,8 +922,13 @@ print(json.dumps({{
             return {"ok": False, "message": "读取时间线标记失败：Resolve API 未返回结果。", "records": [], "counts": {}}
         return data
 
-    def scan_text_items(self, timeline_index: int = 1, query: str = "") -> dict[str, Any]:
-        return self._text_action(timeline_index, "scan", query=query)
+    def scan_text_items(
+        self,
+        timeline_index: int = 1,
+        query: str = "",
+        scan_types: list[str] | None = None,
+    ) -> dict[str, Any]:
+        return self._text_action(timeline_index, "scan", query=query, scan_types=scan_types)
 
     def jump_to_text_item(self, item: dict[str, Any]) -> dict[str, Any]:
         return self._text_action(int(item.get("timeline_index", 1)), "jump", item=item)
@@ -939,6 +944,7 @@ print(json.dumps({{
         timeline_index: int,
         action: str,
         query: str = "",
+        scan_types: list[str] | None = None,
         item: dict[str, Any] | None = None,
         text: str = "",
     ) -> dict[str, Any]:
@@ -948,6 +954,7 @@ print(json.dumps({{
 import json
 ACTION = {json.dumps(action)}
 QUERY = {json.dumps(query)}
+SCAN_TYPES = {json.dumps(scan_types or ["srt"])}
 ITEM = {json.dumps(item or {}, ensure_ascii=False)}
 NEW_TEXT = {json.dumps(text, ensure_ascii=False)}
 resolve = dvr_script.scriptapp("Resolve")
@@ -983,6 +990,7 @@ start_frame = safe(lambda: timeline.GetStartFrame(), 0) or 0
 start_timecode = str(safe(lambda: timeline.GetStartTimecode(), None) or safe(lambda: timeline.GetSetting("timelineStartTimecode"), None) or "00:00:00:00")
 TEXT_KEYS = ["Text", "StyledText", "Text+", "Title", "Subtitle", "Caption", "Name", "Clip Name", "CustomName", "Comments"]
 TITLE_HINT_KEYS = {"Text", "StyledText", "Text+", "Title", "Subtitle", "Caption", "CustomName"}
+SCAN_TYPE_SET = set(SCAN_TYPES or ["srt"])
 
 def timecode_to_frames(tc, fps):
     fps_int = max(1, int(round(float(fps or 25))))
@@ -1029,7 +1037,22 @@ def item_text(clip):
                     return str(value), str(tool_name) + ":" + input_key, "fusion"
     return str(safe(lambda: clip.GetName(), "") or ""), "Name", "name"
 
+def classify_text_item(track_type, text_key, source, clip):
+    if track_type == "subtitle":
+        return "srt"
+    key = str(text_key or "").lower()
+    name = str(safe(lambda: clip.GetName(), "") or "").lower()
+    if source == "fusion" or "text+" in key or "textplus" in name or "text+" in name:
+        return "text_plus"
+    return "text"
+
 def set_item_text(clip, key, source, new_text):
+    def write_and_verify(writer):
+        if not safe(writer, False):
+            return False
+        read_text, _, _ = item_text(clip)
+        return str(read_text) == str(new_text)
+
     if source == "fusion" and ":" in str(key):
         tool_name, input_key = str(key).split(":", 1)
         fusion_count = int(safe(lambda: clip.GetFusionCompCount(), 0) or 0)
@@ -1037,13 +1060,13 @@ def set_item_text(clip, key, source, new_text):
             comp = safe(lambda ci=comp_index: clip.GetFusionCompByIndex(ci))
             tools = safe(lambda c=comp: c.GetToolList(False), {{}}) if comp else {{}}
             tool = tools.get(tool_name) if isinstance(tools, dict) else None
-            if tool and safe(lambda: tool.SetInput(input_key, new_text), False) is not False:
+            if tool and write_and_verify(lambda: tool.SetInput(input_key, new_text)):
                 return True
-    if source == "name" and safe(lambda: clip.SetName(new_text), False):
-        return True
-    for prop_key in [key, "Text", "StyledText", "Name", "Clip Name", "Comments"]:
-        if prop_key and safe(lambda pk=prop_key: clip.SetProperty(pk, new_text), False):
+    for prop_key in [key, "Text", "StyledText", "Subtitle", "Caption", "Name", "Clip Name", "Comments"]:
+        if prop_key and write_and_verify(lambda pk=prop_key: clip.SetProperty(pk, new_text)):
             return True
+    if write_and_verify(lambda: clip.SetName(new_text)):
+        return True
     return False
 
 def collect_items():
@@ -1054,6 +1077,9 @@ def collect_items():
             clips = safe(lambda tt=track_type, ti=track_index: timeline.GetItemListInTrack(tt, ti), []) or []
             for item_index, clip in enumerate(clips):
                 text_value, text_key, source = item_text(clip)
+                item_kind = classify_text_item(track_type, text_key, source, clip)
+                if item_kind not in SCAN_TYPE_SET:
+                    continue
                 if track_type == "video":
                     has_fusion = int(safe(lambda c=clip: c.GetFusionCompCount(), 0) or 0) > 0
                     item_name = str(safe(lambda c=clip: c.GetName(), "") or "")
@@ -1068,6 +1094,7 @@ def collect_items():
                 found.append({{
                     "timeline_index": {int(timeline_index)},
                     "track_type": track_type,
+                    "text_kind": item_kind,
                     "track_index": track_index,
                     "item_index": item_index,
                     "unique_id": str(safe(lambda c=clip: c.GetUniqueId(), "") or ""),
