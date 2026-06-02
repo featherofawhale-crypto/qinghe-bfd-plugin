@@ -222,16 +222,17 @@ end
 -- 从覆盖表反向计算所有空白区间（按时长做区间分级判断）
 -- 返回: {{start_frame, end_frame, duration_sec}, ...}
 -- ============================================================
-function Analyzer.compute_gap_ranges(coverage_table, timeline_fps)
+function Analyzer.compute_gap_ranges(coverage_table, timeline_fps, timeline_start_frame)
     local gaps = {}
     if not coverage_table or #coverage_table == 0 then return gaps end
+    local first_frame = timeline_start_frame or 0
 
     -- 检查开头是否有空白（第一个片段之前的空位）
-    if coverage_table[1].start_frame > 0 then
+    if coverage_table[1].start_frame > first_frame then
         table.insert(gaps, {
-            start_frame = 0,
+            start_frame = first_frame,
             end_frame = coverage_table[1].start_frame,
-            duration_sec = coverage_table[1].start_frame / timeline_fps,
+            duration_sec = (coverage_table[1].start_frame - first_frame) / timeline_fps,
         })
     end
 
@@ -431,7 +432,7 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
     -- 扫描时间线空白区域（按区间时长分级标记）
     -- ============================================================
     if coverage_table and config.GAP_DETECTION.ENABLED then
-        local gap_ranges = Analyzer.compute_gap_ranges(coverage_table, timeline_fps)
+        local gap_ranges = Analyzer.compute_gap_ranges(coverage_table, timeline_fps, params.start_offset)
         local max_mark_sec = params.gap_max_mark_sec or config.GAP_DETECTION.MAX_GAP_MARK_SEC
         local ignore_above_sec = params.gap_ignore_above_sec or config.GAP_DETECTION.IGNORE_GAP_ABOVE_SEC
 

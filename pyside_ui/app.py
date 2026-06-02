@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFrame,
     QGridLayout,
     QGroupBox,
@@ -48,7 +49,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.89"
+APP_VERSION = "1.9.90"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -260,6 +261,10 @@ MARKER_COLORS = {
 
 def settings_path() -> Path:
     return Path.home() / ".qinghe_bfd" / "ui_settings.json"
+
+
+def default_complex_cache_dir() -> Path:
+    return Path.home() / ".qinghe_bfd" / "render_cache"
 
 
 def set_tip(widget: QWidget, text: str) -> QWidget:
@@ -699,9 +704,21 @@ class MainWindow(QMainWindow):
             layout.addWidget(check, index // 2, index % 2)
 
         self.complex_hint = QLabel("坏帧检测依赖复杂模式：需要入点和出点。")
+        self.complex_cache_dir = QLineEdit(str(default_complex_cache_dir()))
+        self.complex_cache_dir.setMinimumWidth(260)
+        set_tip(self.complex_cache_dir, "复杂模式临时渲染视频的存放位置；检测完成后会自动删除本次缓存视频。")
+        self.browse_complex_cache_btn = QPushButton("选择")
+        self.browse_complex_cache_btn.clicked.connect(self.choose_complex_cache_dir)
+        set_tip(self.browse_complex_cache_btn, "选择复杂模式缓存视频目录。")
+        layout.addWidget(QLabel("缓存视频位置"), 4, 0)
+        cache_row = QHBoxLayout()
+        cache_row.addWidget(self.complex_cache_dir, 1)
+        cache_row.addWidget(self.browse_complex_cache_btn)
+        layout.addLayout(cache_row, 4, 1)
+
         self.complex_hint.setObjectName("Muted")
         set_tip(self.complex_hint, "复杂模式会产生临时渲染文件，用最终画面做检测；调色后的坏帧要看最终像素，所以必须依赖它。")
-        layout.addWidget(self.complex_hint, 4, 0, 1, 2)
+        layout.addWidget(self.complex_hint, 5, 0, 1, 2)
         return box
 
     def _build_action_group(self) -> QWidget:
@@ -1077,6 +1094,7 @@ class MainWindow(QMainWindow):
             "pix_th_unit": "percent",
             "min_black_frames": self.min_black_frames.value(),
             "content_sample_interval": self.content_sample_interval.value(),
+            "complex_cache_dir": self.complex_cache_dir.text().strip(),
             "batch_enabled": self.chk_batch_timelines.isChecked(),
             "batch_timeline_indices": [
                 int((self.batch_timeline_list.item(i).data(Qt.UserRole) or {}).get("index", 0))
@@ -1128,6 +1146,8 @@ class MainWindow(QMainWindow):
                     widget.setValue(data[name])
             if "min_black_frames" not in data and isinstance(data.get("min_duration"), (int, float)):
                 self.min_black_frames.setValue(max(1, int(math.ceil(float(data["min_duration"]) * self.selected_fps()))))
+            if isinstance(data.get("complex_cache_dir"), str) and data["complex_cache_dir"].strip():
+                self.complex_cache_dir.setText(data["complex_cache_dir"].strip())
             for name, widget in [
                 ("pix_th", self.pixel_threshold),
             ]:
@@ -1180,6 +1200,12 @@ class MainWindow(QMainWindow):
         self.content_sample_interval.setValue(DEFAULT_CONTENT_SAMPLE_INTERVAL)
         self.update_fps_hint()
 
+    def choose_complex_cache_dir(self) -> None:
+        current = self.complex_cache_dir.text().strip() or str(default_complex_cache_dir())
+        selected = QFileDialog.getExistingDirectory(self, "选择复杂模式缓存目录", current)
+        if selected:
+            self.complex_cache_dir.setText(selected)
+
     def on_complex_mode_changed(self, checked: bool) -> None:
         if not checked:
             self.chk_corrupt.setChecked(False)
@@ -1219,6 +1245,7 @@ class MainWindow(QMainWindow):
             "content_sample_interval": self.content_sample_interval.value(),
             "manual_io_in": self.io_in.text().strip(),
             "manual_io_out": self.io_out.text().strip(),
+            "complex_cache_dir": self.complex_cache_dir.text().strip() or str(default_complex_cache_dir()),
             "marker_types": {
                 "error": self.chk_error.isChecked(),
                 "suspect": self.chk_suspect.isChecked(),

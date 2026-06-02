@@ -1003,8 +1003,8 @@ elif ACTION == "delete":
             rf'''
 import json
 ACTION = {json.dumps(action)}
-AUDIO_MARK_COLOR = "Cocoa"
-AUDIO_MARK_FALLBACK_COLORS = ("Sand", "Cream")
+AUDIO_MARK_COLOR = "Chocolate"
+AUDIO_MARK_FALLBACK_COLORS = ("Brown", "Cocoa", "Orange")
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
@@ -1075,6 +1075,22 @@ def mapping_is_stereo(mapping):
                 return True
     return False
 
+def first_mono_channel(mapping):
+    if not isinstance(mapping, dict):
+        return 1
+    track_mapping = mapping.get("track_mapping")
+    if isinstance(track_mapping, dict):
+        for entry in track_mapping.values():
+            if not isinstance(entry, dict):
+                continue
+            channel_idx = entry.get("channel_idx")
+            if isinstance(channel_idx, list) and channel_idx:
+                try:
+                    return max(1, int(channel_idx[0]))
+                except Exception:
+                    return 1
+    return 1
+
 def stereo_mapping_from(source_mapping, media_mapping):
     base = media_mapping if mapping_is_stereo(media_mapping) else source_mapping
     embedded = 2
@@ -1083,11 +1099,14 @@ def stereo_mapping_from(source_mapping, media_mapping):
             embedded = max(2, int(base.get("embedded_audio_channels") or 2))
         except Exception:
             embedded = 2
+    channel = first_mono_channel(source_mapping)
+    if isinstance(media_mapping, dict) and mapping_is_mono(media_mapping):
+        channel = first_mono_channel(media_mapping)
     return {{
         "embedded_audio_channels": embedded,
         "linked_audio": base.get("linked_audio", {{}}) if isinstance(base, dict) else {{}},
         "track_mapping": {{
-            "1": {{"channel_idx": [1, 2], "mute": False, "type": "stereo"}}
+            "1": {{"channel_idx": [channel, channel], "mute": False, "type": "stereo"}}
         }},
     }}
 
@@ -1217,27 +1236,11 @@ for track_index in range(1, track_count + 1):
                 fixed, fix_method = try_set_stereo_mapping(item, media_pool_item, source_mapping, media_mapping)
                 if fixed:
                     mapping_fixed += 1
+            color_changed = False
             if ACTION in {{"mark", "fix"}}:
-                safe(lambda item=item: item.SetClipColor(AUDIO_MARK_COLOR))
-                start_frame = safe(lambda item=item: item.GetStart(), 0) or 0
-                marker_frame = max(0, int(start_frame or 0) - timeline_start_frame)
-                duration = max(1, int((safe(lambda item=item: item.GetEnd(), 0) or 0) - int(start_frame or 0)))
-                marker_frame = next_free_marker_frame(marker_frame, duration)
-                for marker_color in (AUDIO_MARK_COLOR,) + AUDIO_MARK_FALLBACK_COLORS:
-                    marker_ok = safe(
-                        lambda sf=marker_frame, dur=duration, nm=item_name(item), reason=("mono track" if track_is_mono else "mono source"), marker_color=marker_color:
-                            timeline.AddMarker(
-                                int(sf),
-                                marker_color,
-                                "[BFD-AUDIO] 单声道音频",
-                                f"{{nm}} / {{reason}}",
-                                int(dur),
-                                "BFD_AUDIO_MONO",
-                            ),
-                        False,
-                    )
-                    if marker_ok:
-                        markers_added += 1
+                for clip_color in (AUDIO_MARK_COLOR,) + AUDIO_MARK_FALLBACK_COLORS:
+                    if safe(lambda item=item, clip_color=clip_color: item.SetClipColor(clip_color), False):
+                        color_changed = True
                         break
             reason = "mono track" if track_is_mono else "mono source"
             clips.append({{
@@ -1248,6 +1251,7 @@ for track_index in range(1, track_count + 1):
                 "start_frame": safe(lambda item=item: item.GetStart(), 0),
                 "end_frame": safe(lambda item=item: item.GetEnd(), 0),
                 "color": safe(lambda item=item: item.GetClipColor(), ""),
+                "color_changed": color_changed,
                 "reason": reason,
                 "mapping_fixed": fixed,
                 "fix_method": fix_method,
@@ -1266,6 +1270,15 @@ elif ACTION == "fix":
     )
 else:
     message = f"扫描完成：发现 {{len(clips)}} 个单声道音频片段。"
+
+if ACTION == "mark":
+    message = f"已将 {{len(clips)}} 个单声道音频片段改为 Chocolate 片段颜色。"
+elif ACTION == "fix":
+    message = (
+        f"轨道格式修正 {{track_format_fixed}}/{{track_format_fix_attempts}}；"
+        f"声道映射修正 {{mapping_fixed}}/{{mapping_fix_attempts}}；"
+        f"已将 {{len(clips)}} 个单声道片段改为 Chocolate 片段颜色。"
+    )
 
 print(json.dumps({{
     "ok": True,

@@ -559,14 +559,32 @@ class PySideUiTest(unittest.TestCase):
     def test_audio_marking_uses_chocolate_and_reports_track_format_fixing(self) -> None:
         source = (ROOT / "pyside_ui" / "resolve_bridge.py").read_text(encoding="utf-8")
 
-        self.assertIn('AUDIO_MARK_COLOR = "Cocoa"', source)
+        self.assertIn('AUDIO_MARK_COLOR = "Chocolate"', source)
+        self.assertIn("first_mono_channel", source)
+        self.assertIn('"channel_idx": [channel, channel]', source)
         self.assertIn("track_format_fix_attempts", source)
         self.assertIn("try_set_track_stereo", source)
-        self.assertIn("timeline_start_frame", source)
-        self.assertIn("marker_frame", source)
-        self.assertIn("next_free_marker_frame", source)
-        self.assertIn("existing_timeline_markers", source)
+        self.assertIn("SetClipColor(clip_color)", source)
+        self.assertNotIn("timeline.AddMarker", source)
         self.assertNotIn('SetClipColor("Orange")', source)
+
+    def test_complex_mode_cache_dir_and_leading_gap_are_wired(self) -> None:
+        app_source = (ROOT / "pyside_ui" / "app.py").read_text(encoding="utf-8")
+        lua_source = (
+            ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑帧夹帧检测.lua"
+        ).read_text(encoding="utf-8")
+        analyzer_source = (
+            ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "black_frame_detector" / "black_frame_analyzer.lua"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("complex_cache_dir", app_source)
+        self.assertIn("QFileDialog.getExistingDirectory", app_source)
+        self.assertIn("params.complex_cache_dir", lua_source)
+        self.assertIn("VideoQuality", lua_source)
+        self.assertIn("os.remove(params.complex_render_path)", lua_source)
+        self.assertIn("timeline_start_frame", analyzer_source)
+        self.assertIn("coverage_table[1].start_frame > first_frame", analyzer_source)
+        self.assertIn("Analyzer.compute_gap_ranges(coverage_table, timeline_fps, params.start_offset)", analyzer_source)
 
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {

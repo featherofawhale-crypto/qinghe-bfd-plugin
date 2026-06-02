@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.89
+-- 版本: v1.9.90
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.89 启动 ===")
+dlog("=== BFD v1.9.90 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -906,7 +906,17 @@ function Main()
         else
             dlog("复杂模式：开始渲染管线, io_in=" .. io_in .. " io_out=" .. io_out)
             local render_ok, render_err = pcall(function()
-                local temp_path = config.get_home() .. "/bfd_temp_render.mp4"
+                local sep = package.config:sub(1, 1)
+                local cache_dir = params.complex_cache_dir
+                if not cache_dir or cache_dir == "" then
+                    cache_dir = config.get_home() .. sep .. ".qinghe_bfd" .. sep .. "render_cache"
+                end
+                if sep == "\\" then
+                    os.execute('mkdir "' .. cache_dir .. '" >nul 2>nul')
+                else
+                    os.execute('mkdir -p "' .. cache_dir .. '" >/dev/null 2>&1')
+                end
+                local temp_path = cache_dir .. sep .. "bfd_temp_render.mp4"
                 os.remove(temp_path)  -- 清理旧文件
                 dlog("复杂模式：临时文件路径=" .. temp_path)
 
@@ -923,7 +933,9 @@ function Main()
                 pcall(function()
                     r_project:SetRenderSettings({
                         CustomName = "bfd_temp_render",
-                        TargetDir = config.get_home(),
+                        TargetDir = cache_dir,
+                        VideoQuality = "Restrict to",
+                        Quality = 3500,
                     })
                 end)
                 dlog("复杂模式：SetRenderSettings完成")
@@ -943,10 +955,12 @@ function Main()
                 pcall(function()
                     r_project:SetRenderSettings({
                         CustomName = "bfd_temp_render",
-                        TargetDir = config.get_home(),
+                        TargetDir = cache_dir,
                         SelectAllFrames = false,
                         MarkIn = io_in,
                         MarkOut = io_out,
+                        VideoQuality = "Restrict to",
+                        Quality = 3500,
                     })
                 end)
 
@@ -1196,7 +1210,14 @@ function Main()
                 print("[BFD] ⚠ 复杂模式渲染失败: " .. tostring(render_err))
                 print("[BFD] 降级为正常模式分析...")
                 -- 清理可能的残留临时文件
-                pcall(function() os.remove(config.get_home() .. "/bfd_temp_render.mp4") end)
+                pcall(function()
+                    local sep = package.config:sub(1, 1)
+                    local cache_dir = params.complex_cache_dir
+                    if not cache_dir or cache_dir == "" then
+                        cache_dir = config.get_home() .. sep .. ".qinghe_bfd" .. sep .. "render_cache"
+                    end
+                    os.remove(cache_dir .. sep .. "bfd_temp_render.mp4")
+                end)
             end
         end
     else
@@ -1875,6 +1896,12 @@ function Main()
         print("[BFD] 重复片段检测已跳过")
     end
 
+    if complex_render_done and params.complex_render_path then
+        pcall(function() os.remove(params.complex_render_path) end)
+        dlog("复杂模式：临时渲染文件已清理: " .. tostring(params.complex_render_path))
+        params.complex_render_path = nil
+    end
+
     -- ----------------------------------------------------------
     -- 阶段9: 清除旧标记 + 按用户选择添加新标记
     -- ----------------------------------------------------------
@@ -2163,6 +2190,11 @@ function Main()
     print("")
 
     end  -- has_problems: 有问题时执行阶段7-11
+    if complex_render_done and params.complex_render_path then
+        pcall(function() os.remove(params.complex_render_path) end)
+        dlog("复杂模式：最终兜底清理临时渲染文件: " .. tostring(params.complex_render_path))
+        params.complex_render_path = nil
+    end
     if not has_problems and ProgressBridge then
         ProgressBridge.complete(params, "未检测到问题", {
             counts = { total = 0, error = 0, suspect = 0, scene = 0, gap = 0, duplicate = 0, content_dup = 0, opacity = 0, corrupt = 0 },
