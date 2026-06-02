@@ -1,0 +1,3 @@
+[submodule "tools/windsurf-assistant"]
+	path = tools/windsurf-assistant
+	url = https://github.com/zhouyoukang1234-spec/windsurf-assistant.git
