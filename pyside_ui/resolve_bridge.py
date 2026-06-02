@@ -33,6 +33,10 @@ def progress_path() -> Path:
     return runtime_dir() / "progress.json"
 
 
+def timeline_state_path() -> Path:
+    return runtime_dir() / "current_timeline_state.json"
+
+
 def read_progress_file(path: Path | None = None) -> dict[str, Any] | None:
     path = path or progress_path()
     if not path.exists():
@@ -41,6 +45,19 @@ def read_progress_file(path: Path | None = None) -> dict[str, Any] | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def read_timeline_state(path: Path | None = None) -> dict[str, Any] | None:
+    path = path or timeline_state_path()
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return None
+    if not isinstance(data, dict) or not data.get("ok"):
+        return None
+    return data
 
 
 def frames_to_timecode(frame: int | float, fps: int | float) -> str:
@@ -498,6 +515,19 @@ print(json.dumps({{
 }}, ensure_ascii=False))
 '''
         )
+        if not data or not data.get("ok"):
+            state = read_timeline_state()
+            if state and state.get("in_frame") is not None and state.get("out_frame") is not None:
+                fps = float(state.get("fps", 25.0))
+                return {
+                    "ok": True,
+                    "in_frame": state.get("in_frame"),
+                    "out_frame": state.get("out_frame"),
+                    "fps": fps,
+                    "in_tc": frames_to_timecode(state.get("in_frame", 0), fps),
+                    "out_tc": frames_to_timecode(state.get("out_frame", 0), fps),
+                    "message": "已读取达芬奇启动时缓存的当前时间线入出点。",
+                }
         if not data:
             return {"ok": False, "message": "读取失败：Resolve API 未返回结果。"}
         if data.get("ok"):

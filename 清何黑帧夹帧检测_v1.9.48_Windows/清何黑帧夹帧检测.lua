@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.81
+-- 版本: v1.9.84
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.81 启动 ===")
+dlog("=== BFD v1.9.84 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -223,7 +223,7 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
     local threshold = params.mixed_cut_scene_threshold or 0.06
     local single_scene_score = params.mixed_cut_single_scene_score or math.max(threshold, 0.55)
     local timeout = params.mixed_cut_timeout or 12
-    local max_duration_sec = params.mixed_cut_max_clip_sec or 180
+    local max_duration_sec = params.mixed_cut_max_clip_sec or 45
     local scanned, nested_skipped = 0, 0
     local seen = {}
     local overlay_config = config.OVERLAY_STUCK_DETECTION or {}
@@ -471,7 +471,18 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                     ffmpeg:_quote_path(file_path),
                     filter_arg
                 )
-                local pipe = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
+                local run_cmd = cmd
+                if ffmpeg.os == "windows" and cache_dir then
+                    local bat_path = cache_dir .. "\\mixed_cut_file_scene_run.bat"
+                    local bf = io.open(bat_path, "w")
+                    if bf then
+                        bf:write("@echo off\r\n")
+                        bf:write(cmd .. "\r\n")
+                        bf:close()
+                        run_cmd = 'cmd /S /C "' .. bat_path .. '"'
+                    end
+                end
+                local pipe = io.popen(run_cmd, "r")
                 local last_abs_time = nil
                 if pipe then
                     for line in pipe:lines() do
@@ -585,6 +596,57 @@ local function try_launch_external_ui()
         dlog("PySide UI launcher missing: " .. tostring(launcher))
         return false
     end
+
+    local function json_escape(value)
+        value = tostring(value or "")
+        value = value:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\r", "\\r"):gsub("\n", "\\n")
+        return value
+    end
+
+    pcall(function()
+        local resolve = Resolve and Resolve() or (bmd and bmd.scriptapp and bmd.scriptapp("Resolve"))
+        local pm = resolve and resolve:GetProjectManager()
+        local project = pm and pm:GetCurrentProject()
+        local timeline = project and project:GetCurrentTimeline()
+        if not timeline then return end
+        local fps = tonumber(timeline:GetSetting("timelineFrameRate") or 25) or 25
+        local start_frame = tonumber(timeline:GetStartFrame() or 0) or 0
+        local mark = timeline:GetMarkInOut()
+        local in_frame, out_frame = nil, nil
+        if type(mark) == "table" then
+            for _, key in ipairs({"video", "all", "audio"}) do
+                local entry = mark[key]
+                if type(entry) == "table" then
+                    in_frame = in_frame or tonumber(entry["in"])
+                    out_frame = out_frame or tonumber(entry["out"])
+                end
+                if in_frame and out_frame then break end
+            end
+        end
+        if in_frame and start_frame > 0 and in_frame < start_frame then in_frame = start_frame + in_frame end
+        if out_frame and start_frame > 0 and out_frame < start_frame then out_frame = start_frame + out_frame end
+
+        local home = os.getenv("USERPROFILE") or os.getenv("HOME") or "."
+        local state_dir = home .. sep .. ".qinghe_bfd"
+        if sep == "\\" then
+            os.execute('mkdir "' .. state_dir .. '" >nul 2>nul')
+        else
+            os.execute('mkdir -p "' .. state_dir .. '" >/dev/null 2>&1')
+        end
+        local f = io.open(state_dir .. sep .. "current_timeline_state.json", "w")
+        if f then
+            f:write(string.format(
+                '{"ok":true,"name":"%s","fps":%s,"start_frame":%s,"in_frame":%s,"out_frame":%s}',
+                json_escape(timeline:GetName() or "当前时间线"),
+                tostring(fps),
+                tostring(start_frame),
+                tostring(in_frame or "null"),
+                tostring(out_frame or "null")
+            ))
+            f:close()
+            dlog("PySide UI state snapshot written")
+        end
+    end)
 
     print("[BFD] Opening PySide UI control panel...")
     dlog("Launching PySide UI: " .. launcher)

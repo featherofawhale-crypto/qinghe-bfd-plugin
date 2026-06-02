@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 import tempfile
@@ -17,7 +18,7 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QListWidget, QPushButton,
 import app as ui_app  # noqa: E402
 import resolve_bridge  # noqa: E402
 from app import MainWindow  # noqa: E402
-from resolve_bridge import TimelineInfo, read_progress_file, write_lua_params  # noqa: E402
+from resolve_bridge import TimelineInfo, read_progress_file, read_timeline_state, write_lua_params  # noqa: E402
 
 
 class PySideUiTest(unittest.TestCase):
@@ -224,6 +225,25 @@ class PySideUiTest(unittest.TestCase):
             progress = read_progress_file(progress_path)
             self.assertEqual(progress["percent"], 64)
             self.assertEqual(progress["stage"], "FFmpeg 3/5")
+
+    def test_timeline_state_reader_supports_external_ui_io_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = Path(tmp) / "current_timeline_state.json"
+            state_path.write_text(
+                json.dumps({
+                    "ok": True,
+                    "name": "方法",
+                    "fps": 24,
+                    "start_frame": 86400,
+                    "in_frame": 86400,
+                    "out_frame": 87384,
+                }),
+                encoding="utf-8",
+            )
+
+            state = read_timeline_state(state_path)
+            self.assertEqual(state["in_frame"], 86400)
+            self.assertEqual(state["out_frame"], 87384)
 
     def test_frozen_bridge_process_uses_worker_mode_not_dash_c(self) -> None:
         had_frozen = hasattr(sys, "frozen")
@@ -485,9 +505,20 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("clips_by_file", source)
         self.assertIn("file_scene", source)
         self.assertIn("abs_time - clip_start_sec", source)
+        self.assertIn("mixed_cut_file_scene_run.bat", source)
+        self.assertNotIn("ffmpeg:_wrap_cmd(cmd)", source)
         marker_manager = (ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "black_frame_detector" / "marker_manager.lua").read_text(encoding="utf-8")
         self.assertIn("marker_priority", marker_manager)
         self.assertIn("is_mixed_cut", marker_manager)
+
+    def test_lua_io_prefers_get_mark_in_out_without_missing_method_noise(self) -> None:
+        source = (ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "black_frame_detector" / "version_compat.lua").read_text(encoding="utf-8")
+
+        self.assertIn("GetMarkInOut", source)
+        self.assertIn("normalize_mark_frame", source)
+        self.assertIn('type(obj[method_name]) ~= "function"', source)
+        main_source = (ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑帧夹帧检测.lua").read_text(encoding="utf-8")
+        self.assertIn("current_timeline_state.json", main_source)
 
     def test_audio_marking_uses_chocolate_and_reports_track_format_fixing(self) -> None:
         source = (ROOT / "pyside_ui" / "resolve_bridge.py").read_text(encoding="utf-8")
