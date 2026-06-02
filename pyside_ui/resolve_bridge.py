@@ -48,15 +48,16 @@ def read_progress_file(path: Path | None = None) -> dict[str, Any] | None:
         return None
 
 
-def read_timeline_state(path: Path | None = None) -> dict[str, Any] | None:
+def read_timeline_state(path: Path | None = None, max_age_seconds: float | None = 300) -> dict[str, Any] | None:
     path = path or timeline_state_path()
     if not path.exists():
         return None
-    try:
-        if path.stat().st_mtime < (time.time() - 300):
+    if max_age_seconds is not None:
+        try:
+            if path.stat().st_mtime < (time.time() - max_age_seconds):
+                return None
+        except Exception:
             return None
-    except Exception:
-        return None
     try:
         data = json.loads(path.read_text(encoding="utf-8-sig"))
     except Exception:
@@ -289,8 +290,37 @@ class ResolveBridge:
     def is_connected(self) -> bool:
         return self._connected
 
+    @staticmethod
+    def _timelines_from_state(state: dict[str, Any]) -> list[TimelineInfo]:
+        timelines = state.get("timelines")
+        if not isinstance(timelines, list):
+            return []
+        return [
+            TimelineInfo(
+                int(item.get("index", index + 1)),
+                clean_resolve_text(item.get("name")),
+                float(item.get("fps", 25.0)),
+                clean_resolve_text(item.get("uid")),
+            )
+            for index, item in enumerate(timelines)
+            if isinstance(item, dict)
+        ]
+
     def list_timelines(self) -> list[TimelineInfo]:
         cached = read_timeline_state()
+        if cached:
+            timelines = self._timelines_from_state(cached)
+            if timelines:
+                self._connected = True
+                return timelines
+
+        stale_cached = read_timeline_state(max_age_seconds=None)
+        if stale_cached:
+            timelines = self._timelines_from_state(stale_cached)
+            if timelines:
+                self._connected = False
+                return timelines
+
         if cached and isinstance(cached.get("timelines"), list) and cached["timelines"]:
             self._connected = True
             return [
@@ -344,7 +374,8 @@ for index in range(1, count + 1):
         name = name + "  (当前)"
     items.append({"index": index, "name": name, "fps": fps, "uid": uid})
 print(json.dumps({"connected": True, "timelines": items}, ensure_ascii=False))
-'''
+''',
+            timeout=3,
         )
         if not data:
             return [TimelineInfo(1, "当前时间线", 25.0)]
@@ -1318,7 +1349,7 @@ print(json.dumps({"connected": bool(resolve)}))
         return bool(data and data.get("connected"))
 
     @staticmethod
-    def _run_resolve_python(body: str) -> dict[str, Any] | None:
+    def _run_resolve_python(body: str, timeout: float = 5) -> dict[str, Any] | None:
         command, stdin_script = build_resolve_python_process(body)
         try:
             env = os.environ.copy()
@@ -1331,7 +1362,7 @@ print(json.dumps({"connected": bool(resolve)}))
                 encoding="utf-8",
                 errors="replace",
                 capture_output=True,
-                timeout=20,
+                timeout=timeout,
                 check=False,
             )
         except Exception:

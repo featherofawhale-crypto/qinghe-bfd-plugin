@@ -242,6 +242,26 @@ class PySideUiTest(unittest.TestCase):
             self.assertTrue(bridge.is_connected())
             self.assertFalse(run_bridge.called)
 
+    def test_stale_timeline_state_is_used_when_resolve_bridge_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = Path(tmp) / "current_timeline_state.json"
+            state_path.write_text(
+                '{"ok":true,"timelines":[{"index":1,"name":"方法  (当前)","fps":24,"uid":"abc"}]}',
+                encoding="utf-8",
+            )
+            old_time = 1_700_000_000
+            os.utime(state_path, (old_time, old_time))
+
+            with patch.object(resolve_bridge, "timeline_state_path", return_value=state_path):
+                bridge = resolve_bridge.ResolveBridge()
+                with patch.object(bridge, "_run_resolve_python", return_value=None) as run_bridge:
+                    timelines = bridge.list_timelines()
+
+            self.assertEqual(timelines[0].name, "方法  (当前)")
+            self.assertEqual(timelines[0].fps, 24.0)
+            self.assertFalse(bridge.is_connected())
+            self.assertFalse(run_bridge.called)
+
     def test_frozen_bridge_process_uses_worker_mode_not_dash_c(self) -> None:
         had_frozen = hasattr(sys, "frozen")
         old_frozen = getattr(sys, "frozen", None)
