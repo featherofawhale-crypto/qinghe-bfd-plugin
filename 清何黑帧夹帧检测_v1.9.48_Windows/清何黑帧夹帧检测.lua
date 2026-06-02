@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.93
+-- 版本: v1.9.94
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.93 启动 ===")
+dlog("=== BFD v1.9.94 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -2058,6 +2058,25 @@ function Main()
             end
             print(string.format("[BFD] 已添加 %d 个跨文件内容重复标记", #content_dup_results.cross_file_pairs * 2))
         end
+    end
+
+    if has_io_range then
+        local filtered_records = {}
+        local skipped_by_io = 0
+        for _, r in ipairs(selected_records) do
+            local rs = r.timeline_start_frame or 0
+            local re = r.timeline_end_frame or rs + (r.duration_frames or 1)
+            if re > io_in and rs < io_out then
+                table.insert(filtered_records, r)
+            else
+                skipped_by_io = skipped_by_io + 1
+            end
+        end
+        if skipped_by_io > 0 then
+            print(string.format("[BFD] IO range filter: skipped %d out-of-range markers", skipped_by_io))
+            dlog(string.format("IO range filter: skipped=%d io_in=%s io_out=%s", skipped_by_io, tostring(io_in), tostring(io_out)))
+        end
+        selected_records = filtered_records
     end
 
     if #selected_records == 0 then

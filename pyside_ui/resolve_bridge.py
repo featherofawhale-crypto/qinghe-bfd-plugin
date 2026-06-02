@@ -449,6 +449,28 @@ print(json.dumps({"ok": ok}))
         )
         return bool(data and data.get("ok"))
 
+    def current_timeline_identity(self) -> dict[str, Any]:
+        data = self._run_resolve_python(
+            r'''
+import json
+resolve = dvr_script.scriptapp("Resolve")
+pm = resolve.GetProjectManager() if resolve else None
+project = pm.GetCurrentProject() if pm else None
+timeline = project.GetCurrentTimeline() if project else None
+if not timeline:
+    print(json.dumps({"ok": False}, ensure_ascii=False))
+    raise SystemExit(0)
+uid = ""
+try:
+    uid = timeline.GetUniqueId() or ""
+except Exception:
+    uid = ""
+print(json.dumps({"ok": True, "name": timeline.GetName() or "", "uid": uid}, ensure_ascii=False))
+''',
+            timeout=3,
+        )
+        return data or {"ok": False}
+
     def activate_timeline(self, timeline_index: int = 1) -> tuple[bool, str]:
         data = self._run_resolve_python(
             rf'''
@@ -746,14 +768,14 @@ print(json.dumps({{
             return {"ok": False, "message": "时间线结构扫描失败：Resolve API 未返回结果。", "candidates": [], "count": 0}
         return data
 
-    def scan_mono_audio(self, timeline_index: int = 1) -> dict[str, Any]:
-        return self._audio_action(timeline_index, "scan")
+    def scan_mono_audio(self, timeline_index: int = 1, io_in: str = "", io_out: str = "") -> dict[str, Any]:
+        return self._audio_action(timeline_index, "scan", io_in, io_out)
 
-    def mark_mono_audio(self, timeline_index: int = 1) -> dict[str, Any]:
-        return self._audio_action(timeline_index, "mark")
+    def mark_mono_audio(self, timeline_index: int = 1, io_in: str = "", io_out: str = "") -> dict[str, Any]:
+        return self._audio_action(timeline_index, "mark", io_in, io_out)
 
-    def fix_mono_audio_to_stereo(self, timeline_index: int = 1) -> dict[str, Any]:
-        return self._audio_action(timeline_index, "fix")
+    def fix_mono_audio_to_stereo(self, timeline_index: int = 1, io_in: str = "", io_out: str = "") -> dict[str, Any]:
+        return self._audio_action(timeline_index, "fix", io_in, io_out)
 
     def jump_to_timecode(self, timeline_index: int, timecode: str) -> tuple[bool, str]:
         data = self._run_resolve_python(
@@ -979,6 +1001,12 @@ def tc_from_timeline_frame(frame, fps, timeline_start_frame, timeline_start_tc):
 
 def get_item(track_type, track_index, item_index):
     clips = safe(lambda: timeline.GetItemListInTrack(track_type, track_index), []) or []
+    target_uid = str(ITEM.get("unique_id", "") or "")
+    if target_uid:
+        for clip in clips:
+            uid = str(safe(lambda c=clip: c.GetUniqueId(), "") or "")
+            if uid == target_uid:
+                return clip
     if item_index < 0 or item_index >= len(clips):
         return None
     return clips[item_index]
@@ -1033,17 +1061,19 @@ def collect_items():
                     maybe_title = has_fusion or any(str(k) in TITLE_HINT_KEYS for k in props.keys()) or "title" in item_name.lower() or "text" in item_name.lower()
                     if not maybe_title:
                         continue
-                rel_start = int(safe(lambda c=clip: c.GetStart(), 0) or 0)
-                rel_end = int(safe(lambda c=clip: c.GetEnd(), rel_start) or rel_start)
-                abs_start = int(start_frame) + rel_start
+                raw_start = int(safe(lambda c=clip: c.GetStart(), 0) or 0)
+                raw_end = int(safe(lambda c=clip: c.GetEnd(), raw_start) or raw_start)
+                abs_start = raw_start if raw_start >= int(start_frame) else int(start_frame) + raw_start
+                abs_end = raw_end if raw_end >= int(start_frame) else int(start_frame) + raw_end
                 found.append({{
                     "timeline_index": {int(timeline_index)},
                     "track_type": track_type,
                     "track_index": track_index,
                     "item_index": item_index,
+                    "unique_id": str(safe(lambda c=clip: c.GetUniqueId(), "") or ""),
                     "timecode": tc_from_timeline_frame(abs_start, fps, start_frame, start_timecode),
                     "start_frame": abs_start,
-                    "end_frame": int(start_frame) + rel_end,
+                    "end_frame": abs_end,
                     "text": text_value,
                     "text_key": text_key,
                     "text_source": source,
@@ -1079,12 +1109,14 @@ elif ACTION == "delete":
             return {"ok": False, "message": "文字层操作失败：Resolve API 未返回结果。", "items": []}
         return data
 
-    def _audio_action(self, timeline_index: int, action: str) -> dict[str, Any]:
+    def _audio_action(self, timeline_index: int, action: str, io_in: str = "", io_out: str = "") -> dict[str, Any]:
         action = action if action in {"scan", "mark", "fix"} else "scan"
         data = self._run_resolve_python(
             rf'''
 import json
 ACTION = {json.dumps(action)}
+IO_IN_TEXT = {json.dumps(io_in)}
+IO_OUT_TEXT = {json.dumps(io_out)}
 AUDIO_MARK_COLOR = "Chocolate"
 AUDIO_MARK_FALLBACK_COLORS = ("Brown", "Cocoa", "Orange")
 resolve = dvr_script.scriptapp("Resolve")
@@ -1179,7 +1211,7 @@ def mono_channel_label(mapping):
         return "left-only"
     if channel == 2:
         return "right-only"
-    return f"channel-{channel}-only"
+    return f"channel-{{channel}}-only"
 
 def stereo_mapping_from(source_mapping, media_mapping):
     base = media_mapping if mapping_is_stereo(media_mapping) else source_mapping
@@ -1258,6 +1290,12 @@ def try_set_track_stereo(track_index):
 
 track_count = int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0)
 timeline_start_frame = int(safe(lambda: timeline.GetStartFrame(), 0) or 0)
+timeline_start_timecode = str(safe(lambda: timeline.GetStartTimecode(), None) or safe(lambda: timeline.GetSetting("timelineStartTimecode"), None) or "00:00:00:00")
+fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), None) or safe(lambda: project.GetSetting("timelineFrameRate"), None) or 25
+try:
+    timeline_fps = float(fps_raw)
+except Exception:
+    timeline_fps = 25.0
 existing_timeline_markers = safe(lambda: timeline.GetMarkers(), {{}}) or {{}}
 tracks = []
 clips = []
@@ -1267,6 +1305,38 @@ mapping_fixed = 0
 mapping_fix_attempts = 0
 track_format_fix_attempts = 0
 track_format_fixed = 0
+
+def tc_to_frames(tc):
+    fps_int = max(1, int(round(float(timeline_fps or 25))))
+    parts = str(tc or "").split(":")
+    if len(parts) != 4:
+        return None
+    try:
+        hh, mm, ss, ff = [int(float(part)) for part in parts]
+    except Exception:
+        return None
+    return (((hh * 60) + mm) * 60 + ss) * fps_int + ff
+
+def display_tc_to_timeline_frame(tc):
+    display_frame = tc_to_frames(tc)
+    start_display_frame = tc_to_frames(timeline_start_timecode) or 0
+    if display_frame is None:
+        return None
+    return timeline_start_frame + max(0, display_frame - start_display_frame)
+
+io_in_frame = display_tc_to_timeline_frame(IO_IN_TEXT)
+io_out_frame = display_tc_to_timeline_frame(IO_OUT_TEXT)
+
+def normalize_item_frame(raw):
+    frame = int(raw or 0)
+    return frame if frame >= timeline_start_frame else timeline_start_frame + frame
+
+def item_overlaps_io(item):
+    if io_in_frame is None or io_out_frame is None:
+        return True
+    start = normalize_item_frame(safe(lambda item=item: item.GetStart(), 0))
+    end = normalize_item_frame(safe(lambda item=item: item.GetEnd(), start))
+    return end > io_in_frame and start < io_out_frame
 
 def next_free_marker_frame(preferred_frame, duration):
     used = set()
@@ -1314,6 +1384,8 @@ for track_index in range(1, track_count + 1):
         "format_fix_method": track_format_fix_method,
     }})
     for item in items:
+        if not item_overlaps_io(item):
+            continue
         source_mapping = decode_mapping(safe(lambda item=item: item.GetSourceAudioChannelMapping()))
         media_pool_item = safe(lambda item=item: item.GetMediaPoolItem())
         media_mapping = decode_mapping(safe(lambda mpi=media_pool_item: mpi.GetAudioMapping()) if media_pool_item else None)
@@ -1347,8 +1419,8 @@ for track_index in range(1, track_count + 1):
                 "track_subtype": subtype or "unknown",
                 "track_format": display_track_format(subtype),
                 "name": item_name(item),
-                "start_frame": safe(lambda item=item: item.GetStart(), 0),
-                "end_frame": safe(lambda item=item: item.GetEnd(), 0),
+                "start_frame": normalize_item_frame(safe(lambda item=item: item.GetStart(), 0)),
+                "end_frame": normalize_item_frame(safe(lambda item=item: item.GetEnd(), 0)),
                 "color": safe(lambda item=item: item.GetClipColor(), ""),
                 "color_changed": color_changed,
                 "reason": reason,

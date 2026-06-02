@@ -62,7 +62,7 @@ from resolve_bridge import (
 )
 
 
-APP_VERSION = "1.9.93"
+APP_VERSION = "1.9.94"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -1063,6 +1063,10 @@ class MainWindow(QMainWindow):
     def refresh_timelines(self) -> None:
         self._loading_timelines = True
         self.timelines = self.bridge.list_timelines()
+        current_identity = self.bridge.current_timeline_identity()
+        current_uid = str(current_identity.get("uid", "")) if current_identity.get("ok") else ""
+        current_name = str(current_identity.get("name", "")) if current_identity.get("ok") else ""
+        current_combo_index = 0
         self.timeline_combo.clear()
         self.batch_timeline_list.clear()
         for tl in self.timelines:
@@ -1073,6 +1077,12 @@ class MainWindow(QMainWindow):
             item.setData(Qt.UserRole, data)
             item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
             item.setCheckState(Qt.Checked if "当前" in tl.name else Qt.Unchecked)
+            is_current = bool((current_uid and tl.uid == current_uid) or (current_name and current_name in tl.name))
+            if is_current:
+                current_combo_index = self.timeline_combo.count() - 1
+                item.setCheckState(Qt.Checked)
+            elif current_uid or current_name:
+                item.setCheckState(Qt.Unchecked)
             self.batch_timeline_list.addItem(item)
         self.connection_badge.setText("已连接" if self.bridge.is_connected() else "离线参数")
         self.connection_badge.setObjectName("BadgeOk" if self.bridge.is_connected() else "BadgeWarn")
@@ -1082,6 +1092,8 @@ class MainWindow(QMainWindow):
             self.batch_timeline_list.item(i).checkState() == Qt.Checked for i in range(self.batch_timeline_list.count())
         ):
             self.batch_timeline_list.item(0).setCheckState(Qt.Checked)
+        if self.timeline_combo.count() > 0:
+            self.timeline_combo.setCurrentIndex(current_combo_index)
         self._loading_timelines = False
         self._rescale_threshold_controls(self._control_fps, self.selected_fps())
         self.update_fps_hint()
@@ -1430,19 +1442,31 @@ class MainWindow(QMainWindow):
 
     def scan_mono_audio(self) -> None:
         selected = self.timeline_combo.currentData() or {"index": 1}
-        result = self.bridge.scan_mono_audio(int(selected.get("index", 1)))
+        result = self.bridge.scan_mono_audio(
+            int(selected.get("index", 1)),
+            self.io_in.text().strip(),
+            self.io_out.text().strip(),
+        )
         self.render_audio_scan(result)
         self.side_tabs.setCurrentWidget(self.audio_tab)
 
     def mark_mono_audio(self) -> None:
         selected = self.timeline_combo.currentData() or {"index": 1}
-        result = self.bridge.mark_mono_audio(int(selected.get("index", 1)))
+        result = self.bridge.mark_mono_audio(
+            int(selected.get("index", 1)),
+            self.io_in.text().strip(),
+            self.io_out.text().strip(),
+        )
         self.render_audio_scan(result)
         self.side_tabs.setCurrentWidget(self.audio_tab)
 
     def fix_mono_audio(self) -> None:
         selected = self.timeline_combo.currentData() or {"index": 1}
-        result = self.bridge.fix_mono_audio_to_stereo(int(selected.get("index", 1)))
+        result = self.bridge.fix_mono_audio_to_stereo(
+            int(selected.get("index", 1)),
+            self.io_in.text().strip(),
+            self.io_out.text().strip(),
+        )
         self.render_audio_scan(result)
         self.side_tabs.setCurrentWidget(self.audio_tab)
 
@@ -1537,7 +1561,13 @@ class MainWindow(QMainWindow):
         self.text_status.setText(str(result.get("message", "")))
         self._log(self.text_status.text())
         if result.get("ok"):
-            self.scan_text_layers()
+            row = self.text_table.currentRow()
+            if 0 <= row < len(self.text_records):
+                self.text_records[row]["text"] = new_text
+                self.text_records[row]["name"] = new_text
+                text_cell = self.text_table.item(row, 3)
+                if text_cell:
+                    text_cell.setText(new_text)
 
     def delete_selected_text_item(self) -> None:
         item = self.selected_text_item_record()
