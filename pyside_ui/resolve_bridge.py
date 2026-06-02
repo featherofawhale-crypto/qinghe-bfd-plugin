@@ -869,11 +869,67 @@ def item_name(item):
             return str(name)
     return str(safe(lambda: item.GetName(), "未命名音频"))
 
+def mapping_is_stereo(mapping):
+    if not isinstance(mapping, dict):
+        return False
+    track_mapping = mapping.get("track_mapping")
+    if isinstance(track_mapping, dict):
+        for entry in track_mapping.values():
+            if not isinstance(entry, dict):
+                continue
+            channel_idx = entry.get("channel_idx")
+            if str(entry.get("type", "")).lower() == "stereo":
+                return True
+            if isinstance(channel_idx, list) and len(channel_idx) >= 2:
+                return True
+    return False
+
+def stereo_mapping_from(source_mapping, media_mapping):
+    base = media_mapping if mapping_is_stereo(media_mapping) else source_mapping
+    embedded = 2
+    if isinstance(base, dict):
+        try:
+            embedded = max(2, int(base.get("embedded_audio_channels") or 2))
+        except Exception:
+            embedded = 2
+    return {{
+        "embedded_audio_channels": embedded,
+        "linked_audio": base.get("linked_audio", {{}}) if isinstance(base, dict) else {{}},
+        "track_mapping": {{
+            "1": {{"channel_idx": [1, 2], "mute": False, "type": "stereo"}}
+        }},
+    }}
+
+def try_set_stereo_mapping(item, media_pool_item, source_mapping, media_mapping):
+    desired = stereo_mapping_from(source_mapping, media_mapping)
+    payloads = [desired, json.dumps(desired, ensure_ascii=False)]
+    targets = [
+        (item, ("SetSourceAudioChannelMapping", "SetAudioMapping")),
+        (media_pool_item, ("SetAudioMapping", "SetSourceAudioChannelMapping")),
+    ]
+    for target, methods in targets:
+        if not target:
+            continue
+        for method_name in methods:
+            method = getattr(target, method_name, None)
+            if not callable(method):
+                continue
+            for payload in payloads:
+                ok = safe(lambda method=method, payload=payload: method(payload), False)
+                if ok:
+                    new_source = decode_mapping(safe(lambda item=item: item.GetSourceAudioChannelMapping()))
+                    new_media = decode_mapping(safe(lambda mpi=media_pool_item: mpi.GetAudioMapping()) if media_pool_item else None)
+                    if mapping_is_stereo(new_source) or mapping_is_stereo(new_media):
+                        return True, method_name
+    return False, ""
+
 track_count = int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0)
 tracks = []
 clips = []
 mono_track_indices = []
 markers_added = 0
+mapping_fixed = 0
+mapping_fix_attempts = 0
 for track_index in range(1, track_count + 1):
     subtype = str(safe(lambda idx=track_index: timeline.GetTrackSubType("audio", idx), "") or "")
     track_name = str(safe(lambda idx=track_index: timeline.GetTrackName("audio", idx), f"Audio {{track_index}}") or f"Audio {{track_index}}")
@@ -896,6 +952,13 @@ for track_index in range(1, track_count + 1):
         media_mapping = decode_mapping(safe(lambda mpi=media_pool_item: mpi.GetAudioMapping()) if media_pool_item else None)
         source_is_mono = mapping_is_mono(source_mapping) or mapping_is_mono(media_mapping)
         if track_is_mono or source_is_mono:
+            fixed = False
+            fix_method = ""
+            if ACTION == "fix" and source_is_mono:
+                mapping_fix_attempts += 1
+                fixed, fix_method = try_set_stereo_mapping(item, media_pool_item, source_mapping, media_mapping)
+                if fixed:
+                    mapping_fixed += 1
             if ACTION in {{"mark", "fix"}}:
                 safe(lambda item=item: item.SetClipColor("Orange"))
                 start_frame = safe(lambda item=item: item.GetStart(), 0) or 0
@@ -923,20 +986,19 @@ for track_index in range(1, track_count + 1):
                 "end_frame": safe(lambda item=item: item.GetEnd(), 0),
                 "color": safe(lambda item=item: item.GetClipColor(), ""),
                 "reason": reason,
+                "mapping_fixed": fixed,
+                "fix_method": fix_method,
             }})
 
 created_tracks = 0
-if ACTION == "fix":
-    for _ in mono_track_indices:
-        if safe(lambda: timeline.AddTrack("audio", {{"audioType": "stereo"}}), False):
-            created_tracks += 1
 
 if ACTION == "mark":
     message = f"已标记 {{len(clips)}} 个单声道音频片段为 Orange，并写入 {{markers_added}} 个时间线标记。"
 elif ACTION == "fix":
     message = (
-        f"已创建 {{created_tracks}} 条 stereo 音轨，并标记 {{len(clips)}} 个单声道片段、{{markers_added}} 个时间线标记。"
-        " Resolve 公开 API 未提供直接改片段声道映射的接口。"
+        f"已尝试修正 {{mapping_fix_attempts}} 个声道映射，成功 {{mapping_fixed}} 个；"
+        f"标记 {{len(clips)}} 个单声道片段、{{markers_added}} 个时间线标记。"
+        + (" 未成功写入的项目表示 Resolve API 未接受该片段/素材的声道映射写入。" if mapping_fixed < mapping_fix_attempts else "")
     )
 else:
     message = f"扫描完成：发现 {{len(clips)}} 个单声道音频片段。"
@@ -950,6 +1012,8 @@ print(json.dumps({{
         "mono_clips": len(clips),
         "markers_added": markers_added,
         "created_stereo_tracks": created_tracks,
+        "mapping_fix_attempts": mapping_fix_attempts,
+        "mapping_fixed": mapping_fixed,
     }},
     "tracks": tracks,
     "clips": clips,

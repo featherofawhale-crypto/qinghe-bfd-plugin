@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.77
+-- 版本: v1.9.78
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.77 启动 ===")
+dlog("=== BFD v1.9.78 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -1855,6 +1855,15 @@ function Main()
     end
 
     local selected_records = Analyzer.get_filtered_marker_records(analyzed_results, marker_types)
+    if marker_types.mixed_cut == false then
+        local filtered = {}
+        for _, r in ipairs(selected_records) do
+            if not (r.segment and r.segment.is_mixed_cut) and not r.is_mixed_cut then
+                table.insert(filtered, r)
+            end
+        end
+        selected_records = filtered
+    end
 
     -- 合并透明度检测标记（秒级扫描，无需FFmpeg）
     if #opacity_results > 0 and marker_types.opacity ~= false then
@@ -1878,7 +1887,7 @@ function Main()
     end
 
     -- 合并帧指纹内容重复检测标记（含per-file和跨文件）
-    if content_dup_results and marker_types.duplicate ~= false then
+    if content_dup_results and marker_types.content_dup ~= false then
         local content_records = DuplicateDetector.content_to_marker_records(content_dup_results, timeline_fps)
         for _, r in ipairs(content_records) do
             table.insert(selected_records, r)

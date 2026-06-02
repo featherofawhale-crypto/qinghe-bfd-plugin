@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$Version = "1.9.77"
+$Version = "1.9.78"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PackageRoot = Get-ChildItem -Path $Root -Directory -Filter "*_Windows" |
     Sort-Object LastWriteTime -Descending |

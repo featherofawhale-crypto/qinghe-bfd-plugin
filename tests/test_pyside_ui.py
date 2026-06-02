@@ -88,6 +88,8 @@ class PySideUiTest(unittest.TestCase):
         self.assertFalse(params["mark_partial_opacity"])
         self.assertTrue(params["merge_mode"])
         self.assertFalse(params["complex_mode"])
+        self.assertTrue(params["detect_mixed_cut"])
+        self.assertTrue(params["marker_types"]["mixed_cut"])
 
     def test_collect_params_uses_selected_timeline_fps_for_thresholds(self) -> None:
         with patch.object(
@@ -143,6 +145,7 @@ class PySideUiTest(unittest.TestCase):
             window.chk_duplicate,
             window.chk_content_dup,
             window.chk_opacity,
+            window.chk_mixed_cut,
             window.chk_complex,
             window.chk_merge,
             window.feedback_btn,
@@ -168,8 +171,8 @@ class PySideUiTest(unittest.TestCase):
             window.chk_duplicate,
             window.chk_content_dup,
             window.chk_opacity,
+            window.chk_mixed_cut,
             window.chk_corrupt,
-            window.chk_audio_mono,
         ]
 
         for check in marker_checks:
@@ -296,7 +299,7 @@ class PySideUiTest(unittest.TestCase):
                 first.io_out.setText("01:00:05:12")
                 first.chk_scene.setChecked(True)
                 first.chk_content_dup.setChecked(True)
-                first.chk_audio_mono.setChecked(True)
+                first.chk_mixed_cut.setChecked(False)
                 first.content_sample_interval.setValue(24)
                 first.min_black_frames.setValue(7)
                 first.pixel_threshold.setValue(1.2)
@@ -309,7 +312,7 @@ class PySideUiTest(unittest.TestCase):
         self.assertEqual(second.io_out.text(), "")
         self.assertTrue(second.chk_scene.isChecked())
         self.assertTrue(second.chk_content_dup.isChecked())
-        self.assertTrue(second.chk_audio_mono.isChecked())
+        self.assertFalse(second.chk_mixed_cut.isChecked())
         self.assertEqual(second.content_sample_interval.value(), 24)
         self.assertEqual(second.min_black_frames.value(), 7)
         self.assertAlmostEqual(second.pixel_threshold.value(), 1.2, places=2)
@@ -379,6 +382,33 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("middle", lines[1])
         self.assertIn("late", lines[2])
 
+    def test_result_records_filter_unjumpable_rows(self) -> None:
+        window = MainWindow()
+        window.render_result_records(
+            [
+                {"classification": "info", "name": "no marker"},
+                {"timecode": "01:00:01:00", "classification": "error", "name": "[BFD-ERR] ok"},
+                {"marker_frame": "", "classification": "gap", "name": "[BFD-GAP] empty"},
+            ]
+        )
+
+        text = window.result_list.toPlainText()
+        self.assertIn("[BFD-ERR] ok", text)
+        self.assertNotIn("no marker", text)
+        self.assertNotIn("[BFD-GAP] empty", text)
+        self.assertEqual(len(window.result_records), 1)
+
+    def test_frame_only_result_rows_are_jumpable(self) -> None:
+        window = MainWindow()
+        jumps = []
+        window.bridge.jump_to_timecode = lambda timeline_index, timecode: jumps.append((timeline_index, timecode)) or (True, "ok")
+
+        window.render_result_records([{"frame": 1500, "fps": 25, "classification": "error", "name": "[BFD-ERR] frame only"}])
+        window.jump_to_result_row(0)
+
+        self.assertIn("00:01:00:00", window.result_list.toPlainText())
+        self.assertEqual(jumps, [(1, "00:01:00:00")])
+
     def test_zero_result_progress_shows_in_out_hint_once(self) -> None:
         window = MainWindow()
 
@@ -414,18 +444,20 @@ class PySideUiTest(unittest.TestCase):
         self.assertEqual(window.io_in.text(), "01:00:00:00")
         self.assertEqual(window.io_out.text(), "01:00:08:12")
 
-    def test_audio_mono_controls_and_params_are_present(self) -> None:
+    def test_audio_mono_is_audio_page_only_and_mixed_cut_is_main_option(self) -> None:
         window = MainWindow()
         buttons = {button.text(): button for button in window.findChildren(QPushButton)}
+        check_text = " ".join(check.text() for check in window.findChildren(QCheckBox))
 
-        self.assertTrue(window.chk_audio_mono.isChecked())
+        self.assertIn("混剪夹帧", check_text)
+        self.assertNotIn("单声道音频", check_text)
         self.assertIn("扫描单声道", buttons)
         self.assertIn("标记单声道", buttons)
-        self.assertIn("一键修正双声道", buttons)
+        self.assertIn("修正声道映射", buttons)
         self.assertTrue(window.scan_audio_btn.toolTip())
         self.assertTrue(window.fix_audio_btn.toolTip())
-        self.assertTrue(window.collect_params()["detect_mono_audio"])
         self.assertTrue(window.collect_params()["detect_mixed_cut"])
+        self.assertNotIn("detect_mono_audio", window.collect_params())
 
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {

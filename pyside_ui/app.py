@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.77"
+APP_VERSION = "1.9.78"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -240,6 +240,7 @@ MARKER_COLORS = {
     "gap": "#6D5BD0",
     "duplicate": "#B83280",
     "content_dup": "#8F3F71",
+    "mixed_cut": "#DC2626",
     "opacity": "#047857",
     "corrupt": "#0369A1",
     "audio": "#0F766E",
@@ -570,10 +571,10 @@ class MainWindow(QMainWindow):
         self.chk_gap = self._marker_check("时间线空位", "gap", True, "检测片段之间的空洞，适合找不小心漏剪出的空白。")
         self.chk_duplicate = self._marker_check("重复素材", "duplicate", True, "按源文件、轨道距离和时间距离找近距/远距重复，适合发布会多机位、纪录片素材误复制排查。")
         self.chk_content_dup = self._marker_check("内容重复", "content_dup", False, "用帧指纹比较画面内容，可找不同文件但画面重复的片段，耗时会增加。")
+        self.chk_mixed_cut = self._marker_check("混剪夹帧", "mixed_cut", True, "针对时间线上可见片段筛查源内切点，找混剪成片里只漏出一帧的独立镜头，不需要复杂模式。")
         self.chk_opacity = self._marker_check("透明度/禁用", "opacity", True, "直接读取时间线属性，找不透明度为 0、低透明、禁用和非标准合成。")
         self.chk_corrupt = self._marker_check("渲染坏帧", "corrupt", False, "必须先开启复杂模式：坏帧检测依赖渲染后的最终像素，再用 signalstats/熵/亮度离群分析。")
         self.chk_corrupt.toggled.connect(self.on_corrupt_toggled)
-        self.chk_audio_mono = self._marker_check("单声道音频", "audio", True, "扫描音频轨道和片段源声道映射，发现 mono 轨道/片段后可一键改色并生成可复核的双声道修正轨道。")
 
         checks = [
             self.chk_error,
@@ -582,9 +583,9 @@ class MainWindow(QMainWindow):
             self.chk_gap,
             self.chk_duplicate,
             self.chk_content_dup,
+            self.chk_mixed_cut,
             self.chk_opacity,
             self.chk_corrupt,
-            self.chk_audio_mono,
         ]
         for index, check in enumerate(checks):
             layout.addWidget(check, index // 2, index % 2)
@@ -620,7 +621,7 @@ class MainWindow(QMainWindow):
         self.min_black_frames = QSpinBox()
         self.min_black_frames.setRange(1, MAX_FRAME_THRESHOLD)
         self.min_black_frames.setValue(DEFAULT_MIN_BLACK_FRAMES)
-        set_tip(self.min_black_frames, "FFmpeg 最短黑场时长，但用帧显示。25fps 的 1 帧约 0.04 秒；60fps 会自动换算为约 3 帧。")
+        set_tip(self.min_black_frames, "FFmpeg 黑场 d 参数按实际时间线帧率换算成秒；控件始终显示当前时间线帧数。")
         self.min_black_slider = self._make_slider(1, MAX_FRAME_THRESHOLD, DEFAULT_MIN_BLACK_FRAMES, self.min_black_frames)
 
         self.content_sample_interval = QSpinBox()
@@ -671,7 +672,7 @@ class MainWindow(QMainWindow):
         self.chk_partial_opacity = self._check("标记半透明素材", True, "开启后不透明度低于 100% 的素材会被提示；用于排查意外透明。")
         self.chk_png_opaque = self._check("PNG/PSD 视为遮挡层", False, "多轨叠加检测时，把静态图层也当作上层遮挡，适合字幕贴纸很多的工程。")
         self.chk_merge = self._check("成片模式（合并分析）", True, "把时间线片段合并成连续流做 blackdetect，适合最终成片复查，通常更快。")
-        self.chk_complex = self._check("复杂模式（渲染后分析）", False, "先渲染入出点范围，再分析最终画面。用于多轨、调色、OFX、Fusion、坏帧等普通逐文件模式看不到的问题。")
+        self.chk_complex = self._check("复杂模式（渲染后分析）", False, "先渲染入出点范围，再分析最终画面。调色/OFX/Fusion/叠加后的最终像素异常需要它；混剪夹帧和时间线结构检测不需要。")
         self.chk_html = self._check("生成 HTML 报告", False, "检测完成后输出可阅读报告，适合发给协作者复核。")
 
         self.chk_complex.toggled.connect(self.on_complex_mode_changed)
@@ -690,7 +691,7 @@ class MainWindow(QMainWindow):
 
         self.complex_hint = QLabel("坏帧检测依赖复杂模式：需要入点和出点。")
         self.complex_hint.setObjectName("Muted")
-        set_tip(self.complex_hint, "复杂模式会产生临时渲染文件，用最终画面做检测；这就是坏帧检测必须依赖它的原因。")
+        set_tip(self.complex_hint, "复杂模式会产生临时渲染文件，用最终画面做检测；调色后的坏帧要看最终像素，所以必须依赖它。")
         layout.addWidget(self.complex_hint, 4, 0, 1, 2)
         return box
 
@@ -848,9 +849,9 @@ class MainWindow(QMainWindow):
         set_tip(self.mark_audio_btn, "把识别出的单声道音频片段改为醒目的 Orange 颜色，便于人工复核。")
         self.mark_audio_btn.clicked.connect(self.mark_mono_audio)
 
-        self.fix_audio_btn = QPushButton("一键修正双声道")
+        self.fix_audio_btn = QPushButton("修正声道映射")
         self.fix_audio_btn.setIcon(self.style().standardIcon(QStyle.SP_DriveHDIcon))
-        set_tip(self.fix_audio_btn, "Resolve 公开 API 不能直接改片段属性声道映射；这里会创建 stereo 轨道并标记 mono 片段，避免破坏原工程。")
+        set_tip(self.fix_audio_btn, "尝试把片段源声道映射写回 stereo；如果 Resolve 拒绝该接口，会保留标记和报告，避免误报已修复。")
         self.fix_audio_btn.clicked.connect(self.fix_mono_audio)
         actions.addWidget(self.scan_audio_btn)
         actions.addWidget(self.mark_audio_btn)
@@ -892,6 +893,7 @@ class MainWindow(QMainWindow):
             ("gap", "空位", "紫色标记，时间线片段间隙。", MARKER_COLORS["gap"]),
             ("duplicate", "重复", "重复素材或内容指纹重复。", MARKER_COLORS["duplicate"]),
             ("content_dup", "指纹", "不同文件或跨片段的画面指纹重复。", MARKER_COLORS["content_dup"]),
+            ("mixed_cut", "混剪", "混剪成片里源内切点只露出一帧。", MARKER_COLORS["mixed_cut"]),
             ("opacity", "透明", "透明度、禁用或合成问题。", MARKER_COLORS["opacity"]),
             ("corrupt", "坏帧", "复杂模式下 signalstats/熵分析发现的渲染异常。", MARKER_COLORS["corrupt"]),
         ]
@@ -1075,9 +1077,9 @@ class MainWindow(QMainWindow):
                 "gap": self.chk_gap.isChecked(),
                 "duplicate": self.chk_duplicate.isChecked(),
                 "content_dup": self.chk_content_dup.isChecked(),
+                "mixed_cut": self.chk_mixed_cut.isChecked(),
                 "opacity": self.chk_opacity.isChecked(),
                 "corrupt": self.chk_corrupt.isChecked(),
-                "audio_mono": self.chk_audio_mono.isChecked(),
                 "clear": self.chk_clear.isChecked(),
                 "mark_hidden": self.chk_mark_hidden.isChecked(),
                 "partial_opacity": self.chk_partial_opacity.isChecked(),
@@ -1132,8 +1134,8 @@ class MainWindow(QMainWindow):
                 "gap": self.chk_gap,
                 "duplicate": self.chk_duplicate,
                 "content_dup": self.chk_content_dup,
+                "mixed_cut": self.chk_mixed_cut,
                 "opacity": self.chk_opacity,
-                "audio_mono": self.chk_audio_mono,
                 "clear": self.chk_clear,
                 "mark_hidden": self.chk_mark_hidden,
                 "partial_opacity": self.chk_partial_opacity,
@@ -1174,7 +1176,7 @@ class MainWindow(QMainWindow):
             self.chk_corrupt.setChecked(False)
             self.complex_hint.setText("坏帧检测依赖复杂模式：需要入点和出点。")
         else:
-            self.complex_hint.setText("复杂模式会先渲染入出点范围，再分析最终画面；坏帧检测现在可选。")
+            self.complex_hint.setText("复杂模式会先渲染入出点范围，再分析最终画面；调色/OFX/Fusion 后的坏帧检测现在可选。")
 
     def on_corrupt_toggled(self, checked: bool) -> None:
         if not checked or self.chk_complex.isChecked():
@@ -1216,12 +1218,12 @@ class MainWindow(QMainWindow):
                 "opacity": self.chk_opacity.isChecked(),
                 "duplicate": self.chk_duplicate.isChecked(),
                 "content_dup": self.chk_content_dup.isChecked(),
+                "mixed_cut": self.chk_mixed_cut.isChecked(),
             },
             "detect_duplicate": self.chk_duplicate.isChecked(),
             "detect_content_dup": self.chk_content_dup.isChecked(),
-            "detect_mixed_cut": True,
+            "detect_mixed_cut": self.chk_mixed_cut.isChecked(),
             "detect_corrupt": complex_mode and self.chk_corrupt.isChecked(),
-            "detect_mono_audio": self.chk_audio_mono.isChecked(),
             "html_report": self.chk_html.isChecked(),
             "clear_existing": self.chk_clear.isChecked(),
             "complex_mode": complex_mode,
@@ -1417,7 +1419,8 @@ class MainWindow(QMainWindow):
         message = str(result.get("message", "音频扫描完成。"))
         self.audio_summary.setText(
             f"{message}  单声道片段 {summary.get('mono_clips', len(clips))} 个 / "
-            f"单声道轨道 {summary.get('mono_tracks', 0)} 条"
+            f"单声道轨道 {summary.get('mono_tracks', 0)} 条 / "
+            f"映射修正 {summary.get('mapping_fixed', 0)}/{summary.get('mapping_fix_attempts', 0)}"
         )
         lines = []
         if tracks:
@@ -1435,6 +1438,7 @@ class MainWindow(QMainWindow):
                     f"{idx:03d}  A{clip.get('track_index')}  "
                     f"{clip.get('start_frame')}->{clip.get('end_frame')}  "
                     f"{clip.get('name', '未命名')}  [{clip.get('reason', 'mono')}]"
+                    f"{'  已写回映射' if clip.get('mapping_fixed') else ''}"
                 )
         if not lines:
             lines.append(message)
@@ -1522,14 +1526,57 @@ class MainWindow(QMainWindow):
                 pass
         return 10**12, timecode
 
+    @staticmethod
+    def result_has_jump_target(record: dict) -> bool:
+        timecode = str(record.get("timecode") or record.get("timeline_start_tc") or "").strip()
+        if timecode and timecode != "??:??:??:??":
+            return True
+        for key in ("frame", "timeline_start_frame", "marker_frame"):
+            value = record.get(key)
+            if value is None or value == "":
+                continue
+            try:
+                int(float(value))
+                return True
+            except Exception:
+                pass
+        return False
+
+    @staticmethod
+    def frame_to_timecode(frame: int | float, fps: int | float) -> str:
+        fps_int = max(1, int(round(float(fps or BASELINE_FPS))))
+        total_frames = max(0, int(round(float(frame or 0))))
+        ff = total_frames % fps_int
+        total_seconds = total_frames // fps_int
+        ss = total_seconds % 60
+        mm = (total_seconds // 60) % 60
+        hh = total_seconds // 3600
+        return f"{hh:02d}:{mm:02d}:{ss:02d}:{ff:02d}"
+
+    def normalize_result_record(self, record: dict, default_timeline_index: int) -> dict:
+        normalized = dict(record)
+        normalized.setdefault("timeline_index", default_timeline_index)
+        if not (normalized.get("timecode") or normalized.get("timeline_start_tc")):
+            for key in ("frame", "timeline_start_frame", "marker_frame"):
+                value = normalized.get(key)
+                if value is None or value == "":
+                    continue
+                try:
+                    fps = float(normalized.get("fps") or normalized.get("timeline_fps") or self.selected_fps())
+                    normalized["timecode"] = self.frame_to_timecode(float(value), fps)
+                    break
+                except Exception:
+                    pass
+        return normalized
+
     def render_result_records(self, records: list) -> None:
         default_timeline_index = int(self.selected_timeline_data().get("index", 1))
         self.result_records = []
         for record in records:
             if isinstance(record, dict):
-                normalized = dict(record)
-                normalized.setdefault("timeline_index", default_timeline_index)
-                self.result_records.append(normalized)
+                normalized = self.normalize_result_record(record, default_timeline_index)
+                if self.result_has_jump_target(normalized):
+                    self.result_records.append(normalized)
         self.result_records.sort(key=self.result_sort_key)
         lines = []
         for idx, record in enumerate(self.result_records, 1):
