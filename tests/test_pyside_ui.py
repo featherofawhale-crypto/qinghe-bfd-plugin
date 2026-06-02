@@ -631,7 +631,7 @@ class PySideUiTest(unittest.TestCase):
         build_script = (ROOT / "build_release_windows.ps1").read_text(encoding="utf-8")
 
         for text in (readme, dev_doc, ui_doc, build_script):
-            self.assertIn("1.9.103", text)
+            self.assertIn("1.9.104", text)
 
         self.assertIn("Windows zip", readme)
         self.assertIn("bundled Python runtime", readme)
@@ -647,7 +647,7 @@ class PySideUiTest(unittest.TestCase):
         build_script = (ROOT / "build_release_windows.ps1").read_text(encoding="utf-8")
 
         self.assertIn("清何大大", claude_doc)
-        self.assertIn("Current version: `1.9.103`", claude_doc)
+        self.assertIn("Current version: `1.9.104`", claude_doc)
         self.assertIn("timeline FPS", claude_doc)
         self.assertIn("Do not include `private_docs/`", claude_doc)
         self.assertIn("qinghe-bfd-dev", skill_doc)
@@ -656,6 +656,32 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("one-frame", private_doc)
         self.assertIn("Do not copy `private_docs/`", private_doc)
         self.assertNotIn("private_docs", build_script)
+
+    def test_macos_release_scripts_are_documented(self) -> None:
+        build_script = (ROOT / "build_release_macos.ps1").read_text(encoding="utf-8")
+        install_script = (ROOT / "install_macos.command").read_text(encoding="utf-8")
+        check_script = (ROOT / "check_components_macos.sh").read_text(encoding="utf-8")
+        manual = (ROOT / "docs" / "macos_release.md").read_text(encoding="utf-8")
+
+        for text in (build_script, install_script, check_script, manual):
+            self.assertIn("1.9.104", text)
+
+        self.assertIn("QingheBFD_v${Version}_macOS", build_script)
+        self.assertIn("QingheBFD_Plugin_macOS", build_script)
+        self.assertIn("install_macos.command", build_script)
+        self.assertIn("check_components_macos.sh", build_script)
+        self.assertIn("pyside_ui", build_script)
+        self.assertIn("QingheBFDControl.exe", build_script)
+        self.assertIn("-Exclude", build_script)
+        self.assertIn("Fusion/Scripts/Edit", install_script)
+        self.assertIn("Fusion/Scripts/Modules/black_frame_detector", install_script)
+        self.assertIn("ui_launcher_path.txt", install_script)
+        self.assertIn("run_ui.sh", install_script)
+        self.assertIn("ffmpeg/macos", install_script)
+        self.assertIn("python3", check_script)
+        self.assertIn("DaVinci Resolve", check_script)
+        self.assertIn("hdiutil", manual)
+        self.assertIn("Windows 不能原生生成可签名的 macOS .app/.dmg", manual)
 
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {

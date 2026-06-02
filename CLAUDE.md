@@ -34,7 +34,7 @@ When changing shipped code or docs, update the same version in:
 - `清何黑帧夹帧检测_v1.9.48_Windows/清何黑帧夹帧检测.lua`
 - public docs that mention the version
 
-Current version: `1.9.103`.
+Current version: `1.9.104`.
 
 ## Packaging
 
@@ -69,4 +69,3 @@ py -3 -m unittest tests.test_pyside_ui
 ```
 
 For Resolve-facing behavior, verify with an actual Resolve project when possible. Passing local tests alone is not proof that the plugin opened, read a timeline, or placed markers correctly.
-
