@@ -1,31 +1,47 @@
-# 清何黑帧检测 UI 优化和加密
+# Qinghe BFD Windows Package
 
-当前 Windows 插件版本：`1.9.59`
+Version: 1.9.102
 
-## Windows 一键安装
+Qinghe BFD is a DaVinci Resolve black-frame, stuck-frame, mixed-cut, duplicate-frame, corrupt-frame, audio-channel, and timeline-text inspection tool.
 
-双击 `install_windows.bat`，或在 PowerShell 中运行：
+## Quick Start
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install_windows.ps1
-```
+1. Extract the Windows zip to a normal local folder.
+2. Double-click `install_windows.bat`.
+3. Restart DaVinci Resolve if it is already open.
+4. Open Resolve menu: `Workspace -> Scripts -> Edit -> 清何黑帧夹帧检测`.
+5. Use the generated desktop shortcut `Qinghe BFD Control` for the PySide control panel.
 
-安装器会复制 Resolve 脚本、模块、内置 FFmpeg，安装 PySide6 依赖，生成核心 Lua 字节码，并创建 PySide6 控制台桌面快捷方式。
+## Included Components
 
-## Windows 发行包构建
+- DaVinci Resolve Lua entry script.
+- Lua modules under `black_frame_detector`.
+- Protected bytecode copies of the core detection modules.
+- PySide UI packaged by PyInstaller as `QingheBFDControl.exe`.
+- bundled Python runtime inside the PyInstaller app folder.
+- Bundled FFmpeg executables under the plugin package.
+- Windows installer scripts and component checker.
+- Developer notes and operation cautions under `docs`.
 
-在开发机上运行：
+Users do not need to install Python or PySide separately when using the release zip.
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_release_windows.ps1
-```
+## Requirements
 
-构建产物位于 `release/`。发行包会包含 PySide6 控制台 exe、Resolve Lua 脚本、受保护核心字节码、FFmpeg、安装器和说明文件。普通用户解压后双击 `install_windows.bat` 即可安装。
+- Windows 10 or later.
+- DaVinci Resolve 17 or later.
+- DaVinci Resolve scripting enabled.
+- A project with an active timeline.
 
-## PySide6 控制台
+## Important Notes
 
-```powershell
-.\pyside_ui\run_ui.bat
-```
+- The zip is designed for local installation. Do not run the plugin from inside the compressed archive.
+- If Resolve is already open during installation, restart Resolve before testing the script menu.
+- Complex mode creates temporary render/cache files and removes them after detection when the flow completes.
+- The release contains a watermark string for traceability: `QH-BFD:清何:wm-20260603:v1.9.102`.
+- Core Lua detection modules are protected as bytecode in the release package.
 
-点击“开始检测”后，控制台会保存参数、打开目标时间线并启动检测引擎；进度会写回 `~/.qinghe_bfd/progress.json`。
+## Support Files
+
+- `docs/lua_bytecode_and_pyside_bridge.md`: development notes, packaging flow, and cautions.
+- `pyside_ui/README.md`: PySide control panel notes.
+- `check_components.ps1`: local component diagnostics.

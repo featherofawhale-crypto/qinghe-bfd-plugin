@@ -624,6 +624,22 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("get_watermark_label", report_source)
         self.assertIn("Watermark: ", lua_source)
 
+    def test_windows_release_docs_describe_bundled_runtime(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        dev_doc = (ROOT / "docs" / "lua_bytecode_and_pyside_bridge.md").read_text(encoding="utf-8")
+        ui_doc = (ROOT / "pyside_ui" / "README.md").read_text(encoding="utf-8")
+        build_script = (ROOT / "build_release_windows.ps1").read_text(encoding="utf-8")
+
+        for text in (readme, dev_doc, ui_doc, build_script):
+            self.assertIn("1.9.102", text)
+
+        self.assertIn("Windows zip", readme)
+        self.assertIn("bundled Python runtime", readme)
+        self.assertIn("FFmpeg", readme)
+        self.assertIn("QingheBFDControl.exe", dev_doc)
+        self.assertIn("bytecode_manifest.json", dev_doc)
+        self.assertIn("PyInstaller", ui_doc)
+
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {
             "embedded_audio_channels": 1,
