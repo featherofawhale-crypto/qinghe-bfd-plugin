@@ -65,7 +65,7 @@ from resolve_bridge import (
 )
 
 
-APP_VERSION = "1.9.97"
+APP_VERSION = "1.9.98"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -112,15 +112,16 @@ def is_resolve_process_running() -> bool:
         return True
     try:
         result = subprocess.run(
-            ["tasklist", "/FI", "IMAGENAME eq Resolve.exe", "/NH"],
+            ["tasklist", "/FI", "IMAGENAME eq Resolve.exe", "/FO", "CSV", "/NH"],
             capture_output=True,
             text=True,
             timeout=1.5,
             **hidden_subprocess_kwargs(),
         )
     except Exception:
-        return True
-    return "Resolve.exe" in (result.stdout or "")
+        return False
+    stdout = result.stdout or ""
+    return '"Resolve.exe"' in stdout or "Resolve.exe" in stdout
 
 
 APP_STYLE = """
@@ -565,11 +566,12 @@ class MainWindow(QMainWindow):
         self._loading_settings = False
         self._control_fps = BASELINE_FPS
         self._resolve_seen_running = is_resolve_process_running()
+        self._resolve_missing_ticks = 0
         self.progress_timer = QTimer(self)
         self.progress_timer.setInterval(700)
         self.progress_timer.timeout.connect(self.poll_detection_progress)
         self.resolve_watch_timer = QTimer(self)
-        self.resolve_watch_timer.setInterval(2500)
+        self.resolve_watch_timer.setInterval(1500)
         self.resolve_watch_timer.timeout.connect(self.close_when_resolve_exits)
 
         shell = QFrame()
@@ -2037,11 +2039,14 @@ class MainWindow(QMainWindow):
         running = is_resolve_process_running()
         if running:
             self._resolve_seen_running = True
+            self._resolve_missing_ticks = 0
             return
-        if self._resolve_seen_running:
+        self._resolve_missing_ticks += 1
+        if self._resolve_seen_running or self._resolve_missing_ticks >= 2:
             self.close()
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        self.resolve_watch_timer.stop()
         self.save_settings()
         super().closeEvent(event)
 
