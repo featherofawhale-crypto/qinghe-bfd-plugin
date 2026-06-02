@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import subprocess
 import sys
 import time
 import ctypes
@@ -13,8 +14,10 @@ from pathlib import Path
 from dataclasses import asdict
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication, QIcon
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QIcon
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -26,6 +29,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -41,15 +45,24 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QStyle,
     QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
-from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
+from resolve_bridge import (
+    BRIDGE_WORKER_ARG,
+    ResolveBridge,
+    TimelineInfo,
+    hidden_subprocess_kwargs,
+    read_progress_file,
+    run_resolve_bridge_worker,
+)
 
 
-APP_VERSION = "1.9.91"
+APP_VERSION = "1.9.92"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -61,6 +74,7 @@ DEFAULT_CONTENT_SAMPLE_INTERVAL = 3
 MAX_FRAME_THRESHOLD = 100
 ICON_PATH = Path(__file__).resolve().with_name("icon.svg")
 WINDOWS_APP_ID = "Qinghe.BFD.Control"
+SINGLE_INSTANCE_NAME = "Qinghe.BFD.Control.SingleInstance"
 
 
 def set_windows_app_user_model_id() -> None:
@@ -70,6 +84,40 @@ def set_windows_app_user_model_id() -> None:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(WINDOWS_APP_ID)
     except Exception:
         pass
+
+
+class SingleInstanceGuard:
+    def __init__(self, name: str) -> None:
+        self.server: QLocalServer | None = None
+        self.already_running = False
+
+        socket = QLocalSocket()
+        socket.connectToServer(name)
+        if socket.waitForConnected(120):
+            self.already_running = True
+            socket.disconnectFromServer()
+            return
+
+        QLocalServer.removeServer(name)
+        self.server = QLocalServer()
+        if not self.server.listen(name):
+            self.already_running = True
+
+
+def is_resolve_process_running() -> bool:
+    if sys.platform != "win32":
+        return True
+    try:
+        result = subprocess.run(
+            ["tasklist", "/FI", "IMAGENAME eq Resolve.exe", "/NH"],
+            capture_output=True,
+            text=True,
+            timeout=1.5,
+            **hidden_subprocess_kwargs(),
+        )
+    except Exception:
+        return True
+    return "Resolve.exe" in (result.stdout or "")
 
 
 APP_STYLE = """
@@ -458,6 +506,8 @@ class MainWindow(QMainWindow):
         self.result_index = 0
         self.text_records: list[dict] = []
         self.text_index = -1
+        self.text_match_indices: list[int] = []
+        self.text_match_cursor = -1
         self._zero_result_notice_shown = False
         self._marker_refresh_after_complete = False
         self._tab_animation: QPropertyAnimation | None = None
@@ -465,9 +515,13 @@ class MainWindow(QMainWindow):
         self._loading_timelines = False
         self._loading_settings = False
         self._control_fps = BASELINE_FPS
+        self._resolve_seen_running = is_resolve_process_running()
         self.progress_timer = QTimer(self)
         self.progress_timer.setInterval(700)
         self.progress_timer.timeout.connect(self.poll_detection_progress)
+        self.resolve_watch_timer = QTimer(self)
+        self.resolve_watch_timer.setInterval(2500)
+        self.resolve_watch_timer.timeout.connect(self.close_when_resolve_exits)
 
         shell = QFrame()
         shell.setObjectName("Shell")
@@ -508,6 +562,7 @@ class MainWindow(QMainWindow):
         self.load_settings()
         self.update_fps_hint()
         self.on_complex_mode_changed(self.chk_complex.isChecked())
+        self.resolve_watch_timer.start()
         self._log("Resolve API: " + ("已连接" if self.bridge.is_connected() else "未连接，使用离线参数模式"))
 
     def _build_header(self) -> QHBoxLayout:
@@ -768,6 +823,10 @@ class MainWindow(QMainWindow):
         self.side_tabs.addTab(self.audio_tab, "音频")
         self.side_tabs.addTab(self.log_tab, "日志")
         self.side_tabs.addTab(self.text_tab, "文字")
+        text_tab_index = self.side_tabs.indexOf(self.text_tab)
+        if text_tab_index > 2:
+            self.side_tabs.removeTab(text_tab_index)
+            self.side_tabs.insertTab(2, self.text_tab, "\u6587\u5b57")
         self.side_tabs.setCurrentWidget(self.results_tab)
         self.side_tabs.currentChanged.connect(self.animate_current_tab)
         set_tip(self.side_tabs, "结果、音频扫描和执行日志会一直留在主界面右侧，检测完成后自动回到结果页。")
@@ -828,22 +887,36 @@ class MainWindow(QMainWindow):
         search_row.addWidget(self.text_scan_btn)
         layout.addLayout(search_row)
 
-        self.text_list = QListWidget()
-        self.text_list.setMinimumHeight(180)
-        self.text_list.itemDoubleClicked.connect(self.jump_to_selected_text_item)
-        layout.addWidget(self.text_list, 1)
+        self.text_table = QTableWidget(0, 4)
+        self.text_table.setHorizontalHeaderLabels(["#", "Timecode", "Track", "Text"])
+        self.text_table.setMinimumHeight(220)
+        self.text_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.text_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.text_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.text_table.setWordWrap(True)
+        self.text_table.verticalHeader().setVisible(False)
+        self.text_table.horizontalHeader().setStretchLastSection(True)
+        self.text_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.text_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.text_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.text_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.text_table.cellDoubleClicked.connect(self.jump_to_selected_text_item)
+        layout.addWidget(self.text_table, 1)
 
         edit_row = QHBoxLayout()
         self.text_replace = QLineEdit()
         self.text_replace.setPlaceholderText("替换为")
         self.text_replace_btn = QPushButton("替换")
         self.text_replace_btn.clicked.connect(self.replace_selected_text_item)
+        self.text_next_match_btn = QPushButton("\u4e0b\u4e00\u4e2a\u5339\u914d")
+        self.text_next_match_btn.clicked.connect(self.jump_to_next_text_match)
         self.text_delete_btn = QPushButton("删除")
         self.text_delete_btn.clicked.connect(self.delete_selected_text_item)
         self.text_filler_btn = QPushButton("去语气词")
         self.text_filler_btn.clicked.connect(self.remove_fillers_from_selected_text_item)
         edit_row.addWidget(self.text_replace, 1)
         edit_row.addWidget(self.text_replace_btn)
+        edit_row.addWidget(self.text_next_match_btn)
         edit_row.addWidget(self.text_filler_btn)
         edit_row.addWidget(self.text_delete_btn)
         layout.addLayout(edit_row)
@@ -1387,33 +1460,65 @@ class MainWindow(QMainWindow):
 
     def scan_text_layers(self) -> None:
         selected = self.timeline_combo.currentData() or {"index": 1}
-        result = self.bridge.scan_text_items(int(selected.get("index", 1)), self.text_search.text().strip())
+        query = self.text_search.text().strip()
+        result = self.bridge.scan_text_items(int(selected.get("index", 1)), "")
         self.text_records = result.get("items") if isinstance(result.get("items"), list) else []
-        self.text_list.clear()
+        self.text_match_indices = []
+        self.text_match_cursor = -1
+        self.text_table.setRowCount(0)
+        match_color = QColor("#fff3bf")
         for idx, item in enumerate(self.text_records, 1):
             text = str(item.get("text", "")).replace("\n", " ")
-            if len(text) > 80:
-                text = text[:77] + "..."
-            label = (
-                f"{idx:03d}  {item.get('timecode', '')}  "
-                f"{str(item.get('track_type', '')).upper()}{item.get('track_index', '')}  {text}"
-            )
-            row = QListWidgetItem(label)
-            row.setData(Qt.UserRole, idx - 1)
-            self.text_list.addItem(row)
-        self.text_status.setText(str(result.get("message", f"找到 {len(self.text_records)} 条文字/字幕素材。")))
+            haystack = (text + " " + str(item.get("name", ""))).lower()
+            is_match = bool(query and query.lower() in haystack)
+            if is_match:
+                self.text_match_indices.append(idx - 1)
+            row_index = self.text_table.rowCount()
+            self.text_table.insertRow(row_index)
+            values = [
+                f"{idx:03d}",
+                str(item.get("timecode", "")),
+                f"{str(item.get('track_type', '')).upper()}{item.get('track_index', '')}",
+                text,
+            ]
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(value)
+                cell.setData(Qt.UserRole, idx - 1)
+                if is_match:
+                    cell.setBackground(match_color)
+                self.text_table.setItem(row_index, column, cell)
+        self.text_table.resizeRowsToContents()
+        base_message = str(result.get("message", f"找到 {len(self.text_records)} 条文字/字幕素材。"))
+        if query:
+            base_message += f"  匹配 {len(self.text_match_indices)} 处。"
+        self.text_status.setText(base_message)
         self.side_tabs.setCurrentWidget(self.text_tab)
         self._log(self.text_status.text())
 
     def selected_text_item_record(self) -> dict | None:
-        row = self.text_list.currentItem()
-        if not row:
+        row = self.text_table.currentRow()
+        if row < 0:
             return None
-        index = int(row.data(Qt.UserRole))
+        first_cell = self.text_table.item(row, 0)
+        if not first_cell:
+            return None
+        index = int(first_cell.data(Qt.UserRole))
         if index < 0 or index >= len(self.text_records):
             return None
         self.text_index = index
         return self.text_records[index]
+
+    def jump_to_next_text_match(self) -> None:
+        if not self.text_match_indices:
+            self.text_status.setText("没有可跳转的文字匹配。")
+            return
+        self.text_match_cursor = (self.text_match_cursor + 1) % len(self.text_match_indices)
+        record_index = self.text_match_indices[self.text_match_cursor]
+        self.text_table.selectRow(record_index)
+        item = self.text_table.item(record_index, 0)
+        if item:
+            self.text_table.scrollToItem(item)
+        self.jump_to_selected_text_item()
 
     def jump_to_selected_text_item(self, *_args) -> None:
         item = self.selected_text_item_record()
@@ -1732,6 +1837,14 @@ class MainWindow(QMainWindow):
     def _log(self, message: str) -> None:
         self.log.append(message)
 
+    def close_when_resolve_exits(self) -> None:
+        running = is_resolve_process_running()
+        if running:
+            self._resolve_seen_running = True
+            return
+        if self._resolve_seen_running:
+            self.close()
+
     def closeEvent(self, event) -> None:  # noqa: N802
         self.save_settings()
         super().closeEvent(event)
@@ -1744,6 +1857,10 @@ def main(argv: list[str] | None = None) -> int:
 
     set_windows_app_user_model_id()
     app = QApplication(argv)
+    instance_guard = SingleInstanceGuard(SINGLE_INSTANCE_NAME)
+    if instance_guard.already_running:
+        return 0
+    app._qinghe_single_instance_guard = instance_guard  # type: ignore[attr-defined]
     font_family = install_cjk_font()
     app.setStyleSheet(APP_STYLE)
     app.setFont(QFont(font_family, 10))

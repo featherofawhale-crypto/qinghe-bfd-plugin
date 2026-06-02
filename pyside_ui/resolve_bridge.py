@@ -89,6 +89,29 @@ def frames_to_timecode(frame: int | float, fps: int | float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
 
 
+def timecode_to_frames(timecode: str, fps: int | float) -> int:
+    fps_int = max(1, int(round(float(fps or 25))))
+    parts = str(timecode or "00:00:00:00").split(":")
+    if len(parts) != 4:
+        return 0
+    try:
+        hh, mm, ss, ff = [int(float(part)) for part in parts]
+    except Exception:
+        return 0
+    return (((hh * 60) + mm) * 60 + ss) * fps_int + ff
+
+
+def timeline_frame_to_timecode(
+    frame: int | float,
+    fps: int | float,
+    start_frame: int | float = 0,
+    start_timecode: str = "00:00:00:00",
+) -> str:
+    relative_frame = int(round(float(frame or 0))) - int(round(float(start_frame or 0)))
+    display_frame = timecode_to_frames(start_timecode, fps) + max(0, relative_frame)
+    return frames_to_timecode(display_frame, fps)
+
+
 def is_mono_audio_mapping(mapping: Any) -> bool:
     if not isinstance(mapping, dict):
         return False
@@ -498,6 +521,10 @@ try:
     start_frame = int(float(timeline.GetStartFrame() or 0))
 except Exception:
     start_frame = 0
+try:
+    start_timecode = str(timeline.GetStartTimecode() or timeline.GetSetting("timelineStartTimecode") or "00:00:00:00")
+except Exception:
+    start_timecode = "00:00:00:00"
 
 def as_number(value):
     if value is None or value == "":
@@ -576,6 +603,8 @@ print(json.dumps({{
     "in_frame": in_frame,
     "out_frame": out_frame,
     "fps": fps,
+    "start_frame": start_frame,
+    "start_timecode": start_timecode,
     "message": "已读取当前时间线入出点。" if ok else "当前时间线没有可读取的入出点。"
 }}, ensure_ascii=False))
 '''
@@ -584,8 +613,10 @@ print(json.dumps({{
             return {"ok": False, "message": "读取失败：Resolve API 未返回结果。"}
         if data.get("ok"):
             fps = float(data.get("fps", 25.0))
-            data["in_tc"] = frames_to_timecode(data.get("in_frame", 0), fps)
-            data["out_tc"] = frames_to_timecode(data.get("out_frame", 0), fps)
+            start_frame = data.get("start_frame", 0)
+            start_timecode = str(data.get("start_timecode", "00:00:00:00"))
+            data["in_tc"] = timeline_frame_to_timecode(data.get("in_frame", 0), fps, start_frame, start_timecode)
+            data["out_tc"] = timeline_frame_to_timecode(data.get("out_frame", 0), fps, start_frame, start_timecode)
         return data
 
     def detect_complex_timeline_risk(self, timeline_index: int = 1) -> dict[str, Any]:
@@ -783,9 +814,25 @@ try:
 except Exception:
     fps = 25.0
 start_frame = safe(lambda: timeline.GetStartFrame(), 0) or 0
+start_timecode = str(safe(lambda: timeline.GetStartTimecode(), None) or safe(lambda: timeline.GetSetting("timelineStartTimecode"), None) or "00:00:00:00")
 markers = timeline.GetMarkers() or {{}}
 records = []
 counts = {{"total": 0, "error": 0, "suspect": 0, "scene": 0, "gap": 0, "duplicate": 0, "content_dup": 0, "opacity": 0, "corrupt": 0}}
+
+def timecode_to_frames(tc, fps):
+    fps_int = max(1, int(round(float(fps or 25))))
+    parts = str(tc or "00:00:00:00").split(":")
+    if len(parts) != 4:
+        return 0
+    try:
+        hh, mm, ss, ff = [int(float(part)) for part in parts]
+    except Exception:
+        return 0
+    return (((hh * 60) + mm) * 60 + ss) * fps_int + ff
+
+def tc_from_timeline_frame(frame, fps, timeline_start_frame, timeline_start_tc):
+    rel = int(round(float(frame or 0))) - int(round(float(timeline_start_frame or 0)))
+    return tc_from_frame(timecode_to_frames(timeline_start_tc, fps) + max(0, rel), fps)
 
 def classify(name, color):
     text = str(name or "").upper()
@@ -826,7 +873,7 @@ for frame, marker in markers.items():
         "timeline_index": {int(timeline_index)},
         "frame": abs_frame,
         "marker_frame": relative_frame,
-        "timecode": tc_from_frame(abs_frame, fps),
+        "timecode": tc_from_timeline_frame(abs_frame, fps, start_frame, start_timecode),
         "color": color,
         "classification": classification,
         "name": name,
@@ -905,8 +952,24 @@ try:
 except Exception:
     fps = 25.0
 start_frame = safe(lambda: timeline.GetStartFrame(), 0) or 0
+start_timecode = str(safe(lambda: timeline.GetStartTimecode(), None) or safe(lambda: timeline.GetSetting("timelineStartTimecode"), None) or "00:00:00:00")
 TEXT_KEYS = ["Text", "StyledText", "Text+", "Title", "Subtitle", "Caption", "Name", "Clip Name", "CustomName", "Comments"]
 TITLE_HINT_KEYS = {"Text", "StyledText", "Text+", "Title", "Subtitle", "Caption", "CustomName"}
+
+def timecode_to_frames(tc, fps):
+    fps_int = max(1, int(round(float(fps or 25))))
+    parts = str(tc or "00:00:00:00").split(":")
+    if len(parts) != 4:
+        return 0
+    try:
+        hh, mm, ss, ff = [int(float(part)) for part in parts]
+    except Exception:
+        return 0
+    return (((hh * 60) + mm) * 60 + ss) * fps_int + ff
+
+def tc_from_timeline_frame(frame, fps, timeline_start_frame, timeline_start_tc):
+    rel = int(round(float(frame or 0))) - int(round(float(timeline_start_frame or 0)))
+    return tc_from_frame(timecode_to_frames(timeline_start_tc, fps) + max(0, rel), fps)
 
 def get_item(track_type, track_index, item_index):
     clips = safe(lambda: timeline.GetItemListInTrack(track_type, track_index), []) or []
@@ -942,6 +1005,8 @@ def set_item_text(clip, key, source, new_text):
             tool = tools.get(tool_name) if isinstance(tools, dict) else None
             if tool and safe(lambda: tool.SetInput(input_key, new_text), False) is not False:
                 return True
+    if source == "name" and safe(lambda: clip.SetName(new_text), False):
+        return True
     for prop_key in [key, "Text", "StyledText", "Name", "Clip Name", "Comments"]:
         if prop_key and safe(lambda pk=prop_key: clip.SetProperty(pk, new_text), False):
             return True
@@ -962,9 +1027,6 @@ def collect_items():
                     maybe_title = has_fusion or any(str(k) in TITLE_HINT_KEYS for k in props.keys()) or "title" in item_name.lower() or "text" in item_name.lower()
                     if not maybe_title:
                         continue
-                haystack = (text_value or "") + " " + str(safe(lambda c=clip: c.GetName(), "") or "")
-                if QUERY and QUERY.lower() not in haystack.lower():
-                    continue
                 rel_start = int(safe(lambda c=clip: c.GetStart(), 0) or 0)
                 rel_end = int(safe(lambda c=clip: c.GetEnd(), rel_start) or rel_start)
                 abs_start = int(start_frame) + rel_start
@@ -973,7 +1035,7 @@ def collect_items():
                     "track_type": track_type,
                     "track_index": track_index,
                     "item_index": item_index,
-                    "timecode": tc_from_frame(abs_start, fps),
+                    "timecode": tc_from_timeline_frame(abs_start, fps, start_frame, start_timecode),
                     "start_frame": abs_start,
                     "end_frame": int(start_frame) + rel_end,
                     "text": text_value,
