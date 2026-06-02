@@ -613,6 +613,8 @@ class PySideUiTest(unittest.TestCase):
 
         self.assertIn("config.WATERMARK", config_source)
         self.assertIn("QH-BFD", config_source)
+        self.assertIn("清何", config_source)
+        self.assertNotIn('owner = "qinghe"', config_source)
         self.assertIn("config.build_watermark_payload", config_source)
         self.assertIn("build_watermark_payload", marker_source)
         self.assertIn("safe_add_marker(", marker_source)
