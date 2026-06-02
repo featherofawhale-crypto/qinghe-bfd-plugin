@@ -553,6 +553,7 @@ def try_method(name):
 
 in_frame = None
 out_frame = None
+in_frame_fallback = False
 try:
     mark = timeline.GetMarkInOut() or {{}}
 except Exception:
@@ -596,8 +597,12 @@ if in_frame is None or out_frame is None:
 
 if in_frame is None and out_frame is not None:
     in_frame = start_frame
+    in_frame_fallback = True
 
 ok = in_frame is not None and out_frame is not None and out_frame > in_frame
+message = "已读取当前时间线入出点。" if ok else "当前时间线没有可读取的入出点。"
+if ok and in_frame_fallback:
+    message = "Resolve API 未返回 In 点，已按时间线起点作为 In 点。"
 print(json.dumps({{
     "ok": ok,
     "in_frame": in_frame,
@@ -605,7 +610,8 @@ print(json.dumps({{
     "fps": fps,
     "start_frame": start_frame,
     "start_timecode": start_timecode,
-    "message": "已读取当前时间线入出点。" if ok else "当前时间线没有可读取的入出点。"
+    "in_frame_fallback": in_frame_fallback,
+    "message": message
 }}, ensure_ascii=False))
 '''
         )
