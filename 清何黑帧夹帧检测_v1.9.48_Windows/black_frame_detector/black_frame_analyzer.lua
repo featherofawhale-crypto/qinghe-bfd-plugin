@@ -270,6 +270,8 @@ function Analyzer.generate_note(segment, clip_info, timeline_fps, params, durati
         end
         if segment.edge_visible then
             table.insert(parts, "位置: 源内切点靠近时间线实际可见窗口边界")
+        elseif segment.single_scene_candidate then
+            table.insert(parts, "位置: 源内高强度场景切点，未依赖时间线切刀")
         end
         table.insert(parts, "判定: 时间线上可见镜头内部存在极短源内切点，疑似混剪漏帧/夹帧")
         return table.concat(parts, "\n")

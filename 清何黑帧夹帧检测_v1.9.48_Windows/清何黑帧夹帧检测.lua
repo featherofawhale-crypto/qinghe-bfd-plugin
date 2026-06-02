@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.78
+-- 版本: v1.9.79
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.78 启动 ===")
+dlog("=== BFD v1.9.79 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -180,6 +180,40 @@ local function append_unique_number(list, value, fps)
     table.insert(list, value)
 end
 
+local function source_fps_for_clip(ffmpeg, clip, timeline_fps)
+    if clip and tonumber(clip.source_fps) and tonumber(clip.source_fps) > 0 then
+        return tonumber(clip.source_fps)
+    end
+    if ffmpeg and clip and clip.file_path and clip.file_path ~= "" then
+        local ok, info = pcall(function() return ffmpeg:get_video_info(clip.file_path) end)
+        if ok and info and tonumber(info.fps) and tonumber(info.fps) > 0 then
+            clip.source_fps = tonumber(info.fps)
+            return clip.source_fps
+        end
+    end
+    return timeline_fps
+end
+
+local function add_mixed_cut_record(records, seen, clip, key_suffix, source_start, source_end, tl_start, timeline_fps, scene_score, reason)
+    local key = tostring(clip.file_path) .. ":" .. tostring(tl_start)
+    if seen[key] then return end
+    seen[key] = true
+    table.insert(records, {
+        clip = clip,
+        segments = {{
+            start = source_start,
+            end_ = source_end,
+            duration = math.max(1 / timeline_fps, source_end - source_start),
+            timeline_frame = tl_start,
+            is_mixed_cut = true,
+            edge_visible = reason == "edge",
+            single_scene_candidate = reason == "single_scene",
+            scene_score = scene_score or 0,
+        }},
+        is_mixed_cut = true,
+    })
+end
+
 local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timeline_fps, params)
     local records = {}
     if not ffmpeg or not ffmpeg.ffmpeg_path then return records end
@@ -187,6 +221,7 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
 
     local stuck_frames = params.stuck_frames or config.CLASSIFICATION.STUCK_FRAMES
     local threshold = params.mixed_cut_scene_threshold or 0.06
+    local single_scene_score = params.mixed_cut_single_scene_score or math.max(threshold, 0.55)
     local timeout = params.mixed_cut_timeout or 12
     local max_duration_sec = params.mixed_cut_max_clip_sec or 180
     local scanned, nested_skipped = 0, 0
@@ -227,12 +262,14 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         end
         if clip.skip_ffmpeg or not clip.file_path or clip.file_path == "" then goto continue_clip end
 
+        local source_fps = source_fps_for_clip(ffmpeg, clip, timeline_fps)
         local dur_frames = clip.source_duration_frames or 0
         local left_offset = clip.left_offset or 0
         if dur_frames <= stuck_frames then goto continue_clip end
 
-        local start_sec = left_offset / timeline_fps
-        local duration_sec = dur_frames / timeline_fps
+        local source_to_timeline = timeline_fps / math.max(1, source_fps)
+        local start_sec = left_offset / source_fps
+        local duration_sec = dur_frames / source_fps
         local scan_duration = math.min(duration_sec, max_duration_sec)
         if scan_duration <= 0 then goto continue_clip end
         local visible_intervals = {{
@@ -295,8 +332,8 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                         rel = rel - start_sec
                     end
                     if rel and rel > 0 and rel < scan_duration then
-                        append_unique_number(scene_times, rel, timeline_fps)
-                        last_scene_frame = math.floor(rel * timeline_fps + 0.5)
+                        append_unique_number(scene_times, rel, source_fps)
+                        last_scene_frame = math.floor(rel * source_fps + 0.5)
                         scene_scores[last_scene_frame] = tonumber(score or "0") or scene_scores[last_scene_frame] or 0
                     end
                 elseif score and last_scene_frame then
@@ -322,58 +359,35 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         for i = 1, #scene_times - 1 do
             local rel_start = scene_times[i]
             local rel_end = scene_times[i + 1]
-            local span_frames = math.max(1, math.floor((rel_end - rel_start) * timeline_fps + 0.5))
+            local span_frames = math.max(1, math.floor((rel_end - rel_start) * source_fps + 0.5))
             if span_frames > 0 and span_frames <= stuck_frames then
-                local tl_start = (clip.timeline_start_frame or 0) + math.floor(rel_start * timeline_fps + 0.5)
-                local tl_end = (clip.timeline_start_frame or 0) + math.floor(rel_end * timeline_fps + 0.5)
-                local key = tostring(clip.file_path) .. ":" .. tostring(tl_start) .. ":" .. tostring(tl_end)
-                if not seen[key] then
-                    seen[key] = true
-                    local source_start = start_sec + rel_start
-                    local source_end = start_sec + rel_end
-                    table.insert(records, {
-                        clip = clip,
-                        segments = {{
-                            start = source_start,
-                            end_ = source_end,
-                            duration = math.max(1 / timeline_fps, source_end - source_start),
-                            timeline_frame = tl_start,
-                            is_mixed_cut = true,
-                            scene_score = scene_scores[math.floor(rel_start * timeline_fps + 0.5)] or
-                                scene_scores[math.floor(rel_end * timeline_fps + 0.5)] or 0,
-                        }},
-                        is_mixed_cut = true,
-                    })
-                end
+                local tl_start = (clip.timeline_start_frame or 0) + math.floor(rel_start * source_to_timeline)
+                local source_start = start_sec + rel_start
+                local source_end = start_sec + rel_end
+                add_mixed_cut_record(records, seen, clip, "span", source_start, source_end, tl_start, timeline_fps,
+                    scene_scores[math.floor(rel_start * source_fps + 0.5)] or
+                    scene_scores[math.floor(rel_end * source_fps + 0.5)] or 0, "span")
             end
         end
         for _, rel_cut in ipairs(scene_times) do
             if rel_cut > 0 and rel_cut < scan_duration then
-                local tl_cut = (clip.timeline_start_frame or 0) + math.floor(rel_cut * timeline_fps + 0.5)
+                local source_frame = math.floor(rel_cut * source_fps + 0.5)
+                local score_for_cut = scene_scores[source_frame] or 0
+                local tl_cut = (clip.timeline_start_frame or 0) + math.floor(rel_cut * source_to_timeline)
                 for _, iv in ipairs(visible_intervals) do
                     local iv_start = iv.start or 0
                     local iv_end = iv.end_ or iv["end"] or iv_start
                     if tl_cut >= iv_start and tl_cut <= iv_end then
+                        if score_for_cut >= single_scene_score then
+                            local source_start = start_sec + rel_cut
+                            add_mixed_cut_record(records, seen, clip, "single", source_start,
+                                source_start + (1 / source_fps), tl_cut - 1, timeline_fps, score_for_cut, "single_scene")
+                        end
                         local edge_distance = math.min(math.abs(tl_cut - iv_start), math.abs(iv_end - tl_cut))
-                        if edge_distance <= stuck_frames then
-                            local key = tostring(clip.file_path) .. ":edge:" .. tostring(tl_cut)
-                            if not seen[key] then
-                                seen[key] = true
-                                local source_start = start_sec + rel_cut
-                                table.insert(records, {
-                                    clip = clip,
-                                    segments = {{
-                                        start = source_start,
-                                        end_ = source_start + (1 / timeline_fps),
-                                        duration = 1 / timeline_fps,
-                                        timeline_frame = tl_cut,
-                                        is_mixed_cut = true,
-                                        edge_visible = true,
-                                        scene_score = scene_scores[math.floor(rel_cut * timeline_fps + 0.5)] or 0,
-                                    }},
-                                    is_mixed_cut = true,
-                                })
-                            end
+                        if edge_distance <= stuck_frames and score_for_cut >= single_scene_score then
+                            local source_start = start_sec + rel_cut
+                            add_mixed_cut_record(records, seen, clip, "edge", source_start,
+                                source_start + (1 / source_fps), tl_cut - 1, timeline_fps, score_for_cut, "edge")
                         end
                         break
                     end
@@ -383,8 +397,8 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         ::continue_clip::
     end
 
-    dlog(string.format("混剪源内筛查: scanned=%d records=%d nested_skipped=%d threshold=%.3f",
-        scanned, #records, nested_skipped, threshold))
+    dlog(string.format("混剪源内筛查: scanned=%d records=%d nested_skipped=%d threshold=%.3f single_scene_score=%.3f",
+        scanned, #records, nested_skipped, threshold, single_scene_score))
     if nested_skipped > 0 then
         print(string.format("[BFD] 混剪筛查: %d 个复合/Fusion片段无源文件路径，需用复杂模式渲染检查", nested_skipped))
     end
@@ -720,6 +734,15 @@ function Main()
             local opacity = compat:get_clip_opacity(item)
             local composite_mode = compat:get_clip_composite_mode(item)
             local is_enabled = compat:get_clip_enabled(item)
+            local source_fps = nil
+            pcall(function()
+                local media_item = item:GetMediaPoolItem()
+                if media_item then
+                    source_fps = tonumber(media_item:GetClipProperty("FPS"))
+                        or tonumber(media_item:GetClipProperty("Shot Frame Rate"))
+                        or tonumber(media_item:GetClipProperty("Video Frame Rate"))
+                end
+            end)
 
             -- 静态图片跳过FFmpeg；带通道图片额外跳过夹帧检测
             -- 嵌套片段(复合/Fusion)跳过FFmpeg(无实际文件)，但参与夹帧/叠加/重复检测
@@ -733,6 +756,7 @@ function Main()
                 timeline_start_frame = start_frame,
                 left_offset = left_offset,
                 source_duration_frames = source_dur,
+                source_fps = source_fps,
                 track_index = track_idx,
                 opacity = opacity,
                 composite_mode = composite_mode,
@@ -1855,15 +1879,6 @@ function Main()
     end
 
     local selected_records = Analyzer.get_filtered_marker_records(analyzed_results, marker_types)
-    if marker_types.mixed_cut == false then
-        local filtered = {}
-        for _, r in ipairs(selected_records) do
-            if not (r.segment and r.segment.is_mixed_cut) and not r.is_mixed_cut then
-                table.insert(filtered, r)
-            end
-        end
-        selected_records = filtered
-    end
 
     -- 合并透明度检测标记（秒级扫描，无需FFmpeg）
     if #opacity_results > 0 and marker_types.opacity ~= false then

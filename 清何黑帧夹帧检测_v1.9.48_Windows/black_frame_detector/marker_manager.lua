@@ -37,7 +37,21 @@ function MarkerManager.apply_markers(timeline, records, version_compat, progress
     local skipped = 0
     local total = #records
 
-    -- 按帧去重：达芬奇同一帧只能有一个标记，重复帧仅保留第一条
+    local function marker_priority(record)
+        if record and (record.is_mixed_cut or (record.segment and record.segment.is_mixed_cut)) then
+            return 100
+        end
+        local name = record and tostring(record.marker_name or "") or ""
+        if name:find("%[BFD%-MIX%]") then return 100 end
+        if name:find("%[BFD%-OVL%]") then return 80 end
+        if record and record.classification == "error" then return 70 end
+        if record and record.classification == "opacity" then return 60 end
+        if record and record.classification == "gap" then return 50 end
+        if record and record.classification == "duplicate" then return 30 end
+        return 10
+    end
+
+    -- 按帧去重：达芬奇同一帧只能有一个标记；同帧时保留更具体的错误类型
     local seen_frames = {}
     local deduped_records = {}
     for _, record in ipairs(records) do
@@ -46,9 +60,13 @@ function MarkerManager.apply_markers(timeline, records, version_compat, progress
             skipped = skipped + 1
             goto continue_dedup
         end
-        if not seen_frames[frame] then
-            seen_frames[frame] = true
+        local existing_index = seen_frames[frame]
+        if not existing_index then
             deduped_records[#deduped_records + 1] = {record = record, frame = frame}
+            seen_frames[frame] = #deduped_records
+        elseif marker_priority(record) > marker_priority(deduped_records[existing_index].record) then
+            deduped_records[existing_index] = {record = record, frame = frame}
+            skipped = skipped + 1
         else
             skipped = skipped + 1
         end

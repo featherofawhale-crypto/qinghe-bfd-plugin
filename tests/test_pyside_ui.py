@@ -145,7 +145,6 @@ class PySideUiTest(unittest.TestCase):
             window.chk_duplicate,
             window.chk_content_dup,
             window.chk_opacity,
-            window.chk_mixed_cut,
             window.chk_complex,
             window.chk_merge,
             window.feedback_btn,
@@ -171,7 +170,6 @@ class PySideUiTest(unittest.TestCase):
             window.chk_duplicate,
             window.chk_content_dup,
             window.chk_opacity,
-            window.chk_mixed_cut,
             window.chk_corrupt,
         ]
 
@@ -299,7 +297,6 @@ class PySideUiTest(unittest.TestCase):
                 first.io_out.setText("01:00:05:12")
                 first.chk_scene.setChecked(True)
                 first.chk_content_dup.setChecked(True)
-                first.chk_mixed_cut.setChecked(False)
                 first.content_sample_interval.setValue(24)
                 first.min_black_frames.setValue(7)
                 first.pixel_threshold.setValue(1.2)
@@ -312,7 +309,6 @@ class PySideUiTest(unittest.TestCase):
         self.assertEqual(second.io_out.text(), "")
         self.assertTrue(second.chk_scene.isChecked())
         self.assertTrue(second.chk_content_dup.isChecked())
-        self.assertFalse(second.chk_mixed_cut.isChecked())
         self.assertEqual(second.content_sample_interval.value(), 24)
         self.assertEqual(second.min_black_frames.value(), 7)
         self.assertAlmostEqual(second.pixel_threshold.value(), 1.2, places=2)
@@ -449,7 +445,7 @@ class PySideUiTest(unittest.TestCase):
         buttons = {button.text(): button for button in window.findChildren(QPushButton)}
         check_text = " ".join(check.text() for check in window.findChildren(QCheckBox))
 
-        self.assertIn("混剪夹帧", check_text)
+        self.assertNotIn("混剪夹帧", check_text)
         self.assertNotIn("单声道音频", check_text)
         self.assertIn("扫描单声道", buttons)
         self.assertIn("标记单声道", buttons)
@@ -458,6 +454,19 @@ class PySideUiTest(unittest.TestCase):
         self.assertTrue(window.fix_audio_btn.toolTip())
         self.assertTrue(window.collect_params()["detect_mixed_cut"])
         self.assertNotIn("detect_mono_audio", window.collect_params())
+
+    def test_mixed_cut_is_not_user_filtered_and_uses_source_fps(self) -> None:
+        lua_entry = ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑帧夹帧检测.lua"
+        source = lua_entry.read_text(encoding="utf-8")
+
+        self.assertNotIn("marker_types.mixed_cut == false", source)
+        self.assertIn("source_fps", source)
+        self.assertIn("mixed_cut_single_scene_score", source)
+        self.assertIn("0.55", source)
+        self.assertIn("tl_cut - 1", source)
+        marker_manager = (ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "black_frame_detector" / "marker_manager.lua").read_text(encoding="utf-8")
+        self.assertIn("marker_priority", marker_manager)
+        self.assertIn("is_mixed_cut", marker_manager)
 
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {

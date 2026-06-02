@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.78"
+APP_VERSION = "1.9.79"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -240,7 +240,6 @@ MARKER_COLORS = {
     "gap": "#6D5BD0",
     "duplicate": "#B83280",
     "content_dup": "#8F3F71",
-    "mixed_cut": "#DC2626",
     "opacity": "#047857",
     "corrupt": "#0369A1",
     "audio": "#0F766E",
@@ -571,7 +570,6 @@ class MainWindow(QMainWindow):
         self.chk_gap = self._marker_check("时间线空位", "gap", True, "检测片段之间的空洞，适合找不小心漏剪出的空白。")
         self.chk_duplicate = self._marker_check("重复素材", "duplicate", True, "按源文件、轨道距离和时间距离找近距/远距重复，适合发布会多机位、纪录片素材误复制排查。")
         self.chk_content_dup = self._marker_check("内容重复", "content_dup", False, "用帧指纹比较画面内容，可找不同文件但画面重复的片段，耗时会增加。")
-        self.chk_mixed_cut = self._marker_check("混剪夹帧", "mixed_cut", True, "针对时间线上可见片段筛查源内切点，找混剪成片里只漏出一帧的独立镜头，不需要复杂模式。")
         self.chk_opacity = self._marker_check("透明度/禁用", "opacity", True, "直接读取时间线属性，找不透明度为 0、低透明、禁用和非标准合成。")
         self.chk_corrupt = self._marker_check("渲染坏帧", "corrupt", False, "必须先开启复杂模式：坏帧检测依赖渲染后的最终像素，再用 signalstats/熵/亮度离群分析。")
         self.chk_corrupt.toggled.connect(self.on_corrupt_toggled)
@@ -583,7 +581,6 @@ class MainWindow(QMainWindow):
             self.chk_gap,
             self.chk_duplicate,
             self.chk_content_dup,
-            self.chk_mixed_cut,
             self.chk_opacity,
             self.chk_corrupt,
         ]
@@ -893,7 +890,6 @@ class MainWindow(QMainWindow):
             ("gap", "空位", "紫色标记，时间线片段间隙。", MARKER_COLORS["gap"]),
             ("duplicate", "重复", "重复素材或内容指纹重复。", MARKER_COLORS["duplicate"]),
             ("content_dup", "指纹", "不同文件或跨片段的画面指纹重复。", MARKER_COLORS["content_dup"]),
-            ("mixed_cut", "混剪", "混剪成片里源内切点只露出一帧。", MARKER_COLORS["mixed_cut"]),
             ("opacity", "透明", "透明度、禁用或合成问题。", MARKER_COLORS["opacity"]),
             ("corrupt", "坏帧", "复杂模式下 signalstats/熵分析发现的渲染异常。", MARKER_COLORS["corrupt"]),
         ]
@@ -1077,7 +1073,6 @@ class MainWindow(QMainWindow):
                 "gap": self.chk_gap.isChecked(),
                 "duplicate": self.chk_duplicate.isChecked(),
                 "content_dup": self.chk_content_dup.isChecked(),
-                "mixed_cut": self.chk_mixed_cut.isChecked(),
                 "opacity": self.chk_opacity.isChecked(),
                 "corrupt": self.chk_corrupt.isChecked(),
                 "clear": self.chk_clear.isChecked(),
@@ -1134,7 +1129,6 @@ class MainWindow(QMainWindow):
                 "gap": self.chk_gap,
                 "duplicate": self.chk_duplicate,
                 "content_dup": self.chk_content_dup,
-                "mixed_cut": self.chk_mixed_cut,
                 "opacity": self.chk_opacity,
                 "clear": self.chk_clear,
                 "mark_hidden": self.chk_mark_hidden,
@@ -1218,11 +1212,11 @@ class MainWindow(QMainWindow):
                 "opacity": self.chk_opacity.isChecked(),
                 "duplicate": self.chk_duplicate.isChecked(),
                 "content_dup": self.chk_content_dup.isChecked(),
-                "mixed_cut": self.chk_mixed_cut.isChecked(),
+                "mixed_cut": True,
             },
             "detect_duplicate": self.chk_duplicate.isChecked(),
             "detect_content_dup": self.chk_content_dup.isChecked(),
-            "detect_mixed_cut": self.chk_mixed_cut.isChecked(),
+            "detect_mixed_cut": True,
             "detect_corrupt": complex_mode and self.chk_corrupt.isChecked(),
             "html_report": self.chk_html.isChecked(),
             "clear_existing": self.chk_clear.isChecked(),
