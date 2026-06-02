@@ -601,6 +601,27 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("coverage_table[1].start_frame > first_frame", analyzer_source)
         self.assertIn("Analyzer.compute_gap_ranges(coverage_table, timeline_fps, params.start_offset)", analyzer_source)
 
+    def test_watermark_is_written_to_markers_reports_and_logs(self) -> None:
+        module_root = ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "black_frame_detector"
+        config_source = (module_root / "config.lua").read_text(encoding="utf-8")
+        marker_source = (module_root / "marker_manager.lua").read_text(encoding="utf-8")
+        version_source = (module_root / "version_compat.lua").read_text(encoding="utf-8")
+        report_source = (module_root / "report_generator.lua").read_text(encoding="utf-8")
+        lua_source = (
+            ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑帧夹帧检测.lua"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("config.WATERMARK", config_source)
+        self.assertIn("QH-BFD", config_source)
+        self.assertIn("config.build_watermark_payload", config_source)
+        self.assertIn("build_watermark_payload", marker_source)
+        self.assertIn("safe_add_marker(", marker_source)
+        self.assertIn("custom_data", version_source)
+        self.assertIn("AddMarker(frame, color, name, note, duration or 1, custom_data", version_source)
+        self.assertIn("watermark", report_source)
+        self.assertIn("get_watermark_label", report_source)
+        self.assertIn("Watermark: ", lua_source)
+
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {
             "embedded_audio_channels": 1,

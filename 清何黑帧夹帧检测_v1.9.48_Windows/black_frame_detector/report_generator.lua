@@ -17,6 +17,7 @@ function ReportGenerator.generate_txt(analyzed_results, timeline_name, params, e
     table.insert(lines, "时间线: " .. (timeline_name or "未知"))
     table.insert(lines, "检测时间: " .. os.date("%Y-%m-%d %H:%M:%S"))
     table.insert(lines, "插件版本: v" .. config.PLUGIN_VERSION)
+    table.insert(lines, "watermark: " .. config.get_watermark_label())
 
     -- 版本信息
     if extra_info and extra_info.resolve_info then
@@ -175,6 +176,7 @@ function ReportGenerator.generate_html(analyzed_results, timeline_name, params, 
     table.insert(html, "<h1>黑帧夹帧检测报告</h1>")
     table.insert(html, "<p>时间线: <strong>" .. (timeline_name or "未知") .. "</strong></p>")
     table.insert(html, "<p>检测时间: " .. os.date("%Y-%m-%d %H:%M:%S") .. "</p>")
+    table.insert(html, "<p style='color:#999;font-size:12px;'>watermark: " .. config.get_watermark_label() .. "</p>")
 
     -- 参数
     if params then
@@ -253,7 +255,7 @@ function ReportGenerator.generate_html(analyzed_results, timeline_name, params, 
 
     -- 页脚
     table.insert(html, "<div class='footer'>")
-    table.insert(html, "黑帧夹帧检测插件 v" .. config.PLUGIN_VERSION)
+    table.insert(html, "黑帧夹帧检测插件 v" .. config.PLUGIN_VERSION .. " | watermark: " .. config.get_watermark_label())
     table.insert(html, "</div>")
     table.insert(html, "</body></html>")
 

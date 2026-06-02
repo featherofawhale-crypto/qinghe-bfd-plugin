@@ -65,7 +65,7 @@ from resolve_bridge import (
 )
 
 
-APP_VERSION = "1.9.98"
+APP_VERSION = "1.9.99"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3

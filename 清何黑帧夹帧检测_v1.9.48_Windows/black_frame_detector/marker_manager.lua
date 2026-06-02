@@ -99,8 +99,9 @@ function MarkerManager.apply_markers(timeline, records, version_compat, progress
             dlog(string.format("apply_marker[%d/%d]: frame=%d color=%s name=%s dur=%d",
                 i, #deduped_records, frame, color, name, duration))
         end
+        local custom_data = config.build_watermark_payload(record, frame, name)
         local ok = version_compat:safe_add_marker(
-            timeline, frame, color, name, note, duration
+            timeline, frame, color, name, note, duration, custom_data
         )
 
         if ok then

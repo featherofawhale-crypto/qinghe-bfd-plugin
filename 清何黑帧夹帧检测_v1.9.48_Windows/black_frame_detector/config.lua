@@ -1,5 +1,5 @@
 -- config.lua - 清何黑帧夹帧检测小工具 全局配置
--- 版本: v1.9.98
+-- 版本: v1.9.99
 
 local config = {}
 
@@ -7,9 +7,39 @@ local config = {}
 -- 插件元信息
 -- ============================================================
 config.PLUGIN_NAME = "清何黑帧夹帧检测小工具"
-config.PLUGIN_VERSION = "1.9.98"
+config.PLUGIN_VERSION = "1.9.99"
 config.PLUGIN_AUTHOR = "qinghe"
 config.MARKER_PREFIX = "[BFD]"  -- Black Frame Detection 标记前缀
+
+config.WATERMARK = {
+    product = "QH-BFD",
+    owner = "qinghe",
+    channel = "private",
+    schema = "wm-20260603",
+}
+
+function config.get_watermark_label()
+    return string.format("%s:%s:%s:v%s",
+        config.WATERMARK.product,
+        config.WATERMARK.owner,
+        config.WATERMARK.schema,
+        config.PLUGIN_VERSION
+    )
+end
+
+function config.build_watermark_payload(record, frame, name)
+    record = record or {}
+    return {
+        watermark = config.get_watermark_label(),
+        product = config.WATERMARK.product,
+        owner = config.WATERMARK.owner,
+        schema = config.WATERMARK.schema,
+        version = config.PLUGIN_VERSION,
+        marker = tostring(name or record.marker_name or ""),
+        classification = tostring(record.classification or ""),
+        frame = tonumber(frame) or tonumber(record.timeline_start_frame) or 0,
+    }
+end
 
 -- ============================================================
 -- FFmpeg blackdetect 默认参数

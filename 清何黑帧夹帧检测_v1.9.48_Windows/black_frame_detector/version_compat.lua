@@ -351,12 +351,12 @@ end
 -- ============================================================
 -- 安全添加标记（兼容不同版本API签名）
 -- ============================================================
-function VersionCompat:safe_add_marker(target, frame, color, name, note, duration)
+function VersionCompat:safe_add_marker(target, frame, color, name, note, duration, custom_data)
     local pcall_ok, result = pcall(function()
         if self.capabilities.has_custom_data then
             -- v19+: 6参数版本(frame, color, name, note, duration, customData)
             -- customData 必须是 table，传空字符串导致 API 调用失败 → 标记没打上
-            return target:AddMarker(frame, color, name, note, duration or 1, {})
+            return target:AddMarker(frame, color, name, note, duration or 1, custom_data or {})
         else
             -- v17/v18: 5参数版本(frame, color, name, note, duration)
             return target:AddMarker(frame, color, name, note, duration or 1)
