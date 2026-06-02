@@ -49,7 +49,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.90"
+APP_VERSION = "1.9.91"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -884,7 +884,6 @@ class MainWindow(QMainWindow):
         self.fix_audio_btn.clicked.connect(self.fix_mono_audio)
         actions.addWidget(self.scan_audio_btn)
         actions.addWidget(self.mark_audio_btn)
-        actions.addWidget(self.fix_audio_btn)
         layout.addLayout(actions)
 
         self.audio_list = QTextEdit()
@@ -1297,6 +1296,9 @@ class MainWindow(QMainWindow):
 
     def prompt_complex_mode_for_risky_timelines(self, jobs: list[dict]) -> bool:
         if self.chk_complex.isChecked() or any(job.get("complex_mode") for job in jobs):
+            return False
+        if not self.bridge.is_connected():
+            self._log("Resolve 外部桥接不可用，跳过启动前混剪风险扫描以避免卡顿。")
             return False
         for job in jobs:
             result = self.bridge.detect_complex_timeline_risk(int(job.get("timeline_index", 1)))

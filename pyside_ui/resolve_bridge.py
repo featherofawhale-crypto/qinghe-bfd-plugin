@@ -16,6 +16,17 @@ LUA_ENTRY = REPO_ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑�
 BRIDGE_WORKER_ARG = "--resolve-bridge"
 
 
+def hidden_subprocess_kwargs() -> dict[str, Any]:
+    if platform.system().lower() != "windows":
+        return {}
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    return {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        "startupinfo": startupinfo,
+    }
+
+
 @dataclass
 class TimelineInfo:
     index: int
@@ -556,6 +567,9 @@ if in_frame is None or out_frame is None:
         except Exception:
             pass
 
+if in_frame is None and out_frame is not None:
+    in_frame = start_frame
+
 ok = in_frame is not None and out_frame is not None and out_frame > in_frame
 print(json.dumps({{
     "ok": ok,
@@ -1091,6 +1105,14 @@ def first_mono_channel(mapping):
                     return 1
     return 1
 
+def mono_channel_label(mapping):
+    channel = first_mono_channel(mapping)
+    if channel == 1:
+        return "left-only"
+    if channel == 2:
+        return "right-only"
+    return f"channel-{channel}-only"
+
 def stereo_mapping_from(source_mapping, media_mapping):
     base = media_mapping if mapping_is_stereo(media_mapping) else source_mapping
     embedded = 2
@@ -1227,7 +1249,9 @@ for track_index in range(1, track_count + 1):
         source_mapping = decode_mapping(safe(lambda item=item: item.GetSourceAudioChannelMapping()))
         media_pool_item = safe(lambda item=item: item.GetMediaPoolItem())
         media_mapping = decode_mapping(safe(lambda mpi=media_pool_item: mpi.GetAudioMapping()) if media_pool_item else None)
-        source_is_mono = mapping_is_mono(source_mapping) or mapping_is_mono(media_mapping)
+        source_mapping_is_mono = mapping_is_mono(source_mapping)
+        media_mapping_is_mono = mapping_is_mono(media_mapping)
+        source_is_mono = source_mapping_is_mono or media_mapping_is_mono
         if track_is_mono or source_is_mono:
             fixed = False
             fix_method = ""
@@ -1242,7 +1266,14 @@ for track_index in range(1, track_count + 1):
                     if safe(lambda item=item, clip_color=clip_color: item.SetClipColor(clip_color), False):
                         color_changed = True
                         break
-            reason = "mono track" if track_is_mono else "mono source"
+            if track_is_mono:
+                reason = "mono track"
+            elif source_mapping_is_mono:
+                reason = mono_channel_label(source_mapping)
+            elif media_mapping_is_mono:
+                reason = "media " + mono_channel_label(media_mapping)
+            else:
+                reason = "mono source"
             clips.append({{
                 "track_index": track_index,
                 "track_subtype": subtype or "unknown",
@@ -1253,6 +1284,8 @@ for track_index in range(1, track_count + 1):
                 "color": safe(lambda item=item: item.GetClipColor(), ""),
                 "color_changed": color_changed,
                 "reason": reason,
+                "source_mapping": source_mapping,
+                "media_mapping": media_mapping,
                 "mapping_fixed": fixed,
                 "fix_method": fix_method,
             }})
@@ -1316,23 +1349,18 @@ print(json.dumps({{
         env["BFD_PARAMS_FILE"] = str(params_path)
         command = [str(fuscript), "-l", "lua", str(lua_entry)]
         try:
-            completed = subprocess.run(
+            subprocess.Popen(
                 command,
                 env=env,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                capture_output=True,
-                timeout=10,
-                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                **hidden_subprocess_kwargs(),
             )
-        except subprocess.TimeoutExpired:
-            return True, "fuscript started; Resolve may still be running the script."
         except Exception as exc:
             return False, str(exc)
-
-        output = (completed.stdout or "") + (completed.stderr or "")
-        return completed.returncode == 0, output.strip()
+        return True, "检测已交给 Resolve 后台执行。"
 
     @staticmethod
     def _find_fuscript() -> Path | None:
@@ -1377,6 +1405,7 @@ print(json.dumps({"connected": bool(resolve)}))
                 capture_output=True,
                 timeout=timeout,
                 check=False,
+                **hidden_subprocess_kwargs(),
             )
         except Exception:
             return None

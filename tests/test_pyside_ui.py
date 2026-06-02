@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import sys
@@ -472,6 +472,7 @@ class PySideUiTest(unittest.TestCase):
 
     def test_mixed_timeline_risk_prompts_for_complex_without_auto_start(self) -> None:
         window = MainWindow()
+        window.bridge.is_connected = lambda: True
         window.bridge.detect_complex_timeline_risk = lambda timeline_index: {
             "ok": True,
             "count": 1,
@@ -524,9 +525,8 @@ class PySideUiTest(unittest.TestCase):
         self.assertNotIn("单声道音频", check_text)
         self.assertIn("扫描单声道", buttons)
         self.assertIn("标记单声道", buttons)
-        self.assertIn("修正声道映射", buttons)
+        self.assertNotIn("修正声道映射", buttons)
         self.assertTrue(window.scan_audio_btn.toolTip())
-        self.assertTrue(window.fix_audio_btn.toolTip())
         self.assertTrue(window.collect_params()["detect_mixed_cut"])
         self.assertNotIn("detect_mono_audio", window.collect_params())
 
@@ -561,12 +561,27 @@ class PySideUiTest(unittest.TestCase):
 
         self.assertIn('AUDIO_MARK_COLOR = "Chocolate"', source)
         self.assertIn("first_mono_channel", source)
+        self.assertIn("mono_channel_label", source)
         self.assertIn('"channel_idx": [channel, channel]', source)
         self.assertIn("track_format_fix_attempts", source)
         self.assertIn("try_set_track_stereo", source)
         self.assertIn("SetClipColor(clip_color)", source)
+        self.assertIn("source_mapping", source)
+        self.assertIn("media_mapping", source)
         self.assertNotIn("timeline.AddMarker", source)
         self.assertNotIn('SetClipColor("Orange")', source)
+
+    def test_detection_launch_is_hidden_and_io_out_can_default_in_to_start(self) -> None:
+        source = (ROOT / "pyside_ui" / "resolve_bridge.py").read_text(encoding="utf-8")
+        app_source = (ROOT / "pyside_ui" / "app.py").read_text(encoding="utf-8")
+
+        self.assertIn("hidden_subprocess_kwargs", source)
+        self.assertIn("CREATE_NO_WINDOW", source)
+        self.assertIn("subprocess.Popen", source)
+        self.assertIn("stdout=subprocess.DEVNULL", source)
+        self.assertIn("if in_frame is None and out_frame is not None:", source)
+        self.assertIn("in_frame = start_frame", source)
+        self.assertIn("跳过启动前混剪风险扫描", app_source)
 
     def test_complex_mode_cache_dir_and_leading_gap_are_wired(self) -> None:
         app_source = (ROOT / "pyside_ui" / "app.py").read_text(encoding="utf-8")
