@@ -437,105 +437,107 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
     end
 
     for file_path, file_clips in pairs(clips_by_file) do
-        if #file_clips <= 1 then goto continue_file_scene end
         local source_fps = source_fps_for_clip(ffmpeg, file_clips[1], timeline_fps)
         local min_start_sec, max_end_sec = nil, nil
-        for _, clip in ipairs(file_clips) do
-            local lo = clip.left_offset or 0
-            local dur = clip.source_duration_frames or 0
-            if dur > stuck_frames then
-                local clip_start_sec = lo / source_fps
-                local clip_end_sec = (lo + dur) / source_fps
-                if not min_start_sec or clip_start_sec < min_start_sec then min_start_sec = clip_start_sec end
-                if not max_end_sec or clip_end_sec > max_end_sec then max_end_sec = clip_end_sec end
+        if #file_clips > 1 then
+            for _, clip in ipairs(file_clips) do
+                local lo = clip.left_offset or 0
+                local dur = clip.source_duration_frames or 0
+                if dur > stuck_frames then
+                    local clip_start_sec = lo / source_fps
+                    local clip_end_sec = (lo + dur) / source_fps
+                    if not min_start_sec or clip_start_sec < min_start_sec then min_start_sec = clip_start_sec end
+                    if not max_end_sec or clip_end_sec > max_end_sec then max_end_sec = clip_end_sec end
+                end
             end
         end
-        if not min_start_sec or not max_end_sec or max_end_sec <= min_start_sec then goto continue_file_scene end
-        local scan_duration = math.min(max_end_sec - min_start_sec, max_duration_sec)
-        if scan_duration <= 0 then goto continue_file_scene end
-
-        local prefix = ""
-        if ffmpeg._bundled_lib_dir then
-            prefix = 'DYLD_LIBRARY_PATH="' .. ffmpeg._bundled_lib_dir .. '" '
-        end
-        local filter_arg = filter_script_path and
-            ("-filter_script:v " .. ffmpeg:_quote_path(filter_script_path)) or
-            string.format("-vf \"select='gt(scene\\,%.3f)',metadata=print\"", threshold)
-        local cmd = string.format(
-            "%s%s -timelimit %d -ss %.3f -t %.3f -i %s %s -an -f null - 2>&1",
-            prefix,
-            ffmpeg:_quote_path(ffmpeg.ffmpeg_path),
-            timeout,
-            min_start_sec,
-            scan_duration,
-            ffmpeg:_quote_path(file_path),
-            filter_arg
-        )
-        local pipe = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
-        local last_abs_time = nil
-        if not pipe then goto continue_file_scene end
-        for line in pipe:lines() do
-            local t = line:match("pts_time:(%d+%.?%d*)")
-            local score = line:match("lavfi%.scene_score=(%d+%.?%d*)") or line:match("scene_score[:=](%d+%.?%d*)")
-            if t then
-                local raw_time = tonumber(t)
-                last_abs_time = nil
-                if raw_time then
-                    local candidates = {}
-                    if raw_time >= min_start_sec and raw_time <= (min_start_sec + scan_duration) then
-                        table.insert(candidates, raw_time)
-                    end
-                    local shifted = min_start_sec + raw_time
-                    if shifted >= min_start_sec and shifted <= (min_start_sec + scan_duration) then
-                        table.insert(candidates, shifted)
-                    end
-                    for _, abs_time in ipairs(candidates) do
-                        last_abs_time = abs_time
-                        local score_num = tonumber(score or "0") or 0
-                        if score_num >= single_scene_score then
-                            for _, clip in ipairs(file_clips) do
-                                local lo = clip.left_offset or 0
-                                local dur = clip.source_duration_frames or 0
-                                local clip_start_sec = lo / source_fps
-                                local clip_end_sec = (lo + dur) / source_fps
-                                if abs_time >= clip_start_sec and abs_time <= clip_end_sec then
-                                    local rel = abs_time - clip_start_sec
-                                    local tl_cut = (clip.timeline_start_frame or 0) + math.floor(rel * timeline_fps + 0.5)
-                                    local clip_start = clip.timeline_start_frame or 0
-                                    local clip_end = clip_start + dur
-                                    if tl_cut >= clip_start and tl_cut <= clip_end then
-                                        add_mixed_cut_record(records, seen, clip, "file_scene", abs_time,
-                                            abs_time + (1 / timeline_fps), tl_cut - 1, timeline_fps, score_num, "single_scene")
+        if min_start_sec and max_end_sec and max_end_sec > min_start_sec then
+            local scan_duration = math.min(max_end_sec - min_start_sec, max_duration_sec)
+            if scan_duration > 0 then
+                local prefix = ""
+                if ffmpeg._bundled_lib_dir then
+                    prefix = 'DYLD_LIBRARY_PATH="' .. ffmpeg._bundled_lib_dir .. '" '
+                end
+                local filter_arg = filter_script_path and
+                    ("-filter_script:v " .. ffmpeg:_quote_path(filter_script_path)) or
+                    string.format("-vf \"select='gt(scene\\,%.3f)',metadata=print\"", threshold)
+                local cmd = string.format(
+                    "%s%s -timelimit %d -ss %.3f -t %.3f -i %s %s -an -f null - 2>&1",
+                    prefix,
+                    ffmpeg:_quote_path(ffmpeg.ffmpeg_path),
+                    timeout,
+                    min_start_sec,
+                    scan_duration,
+                    ffmpeg:_quote_path(file_path),
+                    filter_arg
+                )
+                local pipe = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
+                local last_abs_time = nil
+                if pipe then
+                    for line in pipe:lines() do
+                        local t = line:match("pts_time:(%d+%.?%d*)")
+                        local score = line:match("lavfi%.scene_score=(%d+%.?%d*)") or line:match("scene_score[:=](%d+%.?%d*)")
+                        if t then
+                            local raw_time = tonumber(t)
+                            last_abs_time = nil
+                            if raw_time then
+                                local candidates = {}
+                                if raw_time >= min_start_sec and raw_time <= (min_start_sec + scan_duration) then
+                                    table.insert(candidates, raw_time)
+                                end
+                                local shifted = min_start_sec + raw_time
+                                if shifted >= min_start_sec and shifted <= (min_start_sec + scan_duration) then
+                                    table.insert(candidates, shifted)
+                                end
+                                for _, abs_time in ipairs(candidates) do
+                                    last_abs_time = abs_time
+                                    local score_num = tonumber(score or "0") or 0
+                                    if score_num >= single_scene_score then
+                                        for _, clip in ipairs(file_clips) do
+                                            local lo = clip.left_offset or 0
+                                            local dur = clip.source_duration_frames or 0
+                                            local clip_start_sec = lo / source_fps
+                                            local clip_end_sec = (lo + dur) / source_fps
+                                            if abs_time >= clip_start_sec and abs_time <= clip_end_sec then
+                                                local rel = abs_time - clip_start_sec
+                                                local tl_cut = (clip.timeline_start_frame or 0) + math.floor(rel * timeline_fps + 0.5)
+                                                local clip_start = clip.timeline_start_frame or 0
+                                                local clip_end = clip_start + dur
+                                                if tl_cut >= clip_start and tl_cut <= clip_end then
+                                                    add_mixed_cut_record(records, seen, clip, "file_scene", abs_time,
+                                                        abs_time + (1 / timeline_fps), tl_cut - 1, timeline_fps, score_num, "single_scene")
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        elseif score and last_abs_time then
+                            local score_num = tonumber(score or "0") or 0
+                            if score_num >= single_scene_score then
+                                for _, clip in ipairs(file_clips) do
+                                    local lo = clip.left_offset or 0
+                                    local dur = clip.source_duration_frames or 0
+                                    local clip_start_sec = lo / source_fps
+                                    local clip_end_sec = (lo + dur) / source_fps
+                                    if last_abs_time >= clip_start_sec and last_abs_time <= clip_end_sec then
+                                        local rel = last_abs_time - clip_start_sec
+                                        local tl_cut = (clip.timeline_start_frame or 0) + math.floor(rel * timeline_fps + 0.5)
+                                        local clip_start = clip.timeline_start_frame or 0
+                                        local clip_end = clip_start + dur
+                                        if tl_cut >= clip_start and tl_cut <= clip_end then
+                                            add_mixed_cut_record(records, seen, clip, "file_scene_meta", last_abs_time,
+                                                last_abs_time + (1 / timeline_fps), tl_cut - 1, timeline_fps, score_num, "single_scene")
+                                        end
                                     end
                                 end
                             end
                         end
                     end
-                end
-            elseif score and last_abs_time then
-                local score_num = tonumber(score or "0") or 0
-                if score_num >= single_scene_score then
-                    for _, clip in ipairs(file_clips) do
-                        local lo = clip.left_offset or 0
-                        local dur = clip.source_duration_frames or 0
-                        local clip_start_sec = lo / source_fps
-                        local clip_end_sec = (lo + dur) / source_fps
-                        if last_abs_time >= clip_start_sec and last_abs_time <= clip_end_sec then
-                            local rel = last_abs_time - clip_start_sec
-                            local tl_cut = (clip.timeline_start_frame or 0) + math.floor(rel * timeline_fps + 0.5)
-                            local clip_start = clip.timeline_start_frame or 0
-                            local clip_end = clip_start + dur
-                            if tl_cut >= clip_start and tl_cut <= clip_end then
-                                add_mixed_cut_record(records, seen, clip, "file_scene_meta", last_abs_time,
-                                    last_abs_time + (1 / timeline_fps), tl_cut - 1, timeline_fps, score_num, "single_scene")
-                            end
-                        end
-                    end
+                    pipe:close()
                 end
             end
         end
-        pipe:close()
-        ::continue_file_scene::
     end
 
     dlog(string.format("混剪源内筛查: scanned=%d records=%d nested_skipped=%d threshold=%.3f single_scene_score=%.3f",
