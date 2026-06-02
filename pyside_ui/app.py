@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from html import escape as html_escape
 import json
 import math
 import re
@@ -13,8 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from dataclasses import asdict
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QIcon
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QGuiApplication, QIcon, QTextDocument
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -44,6 +45,8 @@ from PySide6.QtWidgets import (
     QSlider,
     QSpinBox,
     QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -62,7 +65,7 @@ from resolve_bridge import (
 )
 
 
-APP_VERSION = "1.9.95"
+APP_VERSION = "1.9.96"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -439,6 +442,51 @@ class ResultTextEdit(QTextEdit):
         self.setTextCursor(cursor)
         self.rowDoubleClicked.emit(cursor.blockNumber())
         event.accept()
+
+
+class SearchHighlightDelegate(QStyledItemDelegate):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.query = ""
+
+    def set_query(self, query: str) -> None:
+        self.query = query.strip()
+
+    def _html(self, text: str) -> str:
+        escaped = html_escape(text)
+        if not self.query:
+            return escaped
+        pattern = re.compile(re.escape(self.query), re.IGNORECASE)
+        return pattern.sub(
+            lambda match: (
+                '<span style="background-color:#fde68a; color:#b91c1c; '
+                'font-weight:700;">' + html_escape(match.group(0)) + "</span>"
+            ),
+            escaped,
+        )
+
+    def paint(self, painter, option, index) -> None:  # noqa: ANN001
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        text = opt.text
+        opt.text = ""
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        style.drawControl(QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+
+        doc = QTextDocument()
+        doc.setDefaultFont(opt.font)
+        doc.setHtml(self._html(text))
+        doc.setTextWidth(max(10, opt.rect.width() - 8))
+
+        painter.save()
+        painter.translate(opt.rect.left() + 4, opt.rect.top() + 2)
+        doc.drawContents(painter, QRectF(0, 0, opt.rect.width() - 8, opt.rect.height() - 4))
+        painter.restore()
+
+    def sizeHint(self, option, index):  # noqa: ANN001, N802
+        size = super().sizeHint(option, index)
+        size.setHeight(max(size.height(), 24))
+        return size
 
 
 class FeedbackDialog(QDialog):
@@ -919,6 +967,8 @@ class MainWindow(QMainWindow):
         self.text_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.text_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.text_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.text_highlight_delegate = SearchHighlightDelegate(self.text_table)
+        self.text_table.setItemDelegateForColumn(3, self.text_highlight_delegate)
         self.text_table.cellDoubleClicked.connect(self.on_text_cell_double_clicked)
         self.text_table.cellChanged.connect(self.on_text_cell_changed)
         layout.addWidget(self.text_table, 1)
@@ -1487,6 +1537,7 @@ class MainWindow(QMainWindow):
     def scan_text_layers(self) -> None:
         selected = self.timeline_combo.currentData() or {"index": 1}
         query = self.text_search.text().strip()
+        self.text_highlight_delegate.set_query(query)
         result = self.bridge.scan_text_items(int(selected.get("index", 1)), "")
         self.text_records = result.get("items") if isinstance(result.get("items"), list) else []
         self.text_match_indices = []
