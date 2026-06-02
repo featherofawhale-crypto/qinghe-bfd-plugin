@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QListWidget, QPushButton,
 import app as ui_app  # noqa: E402
 import resolve_bridge  # noqa: E402
 from app import MainWindow  # noqa: E402
-from resolve_bridge import TimelineInfo, read_progress_file, write_lua_params  # noqa: E402
+from resolve_bridge import TimelineInfo, read_progress_file, read_timeline_state, write_lua_params  # noqa: E402
 
 
 class PySideUiTest(unittest.TestCase):
@@ -225,6 +225,23 @@ class PySideUiTest(unittest.TestCase):
             self.assertEqual(progress["percent"], 64)
             self.assertEqual(progress["stage"], "FFmpeg 3/5")
 
+    def test_timeline_state_cache_is_used_before_slow_resolve_bridge(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            state_path = Path(tmp) / "current_timeline_state.json"
+            state_path.write_text(
+                '{"ok":true,"timelines":[{"index":1,"name":"方法  (当前)","fps":24,"uid":"abc"}]}',
+                encoding="utf-8",
+            )
+            with patch.object(resolve_bridge, "timeline_state_path", return_value=state_path):
+                bridge = resolve_bridge.ResolveBridge()
+                with patch.object(bridge, "_run_resolve_python", return_value=None) as run_bridge:
+                    timelines = bridge.list_timelines()
+
+            self.assertEqual(timelines[0].name, "方法  (当前)")
+            self.assertEqual(timelines[0].fps, 24.0)
+            self.assertTrue(bridge.is_connected())
+            self.assertFalse(run_bridge.called)
+
     def test_frozen_bridge_process_uses_worker_mode_not_dash_c(self) -> None:
         had_frozen = hasattr(sys, "frozen")
         old_frozen = getattr(sys, "frozen", None)
@@ -276,6 +293,8 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("ui_launcher_path.txt", source)
         self.assertIn("BFD_PARAMS_FILE", source)
         self.assertIn("try_launch_external_ui", source)
+        self.assertIn("current_timeline_state.json", source)
+        self.assertIn("write_timeline_state_snapshot", source)
 
         installer = (ROOT / "install_windows.ps1").read_text(encoding="utf-8")
         self.assertIn("ui_launcher_path.txt", installer)

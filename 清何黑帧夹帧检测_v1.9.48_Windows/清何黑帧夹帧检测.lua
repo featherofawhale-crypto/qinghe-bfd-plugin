@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.86
+-- 版本: v1.9.88
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.86 启动 ===")
+dlog("=== BFD v1.9.88 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -444,6 +444,78 @@ local function read_first_line(path)
     return line
 end
 
+local function json_escape(value)
+    value = tostring(value or "")
+    value = value:gsub("\\", "\\\\"):gsub('"', '\\"'):gsub("\r", "\\r"):gsub("\n", "\\n")
+    return value
+end
+
+local function quick_resolve_app()
+    if type(resolve) == "userdata" or type(resolve) == "table" then
+        return resolve
+    end
+    if fusion and fusion.GetResolve then
+        local ok, app = pcall(function() return fusion:GetResolve() end)
+        if ok and app then return app end
+    end
+    return nil
+end
+
+local function write_timeline_state_snapshot()
+    local app = quick_resolve_app()
+    if not app then
+        dlog("PySide timeline snapshot skipped: no fast Resolve handle")
+        return
+    end
+    local ok, err = pcall(function()
+        local pm = app:GetProjectManager()
+        local project = pm and pm:GetCurrentProject()
+        if not project then return end
+        local current = project:GetCurrentTimeline()
+        local current_name = current and current:GetName() or ""
+        local count = tonumber(project:GetTimelineCount() or 0) or 0
+        local timelines = {}
+        local seen = {}
+        for index = 1, count do
+            local tl = project:GetTimelineByIndex(index)
+            if tl then
+                local name = tl:GetName() or ("Timeline " .. tostring(index))
+                local uid = name
+                pcall(function()
+                    uid = tl:GetUniqueId() or name
+                end)
+                if not seen[uid] then
+                    seen[uid] = true
+                    local fps = tonumber(tl:GetSetting("timelineFrameRate") or 25) or 25
+                    if name == current_name then name = name .. "  (当前)" end
+                    table.insert(timelines, string.format(
+                        '{"index":%d,"name":"%s","fps":%s,"uid":"%s"}',
+                        index, json_escape(name), tostring(fps), json_escape(uid)
+                    ))
+                end
+            end
+        end
+        if #timelines == 0 then return end
+        local sep = package.config:sub(1, 1)
+        local home = os.getenv("USERPROFILE") or os.getenv("HOME") or "."
+        local state_dir = home .. sep .. ".qinghe_bfd"
+        if sep == "\\" then
+            os.execute('mkdir "' .. state_dir .. '" >nul 2>nul')
+        else
+            os.execute('mkdir -p "' .. state_dir .. '" >/dev/null 2>&1')
+        end
+        local f = io.open(state_dir .. sep .. "current_timeline_state.json", "w")
+        if f then
+            f:write('{"ok":true,"timelines":[' .. table.concat(timelines, ",") .. ']}\n')
+            f:close()
+            dlog("PySide timeline snapshot written: " .. tostring(#timelines))
+        end
+    end)
+    if not ok then
+        dlog("PySide timeline snapshot failed: " .. tostring(err))
+    end
+end
+
 local function try_launch_external_ui()
     if os.getenv("BFD_PARAMS_FILE") or os.getenv("BFD_DISABLE_EXTERNAL_UI") then
         return false
@@ -460,6 +532,7 @@ local function try_launch_external_ui()
         return false
     end
 
+    write_timeline_state_snapshot()
     print("[BFD] Opening PySide UI control panel...")
     dlog("Launching PySide UI: " .. launcher)
     local ok = false

@@ -35,23 +35,23 @@ local function get_resolve_app()
         " bmd.scriptapp=" .. tostring(bmd and type(bmd.scriptapp) or nil) ..
         " resolve=" .. tostring(type(resolve)))
 
-    local app, label = try_resolve_source("global Resolve()", function() return Resolve() end)
-    if app then return app, label end
-
-    app, label = try_resolve_source("global resolve", function() return resolve end)
-    if app then return app, label end
-
-    app, label = try_resolve_source("bmd.scriptapp('Resolve')", function()
-        if bmd and bmd.scriptapp then
-            return bmd.scriptapp("Resolve")
-        end
-        return nil
-    end)
+    local app, label = try_resolve_source("global resolve", function() return resolve end)
     if app then return app, label end
 
     app, label = try_resolve_source("fusion:GetResolve()", function()
         if fusion and fusion.GetResolve then
             return fusion:GetResolve()
+        end
+        return nil
+    end)
+    if app then return app, label end
+
+    app, label = try_resolve_source("global Resolve()", function() return Resolve() end)
+    if app then return app, label end
+
+    app, label = try_resolve_source("bmd.scriptapp('Resolve')", function()
+        if bmd and bmd.scriptapp then
+            return bmd.scriptapp("Resolve")
         end
         return nil
     end)

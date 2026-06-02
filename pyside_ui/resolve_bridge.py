@@ -5,6 +5,7 @@ import platform
 import subprocess
 import sys
 import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,10 @@ def progress_path() -> Path:
     return runtime_dir() / "progress.json"
 
 
+def timeline_state_path() -> Path:
+    return runtime_dir() / "current_timeline_state.json"
+
+
 def read_progress_file(path: Path | None = None) -> dict[str, Any] | None:
     path = path or progress_path()
     if not path.exists():
@@ -41,6 +46,24 @@ def read_progress_file(path: Path | None = None) -> dict[str, Any] | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def read_timeline_state(path: Path | None = None) -> dict[str, Any] | None:
+    path = path or timeline_state_path()
+    if not path.exists():
+        return None
+    try:
+        if path.stat().st_mtime < (time.time() - 300):
+            return None
+    except Exception:
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return None
+    if not isinstance(data, dict) or not data.get("ok"):
+        return None
+    return data
 
 
 def frames_to_timecode(frame: int | float, fps: int | float) -> str:
@@ -267,6 +290,20 @@ class ResolveBridge:
         return self._connected
 
     def list_timelines(self) -> list[TimelineInfo]:
+        cached = read_timeline_state()
+        if cached and isinstance(cached.get("timelines"), list) and cached["timelines"]:
+            self._connected = True
+            return [
+                TimelineInfo(
+                    int(item.get("index", index + 1)),
+                    clean_resolve_text(item.get("name")),
+                    float(item.get("fps", 25.0)),
+                    clean_resolve_text(item.get("uid")),
+                )
+                for index, item in enumerate(cached["timelines"])
+                if isinstance(item, dict)
+            ] or [TimelineInfo(1, "当前时间线", 25.0)]
+
         data = self._run_resolve_python(
             r'''
 import json
