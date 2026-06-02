@@ -48,7 +48,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.84"
+APP_VERSION = "1.9.86"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -1097,7 +1097,6 @@ class MainWindow(QMainWindow):
                 "partial_opacity": self.chk_partial_opacity.isChecked(),
                 "png_opaque": self.chk_png_opaque.isChecked(),
                 "merge": self.chk_merge.isChecked(),
-                "complex": self.chk_complex.isChecked(),
                 "html": self.chk_html.isChecked(),
             },
         }
@@ -1152,7 +1151,6 @@ class MainWindow(QMainWindow):
                 "partial_opacity": self.chk_partial_opacity,
                 "png_opaque": self.chk_png_opaque,
                 "merge": self.chk_merge,
-                "complex": self.chk_complex,
                 "html": self.chk_html,
             }
             for key, widget in check_map.items():
@@ -1250,6 +1248,8 @@ class MainWindow(QMainWindow):
 
     def start_detection(self) -> None:
         jobs = self.collect_batch_params()
+        if self.prompt_complex_mode_for_risky_timelines(jobs):
+            return
         if any(job["complex_mode"] and (not job["manual_io_in"] or not job["manual_io_out"]) for job in jobs):
             QMessageBox.warning(self, "复杂模式需要入出点", "复杂模式会先渲染检测范围，请填写手动入点和出点。")
             return
@@ -1267,6 +1267,39 @@ class MainWindow(QMainWindow):
         self.worker.progress.connect(self.on_progress)
         self.worker.done.connect(self.on_done)
         self.worker.start()
+
+    def prompt_complex_mode_for_risky_timelines(self, jobs: list[dict]) -> bool:
+        if self.chk_complex.isChecked() or any(job.get("complex_mode") for job in jobs):
+            return False
+        for job in jobs:
+            result = self.bridge.detect_complex_timeline_risk(int(job.get("timeline_index", 1)))
+            if not result.get("ok") or int(result.get("count", 0) or 0) <= 0:
+                continue
+            message = str(result.get("message") or "检测到疑似混剪/多镜头成片。")
+            detail_lines = []
+            for item in (result.get("candidates") or [])[:4]:
+                if isinstance(item, dict):
+                    detail_lines.append(f"- {item.get('name', '未命名')}：{item.get('reason', '需要复杂模式复核')}")
+            detail = "\n".join(detail_lines)
+            prompt = (
+                f"{message}\n\n普通模式不会再对这类成片做慢速深扫；建议启用复杂模式渲染最终画面检测。"
+                f"{chr(10) + detail if detail else ''}\n\n是否现在切换到复杂模式？"
+            )
+            answer = QMessageBox.question(
+                self,
+                "建议启用复杂模式",
+                prompt,
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer == QMessageBox.Yes:
+                self.chk_complex.setChecked(True)
+                self.fill_in_out_from_current_timeline_marks()
+                self._log("已切换到复杂模式，请确认入出点后再次开始检测。")
+                return True
+            self._log("用户选择继续普通模式；疑似混剪成片不会执行慢速深扫。")
+            return False
+        return False
 
     def clear_markers(self) -> None:
         selected = self.timeline_combo.currentData() or {"index": 1}

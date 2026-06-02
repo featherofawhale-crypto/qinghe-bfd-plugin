@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import sys
 import tempfile
@@ -18,7 +17,7 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QListWidget, QPushButton,
 import app as ui_app  # noqa: E402
 import resolve_bridge  # noqa: E402
 from app import MainWindow  # noqa: E402
-from resolve_bridge import TimelineInfo, read_progress_file, read_timeline_state, write_lua_params  # noqa: E402
+from resolve_bridge import TimelineInfo, read_progress_file, write_lua_params  # noqa: E402
 
 
 class PySideUiTest(unittest.TestCase):
@@ -226,25 +225,6 @@ class PySideUiTest(unittest.TestCase):
             self.assertEqual(progress["percent"], 64)
             self.assertEqual(progress["stage"], "FFmpeg 3/5")
 
-    def test_timeline_state_reader_supports_external_ui_io_fallback(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            state_path = Path(tmp) / "current_timeline_state.json"
-            state_path.write_text(
-                json.dumps({
-                    "ok": True,
-                    "name": "方法",
-                    "fps": 24,
-                    "start_frame": 86400,
-                    "in_frame": 86400,
-                    "out_frame": 87384,
-                }),
-                encoding="utf-8",
-            )
-
-            state = read_timeline_state(state_path)
-            self.assertEqual(state["in_frame"], 86400)
-            self.assertEqual(state["out_frame"], 87384)
-
     def test_frozen_bridge_process_uses_worker_mode_not_dash_c(self) -> None:
         had_frozen = hasattr(sys, "frozen")
         old_frozen = getattr(sys, "frozen", None)
@@ -320,6 +300,7 @@ class PySideUiTest(unittest.TestCase):
                 first.io_out.setText("01:00:05:12")
                 first.chk_scene.setChecked(True)
                 first.chk_content_dup.setChecked(True)
+                first.chk_complex.setChecked(True)
                 first.content_sample_interval.setValue(24)
                 first.min_black_frames.setValue(7)
                 first.pixel_threshold.setValue(1.2)
@@ -332,6 +313,7 @@ class PySideUiTest(unittest.TestCase):
         self.assertEqual(second.io_out.text(), "")
         self.assertTrue(second.chk_scene.isChecked())
         self.assertTrue(second.chk_content_dup.isChecked())
+        self.assertFalse(second.chk_complex.isChecked())
         self.assertEqual(second.content_sample_interval.value(), 24)
         self.assertEqual(second.min_black_frames.value(), 7)
         self.assertAlmostEqual(second.pixel_threshold.value(), 1.2, places=2)
@@ -449,6 +431,30 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("入出点", window.log.toPlainText())
         self.assertIn("入出点", window.result_list.toPlainText())
 
+    def test_mixed_timeline_risk_prompts_for_complex_without_auto_start(self) -> None:
+        window = MainWindow()
+        window.bridge.detect_complex_timeline_risk = lambda timeline_index: {
+            "ok": True,
+            "count": 1,
+            "message": "发现 1 个疑似混剪/多镜头成片。",
+            "candidates": [{"reason": "同一源文件多次引用", "name": "成片.mp4"}],
+        }
+        window.bridge.current_timeline_marks = lambda timeline_index: {
+            "ok": True,
+            "in_tc": "01:00:00:00",
+            "out_tc": "01:00:41:00",
+        }
+
+        with patch.object(ui_app.QMessageBox, "question", return_value=ui_app.QMessageBox.Yes), patch.object(
+            ui_app.SubmitWorker, "start"
+        ) as worker_start:
+            window.start_detection()
+
+        self.assertTrue(window.chk_complex.isChecked())
+        self.assertEqual(window.io_in.text(), "01:00:00:00")
+        self.assertEqual(window.io_out.text(), "01:00:41:00")
+        self.assertFalse(worker_start.called)
+
     def test_current_timeline_marks_fill_manual_in_out(self) -> None:
         window = MainWindow()
         window.bridge.current_timeline_marks = lambda timeline_index: {
@@ -462,6 +468,13 @@ class PySideUiTest(unittest.TestCase):
 
         self.assertEqual(window.io_in.text(), "01:00:00:00")
         self.assertEqual(window.io_out.text(), "01:00:08:12")
+
+    def test_resolve_bridge_has_fast_complex_timeline_risk_scan(self) -> None:
+        source = (ROOT / "pyside_ui" / "resolve_bridge.py").read_text(encoding="utf-8")
+
+        self.assertIn("detect_complex_timeline_risk", source)
+        self.assertIn("same_source", source)
+        self.assertNotIn("file_scene", source)
 
     def test_audio_mono_is_audio_page_only_and_mixed_cut_is_main_option(self) -> None:
         window = MainWindow()
@@ -498,27 +511,11 @@ class PySideUiTest(unittest.TestCase):
         self.assertNotIn("rel_cut * source_to_timeline", source)
         self.assertIn("matched_visible", source)
         self.assertIn("single_fallback", source)
-        self.assertIn("direct_scene", source)
-        self.assertIn("tl_cut_now", source)
         self.assertIn("tl_cut >= clip_start and tl_cut <= clip_end", source)
         self.assertIn("ipairs(all_clips or ffmpeg_clips or {})", source)
-        self.assertIn("clips_by_file", source)
-        self.assertIn("file_scene", source)
-        self.assertIn("abs_time - clip_start_sec", source)
-        self.assertIn("mixed_cut_file_scene_run.bat", source)
-        self.assertNotIn("ffmpeg:_wrap_cmd(cmd)", source)
         marker_manager = (ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "black_frame_detector" / "marker_manager.lua").read_text(encoding="utf-8")
         self.assertIn("marker_priority", marker_manager)
         self.assertIn("is_mixed_cut", marker_manager)
-
-    def test_lua_io_prefers_get_mark_in_out_without_missing_method_noise(self) -> None:
-        source = (ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "black_frame_detector" / "version_compat.lua").read_text(encoding="utf-8")
-
-        self.assertIn("GetMarkInOut", source)
-        self.assertIn("normalize_mark_frame", source)
-        self.assertIn('type(obj[method_name]) ~= "function"', source)
-        main_source = (ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑帧夹帧检测.lua").read_text(encoding="utf-8")
-        self.assertIn("current_timeline_state.json", main_source)
 
     def test_audio_marking_uses_chocolate_and_reports_track_format_fixing(self) -> None:
         source = (ROOT / "pyside_ui" / "resolve_bridge.py").read_text(encoding="utf-8")

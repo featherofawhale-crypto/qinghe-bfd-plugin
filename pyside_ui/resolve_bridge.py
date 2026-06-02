@@ -33,10 +33,6 @@ def progress_path() -> Path:
     return runtime_dir() / "progress.json"
 
 
-def timeline_state_path() -> Path:
-    return runtime_dir() / "current_timeline_state.json"
-
-
 def read_progress_file(path: Path | None = None) -> dict[str, Any] | None:
     path = path or progress_path()
     if not path.exists():
@@ -45,19 +41,6 @@ def read_progress_file(path: Path | None = None) -> dict[str, Any] | None:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
-
-
-def read_timeline_state(path: Path | None = None) -> dict[str, Any] | None:
-    path = path or timeline_state_path()
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8-sig"))
-    except Exception:
-        return None
-    if not isinstance(data, dict) or not data.get("ok"):
-        return None
-    return data
 
 
 def frames_to_timecode(frame: int | float, fps: int | float) -> str:
@@ -515,25 +498,133 @@ print(json.dumps({{
 }}, ensure_ascii=False))
 '''
         )
-        if not data or not data.get("ok"):
-            state = read_timeline_state()
-            if state and state.get("in_frame") is not None and state.get("out_frame") is not None:
-                fps = float(state.get("fps", 25.0))
-                return {
-                    "ok": True,
-                    "in_frame": state.get("in_frame"),
-                    "out_frame": state.get("out_frame"),
-                    "fps": fps,
-                    "in_tc": frames_to_timecode(state.get("in_frame", 0), fps),
-                    "out_tc": frames_to_timecode(state.get("out_frame", 0), fps),
-                    "message": "已读取达芬奇启动时缓存的当前时间线入出点。",
-                }
         if not data:
             return {"ok": False, "message": "读取失败：Resolve API 未返回结果。"}
         if data.get("ok"):
             fps = float(data.get("fps", 25.0))
             data["in_tc"] = frames_to_timecode(data.get("in_frame", 0), fps)
             data["out_tc"] = frames_to_timecode(data.get("out_frame", 0), fps)
+        return data
+
+    def detect_complex_timeline_risk(self, timeline_index: int = 1) -> dict[str, Any]:
+        data = self._run_resolve_python(
+            rf'''
+import json
+resolve = dvr_script.scriptapp("Resolve")
+project_manager = resolve.GetProjectManager() if resolve else None
+project = project_manager.GetCurrentProject() if project_manager else None
+timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+if not timeline:
+    print(json.dumps({{"ok": False, "message": "未找到目标时间线。", "candidates": [], "count": 0}}, ensure_ascii=False))
+    raise SystemExit(0)
+
+def safe(callable_obj, default=None):
+    try:
+        return callable_obj()
+    except Exception:
+        return default
+
+def clip_name(item, media_pool_item=None):
+    media_pool_item = media_pool_item or safe(lambda: item.GetMediaPoolItem())
+    if media_pool_item:
+        for key in ("Clip Name", "File Name"):
+            value = safe(lambda key=key: media_pool_item.GetClipProperty(key))
+            if value:
+                return str(value)
+    return str(safe(lambda: item.GetName(), "未命名片段") or "未命名片段")
+
+def clip_file_path(media_pool_item):
+    if not media_pool_item:
+        return ""
+    for key in ("File Path", "FilePath", "Clip File Path"):
+        value = safe(lambda key=key: media_pool_item.GetClipProperty(key))
+        if value:
+            return str(value)
+    props = safe(lambda: media_pool_item.GetClipProperty(), {{}}) or {{}}
+    if isinstance(props, dict):
+        for key, value in props.items():
+            if "path" in str(key).lower() and value:
+                return str(value)
+    return ""
+
+fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), 25) or 25
+try:
+    fps = float(fps_raw)
+except Exception:
+    fps = 25.0
+long_clip_frames = max(1, int(round(fps * 30)))
+track_count = int(safe(lambda: timeline.GetTrackCount("video"), 0) or 0)
+same_source = {{}}
+candidates = []
+
+for track_index in range(1, track_count + 1):
+    items = safe(lambda track_index=track_index: timeline.GetItemListInTrack("video", track_index), []) or []
+    for item_index, item in enumerate(items):
+        media_pool_item = safe(lambda item=item: item.GetMediaPoolItem())
+        name = clip_name(item, media_pool_item)
+        path = clip_file_path(media_pool_item)
+        start = int(safe(lambda item=item: item.GetStart(), 0) or 0)
+        end = int(safe(lambda item=item: item.GetEnd(), start) or start)
+        duration = max(0, end - start)
+        fusion_count = int(safe(lambda item=item: item.GetFusionCompCount(), 0) or 0)
+        lower_name = name.lower()
+        if path:
+            same_source.setdefault(path, []).append({{
+                "name": name,
+                "track_index": track_index,
+                "item_index": item_index,
+                "duration": duration,
+            }})
+        if not path and duration > 0:
+            candidates.append({{
+                "name": name,
+                "track_index": track_index,
+                "reason": "复合片段/Fusion片段或无源文件路径，需要复杂模式看最终画面",
+            }})
+        elif duration >= long_clip_frames and any(token in lower_name for token in ("mix", "final", "output", "成片", "混剪", "合集")):
+            candidates.append({{
+                "name": name,
+                "track_index": track_index,
+                "reason": "长成片命名疑似多镜头导出文件",
+            }})
+        elif fusion_count > 0:
+            candidates.append({{
+                "name": name,
+                "track_index": track_index,
+                "reason": "片段含 Fusion 合成，普通模式不分析最终画面",
+            }})
+
+for path, refs in same_source.items():
+    if len(refs) <= 1:
+        continue
+    first = refs[0]
+    candidates.append({{
+        "name": first.get("name", "同源片段"),
+        "track_index": first.get("track_index", 1),
+        "reason": f"同一源文件在时间线出现 {{len(refs)}} 次，可能是混剪成片或源内多镜头复用",
+        "source_file": path,
+    }})
+
+deduped = []
+seen = set()
+for item in candidates:
+    key = (item.get("name"), item.get("reason"), item.get("source_file", ""))
+    if key in seen:
+        continue
+    seen.add(key)
+    deduped.append(item)
+
+message = f"发现 {{len(deduped)}} 个疑似混剪/多镜头成片，建议启用复杂模式。" if deduped else "未发现明显混剪成片风险。"
+print(json.dumps({{
+    "ok": True,
+    "count": len(deduped),
+    "message": message,
+    "candidates": deduped[:8],
+}}, ensure_ascii=False))
+'''
+        )
+        if not data:
+            return {"ok": False, "message": "时间线结构扫描失败：Resolve API 未返回结果。", "candidates": [], "count": 0}
         return data
 
     def scan_mono_audio(self, timeline_index: int = 1) -> dict[str, Any]:

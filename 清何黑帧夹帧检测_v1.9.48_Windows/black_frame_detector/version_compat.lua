@@ -406,42 +406,6 @@ function VersionCompat:get_in_out_range(timeline)
     end
 
     local in_point, out_point = nil, nil
-    local timeline_start = 0
-    pcall(function()
-        local start_raw = timeline:GetStartFrame()
-        local start_num = type(start_raw) == "number" and start_raw or tonumber(start_raw)
-        if start_num and start_num > 0 then timeline_start = start_num end
-    end)
-
-    local function normalize_mark_frame(value)
-        if value == nil or value == "" then return nil end
-        local frame = type(value) == "number" and value or tonumber(value)
-        if not frame or frame < 0 then return nil end
-        if timeline_start > 0 and frame < timeline_start then
-            return timeline_start + frame
-        end
-        return frame
-    end
-
-    -- Resolve 20 exposes timeline IO through GetMarkInOut(). Prefer it because
-    -- most older single-value method names do not exist and only create noise.
-    pcall(function()
-        if type(timeline.GetMarkInOut) == "function" then
-            local mark = timeline:GetMarkInOut()
-            dlog("GetMarkInOut raw type=" .. type(mark))
-            if type(mark) == "table" then
-                for _, key in ipairs({"video", "all", "audio"}) do
-                    local entry = mark[key]
-                    if type(entry) == "table" then
-                        if in_point == nil then in_point = normalize_mark_frame(entry["in"]) end
-                        if out_point == nil then out_point = normalize_mark_frame(entry["out"]) end
-                        dlog(string.format("  GetMarkInOut[%s] in=%s out=%s", key, tostring(entry["in"]), tostring(entry["out"])))
-                    end
-                    if in_point ~= nil and out_point ~= nil then break end
-                end
-            end
-        end
-    end)
 
     -- ====== 阶段A: 枚举timeline对象的所有方法 ======
     dlog("--- 枚举timeline方法 ---")
@@ -463,17 +427,20 @@ function VersionCompat:get_in_out_range(timeline)
 
     -- ====== 阶段B: 尝试所有已知API变体 ======
     local function try_get_number(obj, method_name)
-        if type(obj[method_name]) ~= "function" then
-            dlog(string.format("  %s() → missing", method_name))
-            return nil
-        end
         local ok, val = pcall(function() return obj[method_name](obj) end)
         if not ok then
             dlog(string.format("  %s() → ERROR: %s", method_name, tostring(val)))
             return nil
         end
         dlog(string.format("  %s() → raw=%s type=%s", method_name, tostring(val), type(val)))
-        return normalize_mark_frame(val)
+        if val ~= nil then
+            if type(val) == "number" then
+                return val
+            elseif type(val) == "string" and val ~= "" then
+                return tonumber(val)
+            end
+        end
+        return nil
     end
 
     -- 直接方法调用（按优先级排列）
