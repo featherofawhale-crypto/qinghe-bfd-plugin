@@ -631,7 +631,7 @@ class PySideUiTest(unittest.TestCase):
         build_script = (ROOT / "build_release_windows.ps1").read_text(encoding="utf-8")
 
         for text in (readme, dev_doc, ui_doc, build_script):
-            self.assertIn("1.9.102", text)
+            self.assertIn("1.9.103", text)
 
         self.assertIn("Windows zip", readme)
         self.assertIn("bundled Python runtime", readme)
@@ -639,6 +639,23 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("QingheBFDControl.exe", dev_doc)
         self.assertIn("bytecode_manifest.json", dev_doc)
         self.assertIn("PyInstaller", ui_doc)
+
+    def test_developer_agent_docs_and_private_cases_are_present(self) -> None:
+        claude_doc = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+        skill_doc = (ROOT / "skills" / "qinghe-bfd-dev" / "SKILL.md").read_text(encoding="utf-8")
+        private_doc = (ROOT / "private_docs" / "acceptance_cases.md").read_text(encoding="utf-8")
+        build_script = (ROOT / "build_release_windows.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("清何大大", claude_doc)
+        self.assertIn("Current version: `1.9.103`", claude_doc)
+        self.assertIn("timeline FPS", claude_doc)
+        self.assertIn("Do not include `private_docs/`", claude_doc)
+        self.assertIn("qinghe-bfd-dev", skill_doc)
+        self.assertIn("非官方构建", skill_doc)
+        self.assertIn("IO points", private_doc)
+        self.assertIn("one-frame", private_doc)
+        self.assertIn("Do not copy `private_docs/`", private_doc)
+        self.assertNotIn("private_docs", build_script)
 
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {
