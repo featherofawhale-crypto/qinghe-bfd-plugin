@@ -62,7 +62,7 @@ from resolve_bridge import (
 )
 
 
-APP_VERSION = "1.9.94"
+APP_VERSION = "1.9.95"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -508,6 +508,7 @@ class MainWindow(QMainWindow):
         self.text_index = -1
         self.text_match_indices: list[int] = []
         self.text_match_cursor = -1
+        self._updating_text_table = False
         self._zero_result_notice_shown = False
         self._marker_refresh_after_complete = False
         self._tab_animation: QPropertyAnimation | None = None
@@ -883,16 +884,34 @@ class MainWindow(QMainWindow):
         self.text_scan_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogContentsView))
         self.text_scan_btn.clicked.connect(self.scan_text_layers)
         self.text_search.returnPressed.connect(self.scan_text_layers)
+        self.text_next_match_btn = QPushButton("\u4e0b\u4e00\u4e2a\u5339\u914d")
+        self.text_next_match_btn.clicked.connect(self.jump_to_next_text_match)
         search_row.addWidget(self.text_search, 1)
         search_row.addWidget(self.text_scan_btn)
+        search_row.addWidget(self.text_next_match_btn)
         layout.addLayout(search_row)
+
+        replace_row = QHBoxLayout()
+        self.text_replace = QLineEdit()
+        self.text_replace.setPlaceholderText("\u66ff\u6362\u4e3a")
+        self.text_replace_btn = QPushButton("\u66ff\u6362\u9009\u4e2d")
+        self.text_replace_btn.clicked.connect(self.replace_selected_text_item)
+        self.text_replace_all_btn = QPushButton("\u6279\u91cf\u66ff\u6362")
+        self.text_replace_all_btn.clicked.connect(self.replace_matched_text_items)
+        self.text_delete_btn = QPushButton("\u5220\u9664")
+        self.text_delete_btn.clicked.connect(self.delete_selected_text_item)
+        replace_row.addWidget(self.text_replace, 1)
+        replace_row.addWidget(self.text_replace_btn)
+        replace_row.addWidget(self.text_replace_all_btn)
+        replace_row.addWidget(self.text_delete_btn)
+        layout.addLayout(replace_row)
 
         self.text_table = QTableWidget(0, 4)
         self.text_table.setHorizontalHeaderLabels(["#", "Timecode", "Track", "Text"])
         self.text_table.setMinimumHeight(220)
         self.text_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.text_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.text_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.text_table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
         self.text_table.setWordWrap(True)
         self.text_table.verticalHeader().setVisible(False)
         self.text_table.horizontalHeader().setStretchLastSection(True)
@@ -900,26 +919,9 @@ class MainWindow(QMainWindow):
         self.text_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.text_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.text_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self.text_table.cellDoubleClicked.connect(self.jump_to_selected_text_item)
+        self.text_table.cellDoubleClicked.connect(self.on_text_cell_double_clicked)
+        self.text_table.cellChanged.connect(self.on_text_cell_changed)
         layout.addWidget(self.text_table, 1)
-
-        edit_row = QHBoxLayout()
-        self.text_replace = QLineEdit()
-        self.text_replace.setPlaceholderText("替换为")
-        self.text_replace_btn = QPushButton("替换")
-        self.text_replace_btn.clicked.connect(self.replace_selected_text_item)
-        self.text_next_match_btn = QPushButton("\u4e0b\u4e00\u4e2a\u5339\u914d")
-        self.text_next_match_btn.clicked.connect(self.jump_to_next_text_match)
-        self.text_delete_btn = QPushButton("删除")
-        self.text_delete_btn.clicked.connect(self.delete_selected_text_item)
-        self.text_filler_btn = QPushButton("去语气词")
-        self.text_filler_btn.clicked.connect(self.remove_fillers_from_selected_text_item)
-        edit_row.addWidget(self.text_replace, 1)
-        edit_row.addWidget(self.text_replace_btn)
-        edit_row.addWidget(self.text_next_match_btn)
-        edit_row.addWidget(self.text_filler_btn)
-        edit_row.addWidget(self.text_delete_btn)
-        layout.addLayout(edit_row)
 
         self.text_status = QLabel("未扫描文字层。")
         self.text_status.setObjectName("Muted")
@@ -1489,6 +1491,7 @@ class MainWindow(QMainWindow):
         self.text_records = result.get("items") if isinstance(result.get("items"), list) else []
         self.text_match_indices = []
         self.text_match_cursor = -1
+        self._updating_text_table = True
         self.text_table.setRowCount(0)
         match_color = QColor("#fff3bf")
         for idx, item in enumerate(self.text_records, 1):
@@ -1508,9 +1511,14 @@ class MainWindow(QMainWindow):
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(value)
                 cell.setData(Qt.UserRole, idx - 1)
+                if column == 3:
+                    cell.setFlags(cell.flags() | Qt.ItemIsEditable)
+                else:
+                    cell.setFlags(cell.flags() & ~Qt.ItemIsEditable)
                 if is_match:
                     cell.setBackground(match_color)
                 self.text_table.setItem(row_index, column, cell)
+        self._updating_text_table = False
         self.text_table.resizeRowsToContents()
         base_message = str(result.get("message", f"找到 {len(self.text_records)} 条文字/字幕素材。"))
         if query:
@@ -1531,6 +1539,38 @@ class MainWindow(QMainWindow):
             return None
         self.text_index = index
         return self.text_records[index]
+
+    def on_text_cell_double_clicked(self, row: int, column: int) -> None:
+        if column == 3:
+            self.text_table.editItem(self.text_table.item(row, column))
+            return
+        self.jump_to_selected_text_item()
+
+    def on_text_cell_changed(self, row: int, column: int) -> None:
+        if self._updating_text_table or column != 3:
+            return
+        first_cell = self.text_table.item(row, 0)
+        text_cell = self.text_table.item(row, 3)
+        if not first_cell or not text_cell:
+            return
+        index = int(first_cell.data(Qt.UserRole))
+        if index < 0 or index >= len(self.text_records):
+            return
+        item = self.text_records[index]
+        new_text = text_cell.text()
+        old_text = str(item.get("text", ""))
+        if new_text == old_text:
+            return
+        result = self.bridge.replace_text_item(item, new_text)
+        self.text_status.setText(str(result.get("message", "")))
+        self._log(self.text_status.text())
+        if result.get("ok"):
+            item["text"] = new_text
+            item["name"] = new_text
+            return
+        self._updating_text_table = True
+        text_cell.setText(old_text)
+        self._updating_text_table = False
 
     def jump_to_next_text_match(self) -> None:
         if not self.text_match_indices:
@@ -1568,6 +1608,44 @@ class MainWindow(QMainWindow):
                 text_cell = self.text_table.item(row, 3)
                 if text_cell:
                     text_cell.setText(new_text)
+
+    def replace_matched_text_items(self) -> None:
+        query = self.text_search.text().strip()
+        replacement = self.text_replace.text()
+        if not query:
+            self.text_status.setText("请先输入要查找的文字。")
+            return
+        if not self.text_match_indices:
+            self.scan_text_layers()
+        targets = list(self.text_match_indices)
+        if not targets:
+            self.text_status.setText("没有匹配项可批量替换。")
+            return
+        ok_count = 0
+        fail_count = 0
+        self._updating_text_table = True
+        for index in targets:
+            if index < 0 or index >= len(self.text_records):
+                continue
+            item = self.text_records[index]
+            source_text = str(item.get("text", ""))
+            new_text = source_text.replace(query, replacement)
+            if new_text == source_text:
+                continue
+            result = self.bridge.replace_text_item(item, new_text)
+            if result.get("ok"):
+                ok_count += 1
+                item["text"] = new_text
+                item["name"] = new_text
+                text_cell = self.text_table.item(index, 3)
+                if text_cell:
+                    text_cell.setText(new_text)
+            else:
+                fail_count += 1
+        self._updating_text_table = False
+        self.scan_text_layers()
+        self.text_status.setText(f"批量替换完成：成功 {ok_count} 条，失败 {fail_count} 条。")
+        self._log(self.text_status.text())
 
     def delete_selected_text_item(self) -> None:
         item = self.selected_text_item_record()
