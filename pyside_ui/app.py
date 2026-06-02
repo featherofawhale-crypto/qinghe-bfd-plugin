@@ -5,6 +5,7 @@ import math
 import re
 import sys
 import time
+import ctypes
 import urllib.error
 import urllib.request
 from datetime import datetime
@@ -34,6 +35,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QGraphicsOpacityEffect,
     QProgressBar,
+    QSizePolicy,
     QSlider,
     QSpinBox,
     QStyle,
@@ -46,7 +48,7 @@ from PySide6.QtWidgets import (
 from resolve_bridge import BRIDGE_WORKER_ARG, ResolveBridge, TimelineInfo, read_progress_file, run_resolve_bridge_worker
 
 
-APP_VERSION = "1.9.79"
+APP_VERSION = "1.9.80"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -57,6 +59,16 @@ DEFAULT_PIXEL_THRESHOLD = 1.0
 DEFAULT_CONTENT_SAMPLE_INTERVAL = 3
 MAX_FRAME_THRESHOLD = 100
 ICON_PATH = Path(__file__).resolve().with_name("icon.svg")
+WINDOWS_APP_ID = "Qinghe.BFD.Control"
+
+
+def set_windows_app_user_model_id() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(WINDOWS_APP_ID)
+    except Exception:
+        pass
 
 
 APP_STYLE = """
@@ -832,6 +844,9 @@ class MainWindow(QMainWindow):
 
         self.audio_summary = QLabel("未扫描音频。")
         self.audio_summary.setObjectName("Muted")
+        self.audio_summary.setWordWrap(True)
+        self.audio_summary.setMaximumHeight(48)
+        self.audio_summary.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         set_tip(self.audio_summary, "扫描会读取音频轨道类型和片段源声道映射，识别 mono 音轨或 mono 素材。")
         layout.addWidget(self.audio_summary)
 
@@ -858,6 +873,8 @@ class MainWindow(QMainWindow):
         self.audio_list = QTextEdit()
         self.audio_list.setReadOnly(True)
         self.audio_list.setMinimumHeight(230)
+        self.audio_list.setMaximumHeight(230)
+        self.audio_list.setLineWrapMode(QTextEdit.WidgetWidth)
         self.audio_list.setPlaceholderText("扫描结果会列出轨道、片段、起止帧和识别原因。")
         set_tip(self.audio_list, "单声道识别依据：音轨 subtype=mono、源文件 embedded_audio_channels=1、或 source channel mapping 为 mono。")
         layout.addWidget(self.audio_list, 1)
@@ -1414,6 +1431,7 @@ class MainWindow(QMainWindow):
         self.audio_summary.setText(
             f"{message}  单声道片段 {summary.get('mono_clips', len(clips))} 个 / "
             f"单声道轨道 {summary.get('mono_tracks', 0)} 条 / "
+            f"轨道修正 {summary.get('track_format_fixed', 0)}/{summary.get('track_format_fix_attempts', 0)} / "
             f"映射修正 {summary.get('mapping_fixed', 0)}/{summary.get('mapping_fix_attempts', 0)}"
         )
         lines = []
@@ -1422,7 +1440,8 @@ class MainWindow(QMainWindow):
             for track in tracks:
                 lines.append(
                     f"  A{track.get('index')}  {track.get('name', '')}  "
-                    f"{track.get('subtype', 'unknown')}  clips={track.get('item_count', 0)}"
+                    f"{track.get('format', track.get('subtype', 'unknown'))}  clips={track.get('item_count', 0)}"
+                    f"{'  已改双声道' if track.get('format_fixed') else ''}"
                 )
         if clips:
             lines.append("")
@@ -1661,6 +1680,7 @@ def main(argv: list[str] | None = None) -> int:
     if BRIDGE_WORKER_ARG in argv[1:]:
         return run_resolve_bridge_worker()
 
+    set_windows_app_user_model_id()
     app = QApplication(argv)
     font_family = install_cjk_font()
     app.setStyleSheet(APP_STYLE)

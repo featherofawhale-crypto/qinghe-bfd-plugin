@@ -1,5 +1,5 @@
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v1.9.79
+-- 版本: v1.9.80
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -125,7 +125,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v1.9.79 启动 ===")
+dlog("=== BFD v1.9.80 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -253,7 +253,7 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         end
     end
 
-    for _, clip in ipairs(ffmpeg_clips or {}) do
+    for _, clip in ipairs(all_clips or ffmpeg_clips or {}) do
         if clip.is_enabled == false then goto continue_clip end
         if (clip.opacity or 100) <= 0 then goto continue_clip end
         if clip.media_type == "nested" then
@@ -267,7 +267,6 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         local left_offset = clip.left_offset or 0
         if dur_frames <= stuck_frames then goto continue_clip end
 
-        local source_to_timeline = timeline_fps / math.max(1, source_fps)
         local start_sec = left_offset / source_fps
         local duration_sec = dur_frames / source_fps
         local scan_duration = math.min(duration_sec, max_duration_sec)
@@ -327,13 +326,20 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                 local t = line:match("pts_time:(%d+%.?%d*)")
                 local score = line:match("lavfi%.scene_score=(%d+%.?%d*)") or line:match("scene_score[:=](%d+%.?%d*)")
                 if t then
-                    local rel = tonumber(t)
-                    if rel and rel > scan_duration + 1 and rel >= start_sec then
-                        rel = rel - start_sec
+                    local raw_rel = tonumber(t)
+                    local candidates = {}
+                    if raw_rel and raw_rel >= 0 and raw_rel < scan_duration then
+                        table.insert(candidates, raw_rel)
                     end
-                    if rel and rel > 0 and rel < scan_duration then
-                        append_unique_number(scene_times, rel, source_fps)
-                        last_scene_frame = math.floor(rel * source_fps + 0.5)
+                    if raw_rel and start_sec > 0 and raw_rel >= start_sec then
+                        local shifted = raw_rel - start_sec
+                        if shifted >= 0 and shifted < scan_duration then
+                            table.insert(candidates, shifted)
+                        end
+                    end
+                    for _, rel in ipairs(candidates) do
+                        append_unique_number(scene_times, rel, timeline_fps)
+                        last_scene_frame = math.floor(rel * timeline_fps + 0.5)
                         scene_scores[last_scene_frame] = tonumber(score or "0") or scene_scores[last_scene_frame] or 0
                     end
                 elseif score and last_scene_frame then
@@ -359,37 +365,48 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         for i = 1, #scene_times - 1 do
             local rel_start = scene_times[i]
             local rel_end = scene_times[i + 1]
-            local span_frames = math.max(1, math.floor((rel_end - rel_start) * source_fps + 0.5))
+            local span_frames = math.max(1, math.floor((rel_end - rel_start) * timeline_fps + 0.5))
             if span_frames > 0 and span_frames <= stuck_frames then
-                local tl_start = (clip.timeline_start_frame or 0) + math.floor(rel_start * source_to_timeline)
+                local tl_start = (clip.timeline_start_frame or 0) + math.floor(rel_start * timeline_fps + 0.5)
                 local source_start = start_sec + rel_start
                 local source_end = start_sec + rel_end
                 add_mixed_cut_record(records, seen, clip, "span", source_start, source_end, tl_start, timeline_fps,
-                    scene_scores[math.floor(rel_start * source_fps + 0.5)] or
-                    scene_scores[math.floor(rel_end * source_fps + 0.5)] or 0, "span")
+                    scene_scores[math.floor(rel_start * timeline_fps + 0.5)] or
+                    scene_scores[math.floor(rel_end * timeline_fps + 0.5)] or 0, "span")
             end
         end
         for _, rel_cut in ipairs(scene_times) do
             if rel_cut > 0 and rel_cut < scan_duration then
-                local source_frame = math.floor(rel_cut * source_fps + 0.5)
+                local source_frame = math.floor(rel_cut * timeline_fps + 0.5)
                 local score_for_cut = scene_scores[source_frame] or 0
-                local tl_cut = (clip.timeline_start_frame or 0) + math.floor(rel_cut * source_to_timeline)
+                local tl_cut = (clip.timeline_start_frame or 0) + math.floor(rel_cut * timeline_fps + 0.5)
+                local clip_start = clip.timeline_start_frame or 0
+                local clip_end = clip_start + (clip.source_duration_frames or 0)
+                local matched_visible = false
                 for _, iv in ipairs(visible_intervals) do
                     local iv_start = iv.start or 0
                     local iv_end = iv.end_ or iv["end"] or iv_start
-                    if tl_cut >= iv_start and tl_cut <= iv_end then
+                    if tl_cut >= clip_start and tl_cut <= clip_end and tl_cut >= iv_start and tl_cut <= iv_end then
+                        matched_visible = true
                         if score_for_cut >= single_scene_score then
                             local source_start = start_sec + rel_cut
                             add_mixed_cut_record(records, seen, clip, "single", source_start,
-                                source_start + (1 / source_fps), tl_cut - 1, timeline_fps, score_for_cut, "single_scene")
+                                source_start + (1 / timeline_fps), tl_cut - 1, timeline_fps, score_for_cut, "single_scene")
                         end
                         local edge_distance = math.min(math.abs(tl_cut - iv_start), math.abs(iv_end - tl_cut))
                         if edge_distance <= stuck_frames and score_for_cut >= single_scene_score then
                             local source_start = start_sec + rel_cut
                             add_mixed_cut_record(records, seen, clip, "edge", source_start,
-                                source_start + (1 / source_fps), tl_cut - 1, timeline_fps, score_for_cut, "edge")
+                                source_start + (1 / timeline_fps), tl_cut - 1, timeline_fps, score_for_cut, "edge")
                         end
                         break
+                    end
+                end
+                if (not matched_visible) and score_for_cut >= single_scene_score then
+                    if tl_cut >= clip_start and tl_cut <= clip_end then
+                        local source_start = start_sec + rel_cut
+                        add_mixed_cut_record(records, seen, clip, "single_fallback", source_start,
+                            source_start + (1 / timeline_fps), tl_cut - 1, timeline_fps, score_for_cut, "single_scene")
                     end
                 end
             end

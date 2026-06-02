@@ -814,6 +814,8 @@ elif ACTION == "delete":
             rf'''
 import json
 ACTION = {json.dumps(action)}
+AUDIO_MARK_COLOR = "Cocoa"
+AUDIO_MARK_FALLBACK_COLORS = ("Sand", "Cream")
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
@@ -923,28 +925,95 @@ def try_set_stereo_mapping(item, media_pool_item, source_mapping, media_mapping)
                         return True, method_name
     return False, ""
 
+def track_subtype_is_mono(subtype):
+    value = str(subtype or "").strip().lower()
+    return value in ("mono", "1.0", "1") or "mono" in value or value in ("left", "right", "left mono", "right mono")
+
+def display_track_format(subtype):
+    value = str(subtype or "").strip()
+    lower = value.lower()
+    if track_subtype_is_mono(value):
+        return "1.0"
+    if lower in ("stereo", "2.0", "2"):
+        return "2.0"
+    return value or "unknown"
+
+def try_set_track_stereo(track_index):
+    payloads = ("stereo", "Stereo", "2.0", 2, {{"audioType": "stereo"}}, {{"audio_type": "stereo"}})
+    method_names = ("SetTrackSubType", "SetTrackFormat", "SetAudioTrackType", "SetTrackAudioType")
+    for method_name in method_names:
+        method = getattr(timeline, method_name, None)
+        if not callable(method):
+            continue
+        for payload in payloads:
+            attempts = (
+                lambda method=method, payload=payload: method("audio", track_index, payload),
+                lambda method=method, payload=payload: method(track_index, payload),
+                lambda method=method, payload=payload: method(track_index, "audio", payload),
+            )
+            for attempt in attempts:
+                if safe(attempt, False):
+                    new_subtype = safe(lambda idx=track_index: timeline.GetTrackSubType("audio", idx), "")
+                    if not track_subtype_is_mono(new_subtype):
+                        return True, method_name
+    return False, ""
+
 track_count = int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0)
+timeline_start_frame = int(safe(lambda: timeline.GetStartFrame(), 0) or 0)
+existing_timeline_markers = safe(lambda: timeline.GetMarkers(), {{}}) or {{}}
 tracks = []
 clips = []
 mono_track_indices = []
 markers_added = 0
 mapping_fixed = 0
 mapping_fix_attempts = 0
+track_format_fix_attempts = 0
+track_format_fixed = 0
+
+def next_free_marker_frame(preferred_frame, duration):
+    used = set()
+    if isinstance(existing_timeline_markers, dict):
+        for key in existing_timeline_markers.keys():
+            try:
+                used.add(int(float(key)))
+            except Exception:
+                pass
+    preferred_frame = int(preferred_frame)
+    duration = max(1, int(duration or 1))
+    for offset in range(0, duration):
+        candidate = preferred_frame + offset
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+    return preferred_frame
+
 for track_index in range(1, track_count + 1):
     subtype = str(safe(lambda idx=track_index: timeline.GetTrackSubType("audio", idx), "") or "")
     track_name = str(safe(lambda idx=track_index: timeline.GetTrackName("audio", idx), f"Audio {{track_index}}") or f"Audio {{track_index}}")
     enabled = safe(lambda idx=track_index: timeline.GetIsTrackEnabled("audio", idx), True)
     items = safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), []) or []
-    track_is_mono = subtype.lower() == "mono"
+    track_is_mono = track_subtype_is_mono(subtype)
+    track_format_fixed_now = False
+    track_format_fix_method = ""
     if track_is_mono:
         mono_track_indices.append(track_index)
+        if ACTION == "fix" and items:
+            track_format_fix_attempts += 1
+            track_format_fixed_now, track_format_fix_method = try_set_track_stereo(track_index)
+            if track_format_fixed_now:
+                track_format_fixed += 1
+                subtype = str(safe(lambda idx=track_index: timeline.GetTrackSubType("audio", idx), subtype) or subtype)
+                track_is_mono = track_subtype_is_mono(subtype)
     tracks.append({{
         "index": track_index,
         "name": track_name,
         "subtype": subtype or "unknown",
+        "format": display_track_format(subtype),
         "enabled": bool(enabled),
         "item_count": len(items),
         "mono": track_is_mono,
+        "format_fixed": track_format_fixed_now,
+        "format_fix_method": track_format_fix_method,
     }})
     for item in items:
         source_mapping = decode_mapping(safe(lambda item=item: item.GetSourceAudioChannelMapping()))
@@ -960,27 +1029,32 @@ for track_index in range(1, track_count + 1):
                 if fixed:
                     mapping_fixed += 1
             if ACTION in {{"mark", "fix"}}:
-                safe(lambda item=item: item.SetClipColor("Orange"))
+                safe(lambda item=item: item.SetClipColor(AUDIO_MARK_COLOR))
                 start_frame = safe(lambda item=item: item.GetStart(), 0) or 0
+                marker_frame = max(0, int(start_frame or 0) - timeline_start_frame)
                 duration = max(1, int((safe(lambda item=item: item.GetEnd(), 0) or 0) - int(start_frame or 0)))
-                marker_ok = safe(
-                    lambda sf=start_frame, dur=duration, nm=item_name(item), reason=("mono track" if track_is_mono else "mono source"):
-                        timeline.AddMarker(
-                            int(sf),
-                            "Orange",
-                            "[BFD-AUDIO] 单声道音频",
-                            f"{{nm}} / {{reason}}",
-                            int(dur),
-                            "BFD_AUDIO_MONO",
-                        ),
-                    False,
-                )
-                if marker_ok:
-                    markers_added += 1
+                marker_frame = next_free_marker_frame(marker_frame, duration)
+                for marker_color in (AUDIO_MARK_COLOR,) + AUDIO_MARK_FALLBACK_COLORS:
+                    marker_ok = safe(
+                        lambda sf=marker_frame, dur=duration, nm=item_name(item), reason=("mono track" if track_is_mono else "mono source"), marker_color=marker_color:
+                            timeline.AddMarker(
+                                int(sf),
+                                marker_color,
+                                "[BFD-AUDIO] 单声道音频",
+                                f"{{nm}} / {{reason}}",
+                                int(dur),
+                                "BFD_AUDIO_MONO",
+                            ),
+                        False,
+                    )
+                    if marker_ok:
+                        markers_added += 1
+                        break
             reason = "mono track" if track_is_mono else "mono source"
             clips.append({{
                 "track_index": track_index,
                 "track_subtype": subtype or "unknown",
+                "track_format": display_track_format(subtype),
                 "name": item_name(item),
                 "start_frame": safe(lambda item=item: item.GetStart(), 0),
                 "end_frame": safe(lambda item=item: item.GetEnd(), 0),
@@ -993,9 +1067,10 @@ for track_index in range(1, track_count + 1):
 created_tracks = 0
 
 if ACTION == "mark":
-    message = f"已标记 {{len(clips)}} 个单声道音频片段为 Orange，并写入 {{markers_added}} 个时间线标记。"
+    message = f"已标记 {{len(clips)}} 个单声道音频片段为 Cocoa，并写入 {{markers_added}} 个时间线标记。"
 elif ACTION == "fix":
     message = (
+        f"轨道格式修正 {{track_format_fixed}}/{{track_format_fix_attempts}}；"
         f"已尝试修正 {{mapping_fix_attempts}} 个声道映射，成功 {{mapping_fixed}} 个；"
         f"标记 {{len(clips)}} 个单声道片段、{{markers_added}} 个时间线标记。"
         + (" 未成功写入的项目表示 Resolve API 未接受该片段/素材的声道映射写入。" if mapping_fixed < mapping_fix_attempts else "")
@@ -1014,6 +1089,8 @@ print(json.dumps({{
         "created_stereo_tracks": created_tracks,
         "mapping_fix_attempts": mapping_fix_attempts,
         "mapping_fixed": mapping_fixed,
+        "track_format_fix_attempts": track_format_fix_attempts,
+        "track_format_fixed": track_format_fixed,
     }},
     "tracks": tracks,
     "clips": clips,
@@ -1096,7 +1173,7 @@ print(json.dumps({"connected": bool(resolve)}))
                 encoding="utf-8",
                 errors="replace",
                 capture_output=True,
-                timeout=4,
+                timeout=20,
                 check=False,
             )
         except Exception:

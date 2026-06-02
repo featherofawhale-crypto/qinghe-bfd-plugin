@@ -191,10 +191,13 @@ class PySideUiTest(unittest.TestCase):
         self.assertEqual(window.progress_label.minimumWidth(), 138)
         self.assertEqual(window.result_list.minimumHeight(), 190)
         self.assertEqual(window.audio_list.minimumHeight(), 230)
+        self.assertLessEqual(window.audio_list.maximumHeight(), 260)
+        self.assertTrue(window.audio_summary.wordWrap())
         self.assertEqual(window.log.minimumHeight(), 300)
         self.assertIn("#f59e0b", ui_app.APP_STYLE.lower())
         self.assertIn("#2563eb", ui_app.APP_STYLE.lower())
         self.assertIn("qpushbutton#primary", ui_app.APP_STYLE.lower())
+        self.assertEqual(ui_app.WINDOWS_APP_ID, "Qinghe.BFD.Control")
 
     def test_visible_ui_labels_are_readable_chinese(self) -> None:
         window = MainWindow()
@@ -464,9 +467,34 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("mixed_cut_single_scene_score", source)
         self.assertIn("0.55", source)
         self.assertIn("tl_cut - 1", source)
+        self.assertIn("raw_rel", source)
+        self.assertIn("candidates", source)
+        self.assertIn("raw_rel - start_sec", source)
+        self.assertNotIn("rel > scan_duration + 1", source)
+        self.assertIn("rel_cut * timeline_fps", source)
+        self.assertIn("rel_start * timeline_fps", source)
+        self.assertIn("left_offset / source_fps", source)
+        self.assertIn("dur_frames / source_fps", source)
+        self.assertNotIn("rel_cut * source_to_timeline", source)
+        self.assertIn("matched_visible", source)
+        self.assertIn("single_fallback", source)
+        self.assertIn("tl_cut >= clip_start and tl_cut <= clip_end", source)
+        self.assertIn("ipairs(all_clips or ffmpeg_clips or {})", source)
         marker_manager = (ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "black_frame_detector" / "marker_manager.lua").read_text(encoding="utf-8")
         self.assertIn("marker_priority", marker_manager)
         self.assertIn("is_mixed_cut", marker_manager)
+
+    def test_audio_marking_uses_chocolate_and_reports_track_format_fixing(self) -> None:
+        source = (ROOT / "pyside_ui" / "resolve_bridge.py").read_text(encoding="utf-8")
+
+        self.assertIn('AUDIO_MARK_COLOR = "Cocoa"', source)
+        self.assertIn("track_format_fix_attempts", source)
+        self.assertIn("try_set_track_stereo", source)
+        self.assertIn("timeline_start_frame", source)
+        self.assertIn("marker_frame", source)
+        self.assertIn("next_free_marker_frame", source)
+        self.assertIn("existing_timeline_markers", source)
+        self.assertNotIn('SetClipColor("Orange")', source)
 
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {
