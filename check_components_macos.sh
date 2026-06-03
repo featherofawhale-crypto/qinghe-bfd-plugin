@@ -1,5 +1,5 @@
 #!/bin/bash
-# Qinghe BFD v1.9.104 - macOS component checker.
+# Qinghe BFD v1.9.105 - macOS component checker.
 
 set -e
 
@@ -7,7 +7,7 @@ SCRIPT_BASE="$HOME/Library/Application Support/Blackmagic Design/DaVinci Resolve
 MODULE_DIR="$SCRIPT_BASE/Modules/black_frame_detector"
 MAIN_SCRIPT="$SCRIPT_BASE/Edit/清何黑帧夹帧检测.lua"
 
-echo "Qinghe BFD v1.9.104 macOS component check"
+echo "Qinghe BFD v1.9.105 macOS component check"
 echo "DaVinci Resolve script base:"
 echo "  $SCRIPT_BASE"
 echo ""

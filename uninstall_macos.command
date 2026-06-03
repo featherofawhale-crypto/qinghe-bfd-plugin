@@ -1,5 +1,5 @@
 #!/bin/bash
-# Qinghe BFD v1.9.104 - macOS uninstaller.
+# Qinghe BFD v1.9.105 - macOS uninstaller.
 
 PLUGIN_NAME="black_frame_detector"
 SCRIPT_BASE="$HOME/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts"
@@ -8,7 +8,7 @@ MODULE_DIR="$SCRIPT_BASE/Modules/$PLUGIN_NAME"
 MAIN_SCRIPT="清何黑帧夹帧检测.lua"
 
 echo "============================================"
-echo "  清何黑帧夹帧检测 v1.9.104 macOS 卸载"
+echo "  清何黑帧夹帧检测 v1.9.105 macOS 卸载"
 echo "============================================"
 echo "将删除："
 echo "  $EDIT_DIR/$MAIN_SCRIPT"

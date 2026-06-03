@@ -1,5 +1,5 @@
 #!/bin/bash
-# Qinghe BFD v1.9.104 - macOS one-click installer.
+# Qinghe BFD v1.9.105 - macOS one-click installer.
 # Target: ~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Edit
 # Target: ~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Modules/black_frame_detector
 
@@ -19,7 +19,7 @@ BACKUP_DIR="$MODULE_DIR/backup_$(date +%Y%m%d_%H%M%S)"
 MAIN_SCRIPT="清何黑帧夹帧检测.lua"
 
 echo "============================================"
-echo "  清何黑帧夹帧检测 v1.9.104 macOS 一键安装"
+echo "  清何黑帧夹帧检测 v1.9.105 macOS 一键安装"
 echo "============================================"
 echo "主脚本: $EDIT_DIR/$MAIN_SCRIPT"
 echo "模块:   $MODULE_DIR"

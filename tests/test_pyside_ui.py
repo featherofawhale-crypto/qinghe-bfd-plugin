@@ -631,7 +631,7 @@ class PySideUiTest(unittest.TestCase):
         build_script = (ROOT / "build_release_windows.ps1").read_text(encoding="utf-8")
 
         for text in (readme, dev_doc, ui_doc, build_script):
-            self.assertIn("1.9.104", text)
+            self.assertIn("1.9.105", text)
 
         self.assertIn("Windows zip", readme)
         self.assertIn("bundled Python runtime", readme)
@@ -647,7 +647,7 @@ class PySideUiTest(unittest.TestCase):
         build_script = (ROOT / "build_release_windows.ps1").read_text(encoding="utf-8")
 
         self.assertIn("清何大大", claude_doc)
-        self.assertIn("Current version: `1.9.104`", claude_doc)
+        self.assertIn("Current version: `1.9.105`", claude_doc)
         self.assertIn("timeline FPS", claude_doc)
         self.assertIn("Do not include `private_docs/`", claude_doc)
         self.assertIn("qinghe-bfd-dev", skill_doc)
@@ -664,7 +664,7 @@ class PySideUiTest(unittest.TestCase):
         manual = (ROOT / "docs" / "macos_release.md").read_text(encoding="utf-8")
 
         for text in (build_script, install_script, check_script, manual):
-            self.assertIn("1.9.104", text)
+            self.assertIn("1.9.105", text)
 
         self.assertIn("QingheBFD_v${Version}_macOS", build_script)
         self.assertIn("QingheBFD_Plugin_macOS", build_script)
@@ -682,6 +682,17 @@ class PySideUiTest(unittest.TestCase):
         self.assertIn("DaVinci Resolve", check_script)
         self.assertIn("hdiutil", manual)
         self.assertIn("Windows 不能原生生成可签名的 macOS .app/.dmg", manual)
+
+    def test_macos_launcher_sets_resolve_scripting_environment(self) -> None:
+        launcher = (ROOT / "pyside_ui" / "run_ui.sh").read_text(encoding="utf-8")
+        bridge = (ROOT / "pyside_ui" / "resolve_bridge.py").read_text(encoding="utf-8")
+
+        self.assertIn("RESOLVE_SCRIPT_API", launcher)
+        self.assertIn("RESOLVE_SCRIPT_LIB", launcher)
+        self.assertIn("DaVinci Resolve.app/Contents/Libraries/Fusion/fusionscript.so", launcher)
+        self.assertIn("RESOLVE_SCRIPT_API", bridge)
+        self.assertIn("RESOLVE_SCRIPT_LIB", bridge)
+        self.assertIn("DaVinci Resolve.app/Contents/Libraries/Fusion/fusionscript.so", bridge)
 
     def test_audio_mapping_helper_identifies_mono_sources(self) -> None:
         mono_mapping = {

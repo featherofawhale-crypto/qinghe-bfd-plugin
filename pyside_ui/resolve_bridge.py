@@ -181,7 +181,17 @@ def add_default_module_path():
         base = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
         path = os.path.join(base, "Blackmagic Design", "DaVinci Resolve", "Support", "Developer", "Scripting", "Modules")
     elif system == "darwin":
-        path = "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Modules"
+        script_api = os.environ.get(
+            "RESOLVE_SCRIPT_API",
+            "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting",
+        )
+        script_lib = os.environ.get(
+            "RESOLVE_SCRIPT_LIB",
+            "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion/fusionscript.so",
+        )
+        if os.path.exists(script_lib):
+            os.environ.setdefault("RESOLVE_SCRIPT_LIB", script_lib)
+        path = os.path.join(script_api, "Modules")
     else:
         path = "/opt/resolve/Developer/Scripting/Modules"
     if os.path.isdir(path):
@@ -305,8 +315,18 @@ def configure_resolve_python_path() -> None:
             / "Modules"
         )
     elif system == "darwin":
+        script_api = os.environ.get(
+            "RESOLVE_SCRIPT_API",
+            "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting",
+        )
+        script_lib = os.environ.get(
+            "RESOLVE_SCRIPT_LIB",
+            "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion/fusionscript.so",
+        )
+        if Path(script_lib).exists():
+            os.environ.setdefault("RESOLVE_SCRIPT_LIB", script_lib)
         candidates.append(
-            Path("/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Modules")
+            Path(script_api) / "Modules"
         )
     else:
         candidates.append(Path("/opt/resolve/Developer/Scripting/Modules"))
