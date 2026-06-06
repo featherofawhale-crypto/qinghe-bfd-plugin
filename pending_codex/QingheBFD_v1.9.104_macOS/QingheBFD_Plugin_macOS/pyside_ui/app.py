@@ -3181,6 +3181,40 @@ class MainWindow(QMainWindow):
                     break
             return result
 
+        def compact_font_key(value: str) -> str:
+            clean = " ".join(str(value or "").split()).casefold()
+            for token in (" ", "-", "_", ".", "regular", "normal", "常规", "標準", "标准"):
+                clean = clean.replace(token, "")
+            return clean
+
+        def preferred_font_name(names: list[str]) -> str:
+            clean_names = unique_texts(names, 32)
+            if not clean_names:
+                return ""
+            chinese = [name for name in clean_names if self.font_language_tag(name) == "中"]
+            if chinese:
+                return sorted(chinese, key=lambda name: (len(name), name.casefold()))[0]
+            return sorted(clean_names, key=lambda name: (len(name), name.casefold()))[0]
+
+        def compact_font_inventory(font_names: list[str], limit: int) -> list[str]:
+            groups: dict[str, list[str]] = {}
+            for name in font_names:
+                clean_name = " ".join(str(name or "").split())
+                if not clean_name:
+                    continue
+                alias_names = [clean_name, *getattr(self, "font_aliases", {}).get(clean_name, [])]
+                family, _style = self.split_font_style(clean_name)
+                if family != clean_name:
+                    alias_names.extend([family, *getattr(self, "font_aliases", {}).get(family, [])])
+                keys = [compact_font_key(item) for item in alias_names if item]
+                keys = [key for key in keys if key]
+                group_key = sorted(keys, key=len)[0] if keys else compact_font_key(clean_name)
+                groups.setdefault(group_key, [])
+                groups[group_key].extend(alias_names)
+            compacted = [preferred_font_name(names) for names in groups.values()]
+            compacted = [name for name in compacted if name]
+            return sorted(unique_texts(compacted, limit), key=self.font_sort_key)
+
         payload = {
             "app_version": APP_VERSION,
             "resolve_version": self.resolve_version_text,
@@ -3190,12 +3224,12 @@ class MainWindow(QMainWindow):
             "learned_rules": list(self.font_probe_rule_items),
         }
         if include_inventory:
-            fonts = unique_texts(list(getattr(self, "available_fonts", [])), 2500)
+            fonts = compact_font_inventory(list(getattr(self, "available_fonts", [])), 2500)
             aliases = {}
             seen_alias_keys = set()
             for key, values in getattr(self, "font_aliases", {}).items():
                 clean_key = " ".join(str(key or "").split())
-                folded_key = clean_key.casefold()
+                folded_key = compact_font_key(clean_key)
                 if not clean_key or folded_key in seen_alias_keys:
                     continue
                 clean_values = unique_texts(list(values), 12)
@@ -3209,7 +3243,7 @@ class MainWindow(QMainWindow):
             seen_style_keys = set()
             for key, values in getattr(self, "font_family_styles", {}).items():
                 clean_key = " ".join(str(key or "").split())
-                folded_key = clean_key.casefold()
+                folded_key = compact_font_key(clean_key)
                 if not clean_key or folded_key in seen_style_keys:
                     continue
                 clean_values = unique_texts(list(values), 24)
