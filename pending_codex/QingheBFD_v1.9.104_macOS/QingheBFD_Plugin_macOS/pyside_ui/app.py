@@ -580,6 +580,11 @@ QLabel#Title {
     font-weight: 700;
     color: #172033;
 }
+QLabel#SectionTitle {
+    color: #334155;
+    font-weight: 700;
+    padding: 0 0 2px 0;
+}
 QLabel#Subtitle, QLabel#Muted { color: #64748b; }
 QLabel#BadgeOk {
     color: #047857;
@@ -742,6 +747,7 @@ QProgressBar { background: #dfe8d2; border-color: #c4d4b4; color: #334229; }
 QProgressBar::chunk, QSlider::sub-page:horizontal { background: #65a30d; }
 QCheckBox::indicator:checked { background: #84cc16; border-color: #4d7c0f; }
 QLabel#Title { color: #172417; }
+QLabel#SectionTitle { color: #334229; }
 QLabel#Subtitle, QLabel#Muted { color: #62715c; }
 """
 
@@ -787,6 +793,7 @@ QCheckBox { color: #e5e7eb; }
 QCheckBox::indicator { background: #020617; border-color: #64748b; }
 QCheckBox::indicator:checked { background: #f59e0b; border-color: #fbbf24; }
 QLabel#Title { color: #f8fafc; }
+QLabel#SectionTitle { color: #e2e8f0; }
 QLabel#Subtitle, QLabel#Muted { color: #94a3b8; }
 QLabel#BadgeOk { color: #a7f3d0; background: #064e3b; border-color: #047857; }
 QLabel#BadgeWarn { color: #fde68a; background: #78350f; border-color: #d97706; }
@@ -1879,8 +1886,17 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
-        self.text_initial_panel = QWidget()
-        initial_row = QHBoxLayout(self.text_initial_panel)
+        self.text_initial_panel = QFrame()
+        self.text_initial_panel.setObjectName("Panel")
+        initial_layout = QVBoxLayout(self.text_initial_panel)
+        initial_layout.setContentsMargins(14, 12, 14, 12)
+        initial_layout.setSpacing(10)
+        initial_title = QLabel("检测时间线文字")
+        initial_title.setObjectName("SectionTitle")
+        initial_hint = QLabel("先选择要读取的文字类型；检测完成后再进入搜索、替换和表格编辑。")
+        initial_hint.setObjectName("Muted")
+        initial_hint.setWordWrap(True)
+        initial_row = QHBoxLayout()
         initial_row.setContentsMargins(0, 0, 0, 0)
         self.text_scan_srt = QCheckBox("SRT")
         self.text_scan_srt.setChecked(True)
@@ -1894,11 +1910,16 @@ class MainWindow(QMainWindow):
         initial_row.addWidget(self.text_scan_textplus)
         initial_row.addStretch(1)
         initial_row.addWidget(self.text_initial_scan_btn)
+        initial_layout.addWidget(initial_title)
+        initial_layout.addWidget(initial_hint)
+        initial_layout.addLayout(initial_row)
         layout.addWidget(self.text_initial_panel)
 
-        self.text_search_panel = QWidget()
+        self.text_search_panel = QFrame()
+        self.text_search_panel.setObjectName("Panel")
         search_row = QHBoxLayout(self.text_search_panel)
-        search_row.setContentsMargins(0, 0, 0, 0)
+        search_row.setContentsMargins(10, 8, 10, 8)
+        search_row.setSpacing(8)
         self.text_search = QLineEdit()
         self.text_search.setPlaceholderText("搜索 SRT / 字幕 / 文字层")
         self.text_scan_btn = QPushButton("查找")
@@ -1912,9 +1933,11 @@ class MainWindow(QMainWindow):
         search_row.addWidget(self.text_next_match_btn)
         layout.addWidget(self.text_search_panel)
 
-        self.text_replace_panel = QWidget()
+        self.text_replace_panel = QFrame()
+        self.text_replace_panel.setObjectName("Panel")
         replace_row = QHBoxLayout(self.text_replace_panel)
-        replace_row.setContentsMargins(0, 0, 0, 0)
+        replace_row.setContentsMargins(10, 8, 10, 8)
+        replace_row.setSpacing(8)
         self.text_replace = QLineEdit()
         self.text_replace.setPlaceholderText("\u66ff\u6362\u4e3a")
         self.text_replace_all_btn = QPushButton("\u6279\u91cf\u66ff\u6362")
@@ -1931,6 +1954,14 @@ class MainWindow(QMainWindow):
         replace_row.addWidget(self.text_delete_btn)
         layout.addWidget(self.text_replace_panel)
 
+        text_table_panel = QFrame()
+        text_table_panel.setObjectName("Panel")
+        text_table_layout = QVBoxLayout(text_table_panel)
+        text_table_layout.setContentsMargins(10, 8, 10, 8)
+        text_table_layout.setSpacing(6)
+        text_table_title = QLabel("文字列表")
+        text_table_title.setObjectName("SectionTitle")
+        text_table_layout.addWidget(text_table_title)
         self.text_table = QTableWidget(0, 4)
         self.text_table.setHorizontalHeaderLabels(["#", "Timecode", "Track", "Text"])
         self.text_table.setMinimumHeight(150)
@@ -1950,13 +1981,15 @@ class MainWindow(QMainWindow):
         self.text_table.setItemDelegateForColumn(3, self.text_highlight_delegate)
         self.text_table.cellDoubleClicked.connect(self.on_text_cell_double_clicked)
         self.text_table.cellChanged.connect(self.on_text_cell_changed)
-        layout.addWidget(self.text_table, 1)
+        text_table_layout.addWidget(self.text_table, 1)
+        layout.addWidget(text_table_panel, 1)
 
         self.text_status = QLabel("未扫描文字层。")
         self.text_status.setObjectName("Muted")
         layout.addWidget(self.text_status)
 
-        for widget in (self.text_search_panel, self.text_replace_panel, self.text_table, self.text_status):
+        self.text_table_panel = text_table_panel
+        for widget in (self.text_search_panel, self.text_replace_panel, self.text_table_panel, self.text_status):
             widget.hide()
         return tab
 
@@ -1966,7 +1999,11 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
 
-        top = QHBoxLayout()
+        top_panel = QFrame()
+        top_panel.setObjectName("Panel")
+        top = QHBoxLayout(top_panel)
+        top.setContentsMargins(10, 8, 10, 8)
+        top.setSpacing(8)
         self.font_search = QLineEdit()
         self.font_search.setPlaceholderText("搜索字体 / 中文 / PostScript 名称")
         self.font_search.textChanged.connect(self.refresh_font_list)
@@ -1985,8 +2022,18 @@ class MainWindow(QMainWindow):
         top.addWidget(QLabel("粗细"))
         top.addWidget(self.font_style_combo)
         top.addWidget(self.font_scan_btn)
-        layout.addLayout(top)
+        layout.addWidget(top_panel)
 
+        main_split = QSplitter(Qt.Horizontal)
+        main_split.setChildrenCollapsible(False)
+        browser_panel = QFrame()
+        browser_panel.setObjectName("Panel")
+        browser_layout = QVBoxLayout(browser_panel)
+        browser_layout.setContentsMargins(10, 8, 10, 8)
+        browser_layout.setSpacing(7)
+        browser_title_row = QHBoxLayout()
+        browser_title = QLabel("字体库")
+        browser_title.setObjectName("SectionTitle")
         fav_row = QHBoxLayout()
         self.font_favorite_only = QCheckBox("收藏")
         self.font_favorite_only.toggled.connect(self.refresh_font_list)
@@ -1994,24 +2041,37 @@ class MainWindow(QMainWindow):
         self.font_add_favorite_btn.clicked.connect(self.add_selected_font_favorite)
         self.font_remove_favorite_btn = QPushButton("取消")
         self.font_remove_favorite_btn.clicked.connect(self.remove_selected_font_favorite)
+        browser_title_row.addWidget(browser_title)
+        browser_title_row.addStretch(1)
+        browser_layout.addLayout(browser_title_row)
         fav_row.addWidget(self.font_favorite_only)
         fav_row.addStretch(1)
         fav_row.addWidget(self.font_add_favorite_btn)
         fav_row.addWidget(self.font_remove_favorite_btn)
-        layout.addLayout(fav_row)
+        browser_layout.addLayout(fav_row)
         self.font_list = QListWidget()
-        self.font_list.setMaximumHeight(130)
+        self.font_list.setMinimumHeight(150)
+        self.font_list.setMaximumHeight(260)
         self.font_list.itemSelectionChanged.connect(self.on_font_selection_changed)
         self.font_list.itemDoubleClicked.connect(lambda _item: self.apply_font_to_selected_layer())
-        layout.addWidget(self.font_list)
+        browser_layout.addWidget(self.font_list, 1)
 
         self.font_preview_image = QLabel()
-        self.font_preview_image.setMinimumHeight(86)
-        self.font_preview_image.setMaximumHeight(112)
+        self.font_preview_image.setMinimumHeight(122)
+        self.font_preview_image.setMaximumHeight(168)
         self.font_preview_image.setAlignment(Qt.AlignCenter)
         self.font_preview_image.setObjectName("Panel")
         set_tip(self.font_preview_image, "切换字体时生成本地图片预览；如果系统实际 fallback 到别的字体，会显示 Font Not Found 提示。")
-        layout.addWidget(self.font_preview_image)
+        browser_layout.addWidget(self.font_preview_image)
+
+        layers_panel = QFrame()
+        layers_panel.setObjectName("Panel")
+        layers_layout = QVBoxLayout(layers_panel)
+        layers_layout.setContentsMargins(10, 8, 10, 8)
+        layers_layout.setSpacing(7)
+        layers_title = QLabel("时间线文字层")
+        layers_title.setObjectName("SectionTitle")
+        layers_layout.addWidget(layers_title)
 
         self.font_table = QTableWidget(0, 7)
         self.font_table.setHorizontalHeaderLabels(["#", "Timecode", "类型", "轨道", "当前字体", "状态", "文字 / 说明"])
@@ -2032,11 +2092,25 @@ class MainWindow(QMainWindow):
         self.font_table.setColumnWidth(6, 260)
         self.font_table.cellDoubleClicked.connect(lambda _row, _col: self.jump_to_selected_font_item())
         self.font_table.itemSelectionChanged.connect(lambda: self.update_font_preview(self.selected_font_name()))
-        layout.addWidget(self.font_table, 1)
+        layers_layout.addWidget(self.font_table, 1)
+        main_split.addWidget(browser_panel)
+        main_split.addWidget(layers_panel)
+        main_split.setSizes([430, 690])
+        layout.addWidget(main_split, 1)
 
+        lower_split = QSplitter(Qt.Horizontal)
+        lower_split.setChildrenCollapsible(False)
+        style_panel = QFrame()
+        style_panel.setObjectName("Panel")
+        style_layout = QVBoxLayout(style_panel)
+        style_layout.setContentsMargins(10, 8, 10, 8)
+        style_layout.setSpacing(7)
+        style_title = QLabel("本地 Text+ 样式库")
+        style_title.setObjectName("SectionTitle")
+        style_layout.addWidget(style_title)
         library_row = QHBoxLayout()
         self.font_style_library_list = QListWidget()
-        self.font_style_library_list.setMaximumHeight(76)
+        self.font_style_library_list.setMaximumHeight(92)
         self.font_style_library_list.itemSelectionChanged.connect(self.on_font_style_library_selection_changed)
         set_tip(self.font_style_library_list, "本地 Text+ 样式库；选择样式后会载入预览，也可直接应用到选中的 Text+。")
         library_buttons = QVBoxLayout()
@@ -2054,16 +2128,24 @@ class MainWindow(QMainWindow):
         library_buttons.addWidget(self.font_delete_style_btn)
         library_row.addWidget(self.font_style_library_list, 1)
         library_row.addLayout(library_buttons)
-        layout.addLayout(library_row)
+        style_layout.addLayout(library_row)
 
         self.font_style_preview_image = QLabel()
         self.font_style_preview_image.setMinimumHeight(54)
-        self.font_style_preview_image.setMaximumHeight(78)
+        self.font_style_preview_image.setMaximumHeight(88)
         self.font_style_preview_image.setAlignment(Qt.AlignCenter)
         self.font_style_preview_image.setObjectName("Panel")
         set_tip(self.font_style_preview_image, "16:9 标题安全区预览；用于快速判断样式在画幅中的大概位置、字号和颜色。")
-        layout.addWidget(self.font_style_preview_image)
+        style_layout.addWidget(self.font_style_preview_image)
 
+        srt_panel = QFrame()
+        srt_panel.setObjectName("Panel")
+        srt_layout = QVBoxLayout(srt_panel)
+        srt_layout.setContentsMargins(10, 8, 10, 8)
+        srt_layout.setSpacing(7)
+        srt_title = QLabel("SRT 转 Text+")
+        srt_title.setObjectName("SectionTitle")
+        srt_layout.addWidget(srt_title)
         template_row = QHBoxLayout()
         self.caption_template_combo = QComboBox()
         self.caption_template_combo.addItem("内置默认 Text+ 模板", "")
@@ -2083,7 +2165,7 @@ class MainWindow(QMainWindow):
         template_row.addWidget(QLabel("SRT模板"))
         template_row.addWidget(self.caption_template_combo, 1)
         template_row.addWidget(self.refresh_caption_templates_btn)
-        layout.addLayout(template_row)
+        srt_layout.addLayout(template_row)
 
         actions = QHBoxLayout()
         self.font_jump_btn = QPushButton("跳转")
@@ -2115,7 +2197,11 @@ class MainWindow(QMainWindow):
         actions.addWidget(self.font_apply_style_btn)
         actions.addWidget(self.font_convert_srt_btn)
         actions.addStretch(1)
-        layout.addLayout(actions)
+        srt_layout.addLayout(actions)
+        lower_split.addWidget(style_panel)
+        lower_split.addWidget(srt_panel)
+        lower_split.setSizes([560, 560])
+        layout.addWidget(lower_split)
 
         self.font_style_note = QLabel("提示：Resolve 21+ 自带粘贴属性支持部分属性复制；本插件向下兼容 Resolve 19/20/21，可批量复制/应用 Text+ 字体、描边、阴影等样式。")
         self.font_style_note.setObjectName("Muted")
@@ -4125,7 +4211,7 @@ class MainWindow(QMainWindow):
             self.text_next_match_btn.setText("下一个匹配")
         self.text_status.setText(base_message)
         self.text_initial_panel.hide()
-        for widget in (self.text_search_panel, self.text_replace_panel, self.text_table, self.text_status):
+        for widget in (self.text_search_panel, self.text_replace_panel, self.text_table_panel, self.text_status):
             widget.show()
         self.side_tabs.setCurrentWidget(self.text_tab)
         self._log(self.text_status.text())
