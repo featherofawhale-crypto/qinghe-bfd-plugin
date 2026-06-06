@@ -1403,11 +1403,12 @@ class MainWindow(QMainWindow):
         self.connection_badge.setAlignment(Qt.AlignCenter)
         set_tip(self.connection_badge, "已连接表示控制台能读到当前 Resolve 工程；离线时仍可保存参数，稍后由检测引擎读取。")
 
-        self.text_compact_btn = QPushButton("文字小窗")
-        self.text_compact_btn.setIcon(self.style().standardIcon(QStyle.SP_TitleBarShadeButton))
-        self.text_compact_btn.setFixedHeight(34)
-        set_tip(self.text_compact_btn, "折叠成只显示文字/字体工具的小窗口；再点一次恢复完整面板。")
-        self.text_compact_btn.clicked.connect(self.toggle_text_compact_mode)
+        self.compact_restore_btn = QPushButton("完整面板")
+        self.compact_restore_btn.setIcon(self.style().standardIcon(QStyle.SP_TitleBarUnshadeButton))
+        self.compact_restore_btn.setFixedHeight(34)
+        self.compact_restore_btn.hide()
+        set_tip(self.compact_restore_btn, "退出文字/字体小窗，恢复完整检测面板。")
+        self.compact_restore_btn.clicked.connect(self.restore_full_panel)
 
         self.donate_btn = QPushButton("捐赠")
         self.donate_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogYesButton))
@@ -1427,7 +1428,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.theme_combo, 0, Qt.AlignTop)
         layout.addWidget(self.donate_btn, 0, Qt.AlignTop)
         layout.addWidget(self.connection_badge, 0, Qt.AlignTop)
-        layout.addWidget(self.text_compact_btn, 0, Qt.AlignTop)
+        layout.addWidget(self.compact_restore_btn, 0, Qt.AlignTop)
         return layout
 
     def _build_timeline_group(self) -> QGroupBox:
@@ -1435,19 +1436,18 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(box)
         layout.setSpacing(8)
 
-        target_row = QHBoxLayout()
-        target_row.setSpacing(8)
-        io_row = QHBoxLayout()
-        io_row.setSpacing(8)
+        timeline_grid = QGridLayout()
+        timeline_grid.setHorizontalSpacing(8)
+        timeline_grid.setVerticalSpacing(8)
         batch_row = QHBoxLayout()
         batch_row.setSpacing(8)
 
         self.timeline_combo = QComboBox()
-        self.timeline_combo.setMinimumWidth(150)
-        self.timeline_combo.setMaximumWidth(360)
-        self.timeline_combo.setMinimumContentsLength(14)
+        self.timeline_combo.setMinimumWidth(220)
+        self.timeline_combo.setMaximumWidth(520)
+        self.timeline_combo.setMinimumContentsLength(22)
         self.timeline_combo.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self.timeline_combo.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.timeline_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         set_tip(self.timeline_combo, "选择要检测的 Resolve 时间线；默认会优先当前打开的时间线。")
         self.timeline_combo.currentIndexChanged.connect(self.on_timeline_changed)
         refresh = QPushButton("刷新")
@@ -1455,9 +1455,9 @@ class MainWindow(QMainWindow):
         refresh.setFixedWidth(76)
         set_tip(refresh, "重新读取 DaVinci Resolve 当前工程内的时间线列表。")
         refresh.clicked.connect(self.refresh_timelines)
-        self.read_marks_btn = QPushButton("读IO")
+        self.read_marks_btn = QPushButton("入出点")
         self.read_marks_btn.setIcon(self.style().standardIcon(QStyle.SP_ArrowDown))
-        self.read_marks_btn.setFixedWidth(68)
+        self.read_marks_btn.setFixedWidth(86)
         set_tip(self.read_marks_btn, "读取 Resolve 当前时间线的入点/出点，自动填入复杂模式需要的检测范围。")
         self.read_marks_btn.clicked.connect(self.fill_in_out_from_current_timeline_marks)
         self.full_timeline_btn = QPushButton("全时间线")
@@ -1467,13 +1467,15 @@ class MainWindow(QMainWindow):
         self.full_timeline_btn.clicked.connect(self.use_full_timeline_range)
 
         self.io_in = QLineEdit()
-        self.io_in.setMinimumWidth(92)
-        self.io_in.setMaximumWidth(138)
+        self.io_in.setMinimumWidth(128)
+        self.io_in.setMaximumWidth(190)
+        self.io_in.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.io_in.setPlaceholderText("01:00:00:00")
         set_tip(self.io_in, "限制检测起点。Resolve 19 API无法读取IO，请手动输入。复杂模式必须填写。")
         self.io_out = QLineEdit()
-        self.io_out.setMinimumWidth(92)
-        self.io_out.setMaximumWidth(138)
+        self.io_out.setMinimumWidth(128)
+        self.io_out.setMaximumWidth(190)
+        self.io_out.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.io_out.setPlaceholderText("01:02:30:00")
         set_tip(self.io_out, "限制检测终点。复杂模式必须填写出点，避免渲染整条时间线导致过慢。")
 
@@ -1490,29 +1492,31 @@ class MainWindow(QMainWindow):
         set_tip(self.batch_timeline_list, "勾选要批量检测的时间线；每条时间线会使用自己的帧率换算阈值。")
 
         target_label = QLabel("目标时间线")
-        target_label.setFixedWidth(86)
-        target_row.addWidget(target_label)
-        target_row.addWidget(self.timeline_combo)
-        target_row.addWidget(refresh)
-        target_row.addWidget(self.read_marks_btn)
-        target_row.addStretch(1)
+        target_label.setFixedWidth(72)
 
         in_label = QLabel("入点")
         out_label = QLabel("出点")
         in_label.setFixedWidth(42)
         out_label.setFixedWidth(42)
-        io_row.addWidget(in_label)
-        io_row.addWidget(self.io_in)
-        io_row.addWidget(out_label)
-        io_row.addWidget(self.io_out)
-        io_row.addWidget(self.full_timeline_btn)
-        io_row.addStretch(1)
+
+        timeline_grid.addWidget(target_label, 0, 0)
+        timeline_grid.addWidget(self.timeline_combo, 0, 1, 1, 3)
+        timeline_grid.addWidget(refresh, 0, 4)
+        timeline_grid.addWidget(self.read_marks_btn, 0, 5)
+        timeline_grid.addWidget(in_label, 1, 0)
+        timeline_grid.addWidget(self.io_in, 1, 1)
+        timeline_grid.addWidget(out_label, 1, 2)
+        timeline_grid.addWidget(self.io_out, 1, 3)
+        timeline_grid.addWidget(self.full_timeline_btn, 1, 4, 1, 2)
+        timeline_grid.setColumnStretch(1, 3)
+        timeline_grid.setColumnStretch(3, 3)
+        timeline_grid.setColumnMinimumWidth(4, 76)
+        timeline_grid.setColumnMinimumWidth(5, 86)
 
         batch_row.addWidget(self.chk_batch_timelines)
         batch_row.addWidget(self.batch_timeline_list, 1)
 
-        layout.addLayout(target_row)
-        layout.addLayout(io_row)
+        layout.addLayout(timeline_grid)
         layout.addLayout(batch_row)
         return box
 
@@ -1760,11 +1764,11 @@ class MainWindow(QMainWindow):
         set_tip(self.side_tabs, "结果、音频扫描、文字和字体工具会一直留在主界面右侧，检测完成后自动回到结果页。")
         return self.side_tabs
 
-    def toggle_text_compact_mode(self) -> None:
+    def restore_full_panel(self) -> None:
         if self._font_compact_mode:
             self.set_font_compact_mode(False)
-            return
-        self.set_text_compact_mode(not self._text_compact_mode)
+        if self._text_compact_mode:
+            self.set_text_compact_mode(False)
 
     def set_text_compact_mode(self, enabled: bool) -> None:
         if enabled == self._text_compact_mode:
@@ -1782,16 +1786,15 @@ class MainWindow(QMainWindow):
             self.text_table.setColumnWidth(0, 46)
             self.text_table.setColumnWidth(1, 96)
             self.text_table.setColumnWidth(2, 48)
-            self.text_compact_btn.setText("完整面板")
-            self.text_compact_btn.setIcon(self.style().standardIcon(QStyle.SP_TitleBarUnshadeButton))
+            self.compact_restore_btn.show()
             self.resize(560, 520)
         else:
             self.setMinimumSize(960, 640)
             self.left_panel.show()
             self.side_tabs.tabBar().show()
             self.text_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Interactive)
-            self.text_compact_btn.setText("文字小窗")
-            self.text_compact_btn.setIcon(self.style().standardIcon(QStyle.SP_TitleBarShadeButton))
+            if not self._font_compact_mode:
+                self.compact_restore_btn.hide()
             if self._normal_geometry is not None:
                 self.setGeometry(self._normal_geometry)
             else:
@@ -1814,8 +1817,7 @@ class MainWindow(QMainWindow):
             self.font_preview_image.setMaximumHeight(150)
             self.font_table.setColumnWidth(4, 360)
             self.font_table.setColumnWidth(6, 380)
-            self.text_compact_btn.setText("完整面板")
-            self.text_compact_btn.setIcon(self.style().standardIcon(QStyle.SP_TitleBarUnshadeButton))
+            self.compact_restore_btn.show()
             self.resize(1180, 780)
         else:
             self.setMinimumSize(960, 640)
@@ -1826,8 +1828,8 @@ class MainWindow(QMainWindow):
             self.font_preview_image.setMaximumHeight(112)
             self.font_table.setColumnWidth(4, 180)
             self.font_table.setColumnWidth(6, 260)
-            self.text_compact_btn.setText("文字小窗")
-            self.text_compact_btn.setIcon(self.style().standardIcon(QStyle.SP_TitleBarShadeButton))
+            if not self._text_compact_mode:
+                self.compact_restore_btn.hide()
             if self._normal_geometry is not None:
                 self.setGeometry(self._normal_geometry)
             else:
@@ -4689,6 +4691,8 @@ class MainWindow(QMainWindow):
         widget = self.side_tabs.currentWidget()
         if widget:
             self.animate_widget(widget, 180)
+        if widget is self.text_tab and not self._text_compact_mode and not self._font_compact_mode:
+            QTimer.singleShot(0, lambda: self.set_text_compact_mode(True))
         if widget is self.font_tab and not self._font_compact_mode and not self._text_compact_mode:
             QTimer.singleShot(0, lambda: self.set_font_compact_mode(True))
         if widget is self.font_tab:

@@ -109,10 +109,19 @@ class PySideUiRegressionTests(unittest.TestCase):
 
     def test_timeline_row_keeps_refresh_and_io_visible(self) -> None:
         source = (PYSIDE_DIR / "app.py").read_text(encoding="utf-8")
-        self.assertIn("self.timeline_combo.setMaximumWidth(360)", source)
-        self.assertIn("self.timeline_combo.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)", source)
-        self.assertIn("target_row.addWidget(self.read_marks_btn)", source)
-        self.assertIn("target_row.addStretch(1)", source)
+        self.assertIn("self.timeline_combo.setMaximumWidth(520)", source)
+        self.assertIn("self.timeline_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)", source)
+        self.assertIn("timeline_grid.addWidget(self.read_marks_btn", source)
+        self.assertIn("timeline_grid.setColumnStretch(1, 3)", source)
+        self.assertIn("timeline_grid.setColumnMinimumWidth(5, 86)", source)
+
+    def test_text_tab_auto_enters_compact_mode_without_header_small_window_button(self) -> None:
+        source = (PYSIDE_DIR / "app.py").read_text(encoding="utf-8")
+        self.assertNotIn('QPushButton("文字小窗")', source)
+        self.assertIn('QPushButton("完整面板")', source)
+        self.assertIn("def restore_full_panel", source)
+        self.assertIn("widget is self.text_tab and not self._text_compact_mode", source)
+        self.assertIn("QTimer.singleShot(0, lambda: self.set_text_compact_mode(True))", source)
 
     def test_audio_fx_cards_are_tutorial_only(self) -> None:
         source = (PYSIDE_DIR / "app.py").read_text(encoding="utf-8")
@@ -138,11 +147,11 @@ class PySideUiRegressionTests(unittest.TestCase):
     def test_timeline_group_has_full_timeline_button(self) -> None:
         source = (PYSIDE_DIR / "app.py").read_text(encoding="utf-8")
         self.assertIn('QPushButton("全时间线")', source)
-        self.assertIn('QPushButton("读IO")', source)
-        self.assertIn("target_row.addWidget(refresh)", source)
-        self.assertIn("target_row.addWidget(self.read_marks_btn)", source)
-        self.assertIn("io_row.addWidget(self.full_timeline_btn)", source)
-        self.assertIn("self.io_in.setMaximumWidth(138)", source)
+        self.assertIn('QPushButton("入出点")', source)
+        self.assertIn("timeline_grid.addWidget(refresh", source)
+        self.assertIn("timeline_grid.addWidget(self.read_marks_btn", source)
+        self.assertIn("timeline_grid.addWidget(self.full_timeline_btn", source)
+        self.assertIn("self.io_in.setMaximumWidth(190)", source)
         self.assertIn("slider.setMaximumWidth(180)", source)
         self.assertIn("def use_full_timeline_range", source)
         self.assertIn("self.io_in.clear()", source)
