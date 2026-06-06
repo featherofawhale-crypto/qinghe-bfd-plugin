@@ -3109,7 +3109,9 @@ class MainWindow(QMainWindow):
             data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         except Exception:
             data = {}
-        rules = data.get("rules") if isinstance(data, dict) else []
+        rules = data.get("rules", []) if isinstance(data, dict) else []
+        if not isinstance(rules, list):
+            rules = []
         self.font_probe_rule_items = [item for item in rules if isinstance(item, dict)]
         self.font_probe_rules = {}
         for item in self.font_probe_rule_items:
