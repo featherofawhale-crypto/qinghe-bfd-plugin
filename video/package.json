@@ -1,0 +1,19 @@
+{
+  "name": "bfd-intro-video",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "remotion studio src/index.ts",
+    "render": "remotion render BFD-Intro out/bfd-intro.mp4 --codec=h264"
+  },
+  "devDependencies": {
+    "@remotion/cli": "^4.0.469",
+    "@types/react": "^19.2.15",
+    "remotion": "^4.0.469",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  }
+}
