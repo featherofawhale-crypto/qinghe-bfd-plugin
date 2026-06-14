@@ -1,70 +1,27 @@
 (() => {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const canvas = document.getElementById("hero-canvas");
-  const ctx = canvas?.getContext("2d");
-  let width = 0;
-  let height = 0;
-  let particles = [];
-  let raf = 0;
-
-  function resizeCanvas() {
-    if (!canvas || !ctx) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    width = canvas.clientWidth;
-    height = canvas.clientHeight;
-    canvas.width = Math.floor(width * dpr);
-    canvas.height = Math.floor(height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    particles = Array.from({ length: Math.max(46, Math.floor(width / 18)) }, (_, i) => ({
-      x: Math.random() * width,
-      y: Math.random() * height,
-      r: 0.6 + Math.random() * 2.2,
-      vx: -0.25 + Math.random() * 0.5,
-      vy: -0.18 + Math.random() * 0.36,
-      hue: i % 3,
-    }));
-  }
-
-  function drawCanvas() {
-    if (!ctx || !canvas) return;
-    ctx.clearRect(0, 0, width, height);
-    const gradient = ctx.createRadialGradient(width * 0.68, height * 0.44, 30, width * 0.68, height * 0.44, Math.max(width, height) * 0.72);
-    gradient.addColorStop(0, "rgba(117,214,157,0.32)");
-    gradient.addColorStop(0.34, "rgba(224,180,91,0.16)");
-    gradient.addColorStop(1, "rgba(6,8,7,0)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-
-    particles.forEach((p, index) => {
-      p.x += p.vx;
-      p.y += p.vy;
-      if (p.x < -20) p.x = width + 20;
-      if (p.x > width + 20) p.x = -20;
-      if (p.y < -20) p.y = height + 20;
-      if (p.y > height + 20) p.y = -20;
-      ctx.beginPath();
-      ctx.fillStyle = p.hue === 0 ? "rgba(117,214,157,0.62)" : p.hue === 1 ? "rgba(224,180,91,0.5)" : "rgba(225,127,99,0.44)";
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
-      const next = particles[(index + 7) % particles.length];
-      const dx = next.x - p.x;
-      const dy = next.y - p.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 150) {
-        ctx.strokeStyle = `rgba(245,241,232,${0.08 * (1 - dist / 150)})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(next.x, next.y);
-        ctx.stroke();
-      }
+  const bg = document.getElementById("vanta-bg");
+  if (bg && !reduceMotion && window.VANTA?.FOG && window.THREE) {
+    const effect = window.VANTA.FOG({
+      el: bg,
+      THREE: window.THREE,
+      mouseControls: true,
+      touchControls: true,
+      gyroControls: false,
+      minHeight: 200,
+      minWidth: 200,
+      highlightColor: 0x75d69d,
+      midtoneColor: 0x173126,
+      lowlightColor: 0x060807,
+      baseColor: 0x050706,
+      blurFactor: 0.62,
+      speed: 0.75,
+      zoom: 0.72,
     });
-    raf = requestAnimationFrame(drawCanvas);
+    window.addEventListener("pagehide", () => effect.destroy());
+  } else if (bg) {
+    bg.classList.add("is-static");
   }
-
-  resizeCanvas();
-  if (!reduceMotion) drawCanvas();
-  window.addEventListener("resize", resizeCanvas, { passive: true });
 
   const hasGsap = window.gsap && window.ScrollTrigger;
   if (!hasGsap || reduceMotion) return;

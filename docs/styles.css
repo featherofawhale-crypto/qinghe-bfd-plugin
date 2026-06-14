@@ -15,13 +15,45 @@ html { scroll-behavior: smooth; background: var(--bg); }
 body {
   margin: 0;
   color: var(--ink);
-  background: var(--bg);
+  background:
+    linear-gradient(180deg, #07100c 0%, var(--bg) 44%, #050706 100%);
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   letter-spacing: 0;
   overflow-x: hidden;
 }
 a { color: inherit; text-decoration: none; }
 img { display: block; width: 100%; height: auto; }
+
+#vanta-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 70% 25%, rgba(117,214,157,0.18), transparent 34%),
+    radial-gradient(circle at 20% 78%, rgba(224,180,91,0.12), transparent 30%),
+    linear-gradient(180deg, #07100c 0%, #050706 100%);
+}
+#vanta-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 28%, transparent 0 34%, rgba(6,8,7,0.22) 68%, rgba(6,8,7,0.62) 100%),
+    linear-gradient(to bottom, rgba(6,8,7,0.04), rgba(6,8,7,0.5) 100%);
+  mix-blend-mode: multiply;
+}
+#vanta-bg canvas {
+  opacity: 0.86;
+}
+
+main, .site-footer {
+  position: relative;
+  z-index: 1;
+}
 
 .site-header {
   position: fixed;
@@ -82,19 +114,12 @@ img { display: block; width: 100%; height: auto; }
   padding: 96px clamp(22px, 5vw, 78px) 58px;
   overflow: hidden;
 }
-#hero-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.88;
-}
 .hero-vignette {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 68% 48%, transparent 0 28%, rgba(6,8,7,0.62) 56%, var(--bg) 88%),
-    linear-gradient(to bottom, rgba(6,8,7,0.05), var(--bg) 96%);
+    radial-gradient(circle at 68% 48%, transparent 0 26%, rgba(6,8,7,0.54) 56%, rgba(6,8,7,0.86) 88%),
+    linear-gradient(to bottom, rgba(6,8,7,0.08), rgba(6,8,7,0.8) 96%);
 }
 .hero-copy-block, .hero-product { position: relative; z-index: 2; }
 .eyebrow, .section-kicker {
@@ -541,9 +566,9 @@ img { display: block; width: 100%; height: auto; }
 
 .community-section {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(330px, 0.55fr);
   align-items: end;
-  gap: 24px;
+  gap: 28px;
   padding-top: 0;
 }
 .community-section > div:first-child {
@@ -567,22 +592,41 @@ img { display: block; width: 100%; height: auto; }
   line-height: 1.78;
   font-size: 18px;
 }
+.star-link {
+  min-height: 38px;
+  margin-top: 20px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(245,241,232,0.92);
+  color: #08100c;
+  font-size: 14px;
+  font-weight: 900;
+  transition: transform 180ms ease, background 180ms ease;
+}
+.star-link:hover {
+  transform: translateY(-2px);
+  background: var(--ink);
+}
 .community-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
   justify-content: flex-end;
 }
 .donate-mini {
   display: flex;
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+  width: 100%;
+  justify-content: center;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255,255,255,0.045);
 }
 .donate-mini figure {
-  width: 104px;
+  width: min(138px, 42vw);
   margin: 0;
 }
 .donate-mini img {
@@ -655,7 +699,6 @@ img { display: block; width: 100%; height: auto; }
   .function-grid article, .innovation-list article { min-height: auto; }
   .function-grid h3 { margin-top: 42px; }
   .community-actions { justify-content: stretch; }
-  .community-actions > a { width: 100%; }
   .donate-mini { justify-content: center; width: 100%; }
 }
 
@@ -666,6 +709,8 @@ img { display: block; width: 100%; height: auto; }
   .hero { padding-inline: 20px; }
   .hero-actions, .download-actions, .primary-button, .secondary-button, .netdisk-panel .primary-button { width: 100%; }
   .hero-points span { flex: 1 1 160px; justify-content: center; }
+  .donate-mini { gap: 12px; padding: 12px; }
+  .donate-mini figure { width: min(128px, 40vw); }
   .quick-features { grid-template-columns: 1fr; }
   .quick-features div { min-height: auto; }
   .section-heading h2, .install-copy h2, .download-panel h2 { font-size: 42px; }

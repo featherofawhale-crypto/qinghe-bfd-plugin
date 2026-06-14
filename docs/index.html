@@ -7,11 +7,14 @@
     <meta name="theme-color" content="#060807" />
     <title>清何剪辑工具箱 | DaVinci Resolve 剪辑检查插件</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./vendor/three.min.js"></script>
+    <script defer src="./vendor/vanta.fog.min.js"></script>
     <script defer src="./vendor/gsap.min.js"></script>
     <script defer src="./vendor/ScrollTrigger.min.js"></script>
     <script defer src="./app.js"></script>
   </head>
   <body>
+    <div id="vanta-bg" aria-hidden="true"></div>
     <header class="site-header">
       <a class="brand" href="#top" aria-label="清何剪辑工具箱首页">
         <span class="brand-mark">清</span>
@@ -29,7 +32,6 @@
 
     <main id="top">
       <section class="hero" aria-labelledby="hero-title">
-        <canvas id="hero-canvas" aria-hidden="true"></canvas>
         <div class="hero-vignette" aria-hidden="true"></div>
         <div class="hero-copy-block">
           <p class="eyebrow">DaVinci Resolve 剪辑质检插件</p>
@@ -273,9 +275,9 @@
             GitHub 星标能让更多达芬奇剪辑师看到这个工具，也方便后续跟进更新。
             如果它帮你省过时间，也可以扫旁边小码随缘支持。
           </p>
+          <a class="star-link" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin">去 GitHub 点 Star</a>
         </div>
         <div class="community-actions">
-          <a class="primary-button" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin">去 GitHub 点 Star</a>
           <div class="donate-mini" aria-label="随缘支持">
             <figure>
               <img src="./assets/donate-wechat.jpg" alt="微信打赏二维码" />
