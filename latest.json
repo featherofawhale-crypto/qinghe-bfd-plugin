@@ -4,7 +4,7 @@
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
   "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg",
   "package_type": "dmg",
-  "sha256": "bc734c6db58c030932124ad727b6479fa601623e63a21639973c745bcf5d313d",
+  "sha256": "72ddb6a588e3b936a9489df1c47e40c7d4188076a015bf32466797c8a68f39dd",
   "notes": "macOS DMG 一键安装包。国内 CNB 源可放同名 latest.json 与 DMG 附件；GitHub Release 为备用源。",
   "mandatory": false,
   "mirrors": [
@@ -27,7 +27,7 @@
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
       "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg",
       "package_type": "dmg",
-      "sha256": "bc734c6db58c030932124ad727b6479fa601623e63a21639973c745bcf5d313d",
+      "sha256": "72ddb6a588e3b936a9489df1c47e40c7d4188076a015bf32466797c8a68f39dd",
       "notes": "macOS DMG 安装包。插件内更新会下载 DMG，手动打开后运行一键安装。"
     },
     "windows": {
