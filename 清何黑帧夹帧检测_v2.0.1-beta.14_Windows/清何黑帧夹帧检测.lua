@@ -901,7 +901,12 @@ local function try_launch_external_ui()
     dlog("Launching PySide UI: " .. launcher)
     local ok = false
     if sep == "\\" then
-        ok = os.execute('wscript.exe //B "' .. launcher .. '"')
+        local lower_launcher = string.lower(launcher)
+        if lower_launcher:sub(-4) == ".vbs" then
+            ok = os.execute('wscript.exe //B "' .. launcher .. '"')
+        else
+            ok = os.execute('cmd.exe /C start "" "' .. launcher .. '"')
+        end
     else
         ok = os.execute('sh "' .. launcher .. '" >/dev/null 2>&1 &')
     end

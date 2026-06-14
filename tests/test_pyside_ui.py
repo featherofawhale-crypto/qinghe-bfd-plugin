@@ -55,6 +55,8 @@ class PySideUiRegressionTests(unittest.TestCase):
         analyzer_source = (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "black_frame_analyzer.lua").read_text(encoding="utf-8")
 
         self.assertIn("Recent PySide params found; skip launching UI and run detection", entry_source)
+        self.assertIn('cmd.exe /C start "" "', entry_source)
+        self.assertIn('lower_launcher:sub(-4) == ".vbs"', entry_source)
         self.assertIn("detect_mixed_cut = false", bridge_source)
         self.assertIn("MARK_COMPOSITE_NONORMAL", (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "config.lua").read_text(encoding="utf-8"))
         self.assertNotIn("clip.timeline_end_frame", analyzer_source)
