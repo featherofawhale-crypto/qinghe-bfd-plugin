@@ -1,3 +1,0 @@
-# 强制 Windows 批处理文件使用 CRLF 行尾
-# cmd.exe 对 LF-only 的 .bat 文件解析不稳定，多行 if/for 块会出错
-*.bat text eol=crlf
