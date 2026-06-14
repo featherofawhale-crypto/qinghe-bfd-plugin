@@ -109,54 +109,80 @@
     scrollTrigger: { trigger: ".availability", start: "top 82%" },
   });
 
-  const steps = [...document.querySelectorAll(".story-steps > div")];
-  const title = document.querySelector(".story-title");
-  const text = document.querySelector(".story-text");
+  const switcher = document.querySelector(".interface-switcher");
+  if (switcher) {
+    const shots = [...switcher.querySelectorAll(".interface-stage img")];
+    const buttons = [...switcher.querySelectorAll(".interface-tabs button")];
+    const kicker = switcher.querySelector(".interface-kicker");
+    const title = switcher.querySelector(".interface-copy h3");
+    const copy = switcher.querySelector(".interface-copy p");
+    let activeShot = 0;
+    let timer = 0;
 
-  if (window.matchMedia("(min-width: 901px)").matches) {
-    gsap.set(".screen-results", { xPercent: 8, yPercent: 8, scale: 0.88, opacity: 0.45, rotationY: -8 });
-    gsap.set(".screen-fonts", { xPercent: 16, yPercent: 16, scale: 0.76, opacity: 0.28, rotationY: -14 });
+    const showShot = (index) => {
+      activeShot = (index + shots.length) % shots.length;
+      switcher.style.setProperty("--shot-index", String(activeShot));
+      shots.forEach((shot, shotIndex) => {
+        shot.classList.toggle("is-active", shotIndex === activeShot);
+      });
+      buttons.forEach((button, buttonIndex) => {
+        const selected = buttonIndex === activeShot;
+        button.classList.toggle("is-active", selected);
+        button.setAttribute("aria-selected", String(selected));
+      });
+      const shot = shots[activeShot];
+      if (shot && kicker && title && copy) {
+        gsap.to([kicker, title, copy], {
+          y: -8,
+          autoAlpha: 0,
+          duration: 0.16,
+          onComplete: () => {
+            kicker.textContent = shot.dataset.kicker || "";
+            title.textContent = shot.dataset.title || "";
+            copy.textContent = shot.dataset.copy || "";
+            gsap.fromTo([kicker, title, copy], { y: 10, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.28, stagger: 0.035 });
+          },
+        });
+      }
+    };
 
-    const storyTl = gsap.timeline({
-      scrollTrigger: {
-        trigger: ".story",
-        start: "top top",
-        end: "bottom bottom",
-        scrub: 0.6,
-        onUpdate: (self) => {
-          const index = Math.min(2, Math.floor(self.progress * 3));
-          const step = steps[index];
-          if (step && title && title.textContent !== step.dataset.title) {
-            gsap.to([title, text], {
-              y: -12,
-              autoAlpha: 0,
-              duration: 0.18,
-              onComplete: () => {
-                title.textContent = step.dataset.title;
-                text.textContent = step.dataset.text;
-                gsap.fromTo([title, text], { y: 14, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.32, stagger: 0.04 });
-              },
-            });
-          }
+    const restartTimer = () => {
+      window.clearInterval(timer);
+      timer = window.setInterval(() => showShot(activeShot + 1), 4200);
+    };
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        showShot(Number(button.dataset.shot || 0));
+        restartTimer();
+      });
+    });
+
+    restartTimer();
+
+    gsap.from(switcher, {
+      y: 54,
+      clipPath: "inset(10% 0 10% 0)",
+      autoAlpha: 0,
+      scrollTrigger: { trigger: switcher, start: "top 82%" },
+    });
+
+    gsap.fromTo(
+      ".interface-stage",
+      { y: 28 },
+      {
+        y: -18,
+        scrollTrigger: {
+          trigger: switcher,
+          start: "top bottom",
+          end: "bottom top",
+          scrub: true,
         },
       },
-    });
-
-    storyTl
-      .to(".screen-main", { xPercent: -16, yPercent: -4, scale: 0.84, opacity: 0.42, rotationY: 10 }, 0.14)
-      .to(".screen-results", { xPercent: 0, yPercent: 0, scale: 1, opacity: 1, rotationY: 0 }, 0.14)
-      .to(".screen-fonts", { xPercent: 10, yPercent: 10, scale: 0.84, opacity: 0.36, rotationY: -8 }, 0.14)
-      .to(".screen-results", { xPercent: -16, yPercent: -4, scale: 0.84, opacity: 0.42, rotationY: 10 }, 0.58)
-      .to(".screen-fonts", { xPercent: 0, yPercent: 0, scale: 1, opacity: 1, rotationY: 0 }, 0.58);
-
-    gsap.to(".story-orbit", {
-      rotation: 360,
-      ease: "none",
-      scrollTrigger: { trigger: ".story", start: "top bottom", end: "bottom top", scrub: true },
-    });
+    );
   }
 
-  gsap.utils.toArray(".feature-row article, .install-copy, .steps, .download-panel, .legal-section > div").forEach((el) => {
+  gsap.utils.toArray(".function-grid article, .innovation-list article, .install-copy, .steps, .download-panel, .legal-section > div").forEach((el) => {
     gsap.from(el, {
       y: 42,
       autoAlpha: 0,
@@ -164,7 +190,7 @@
     });
   });
 
-  gsap.utils.toArray(".feature-row article").forEach((card) => {
+  gsap.utils.toArray(".function-grid article, .innovation-list article").forEach((card) => {
     const yTo = gsap.quickTo(card, "y", { duration: 0.35, ease: "power3.out" });
     card.addEventListener("mouseenter", () => yTo(-8));
     card.addEventListener("mouseleave", () => yTo(0));

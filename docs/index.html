@@ -18,8 +18,9 @@
         <span>清何剪辑工具箱</span>
       </a>
       <nav class="nav-links" aria-label="页面导航">
-        <a href="#story">体验</a>
+        <a href="#story">界面</a>
         <a href="#features">功能</a>
+        <a href="#innovation">亮点</a>
         <a href="#install">安装</a>
         <a href="#download">下载</a>
       </nav>
@@ -70,58 +71,115 @@
         </div>
       </section>
 
-      <section id="story" class="story">
-        <div class="story-stage">
-          <div class="story-visual">
-            <div class="screen-stack">
-              <img class="screen screen-main" src="./assets/qinghe-main-latest.png" alt="清何剪辑工具箱 v2.0.1 主界面" />
-              <img class="screen screen-results" src="./assets/qinghe-subtitle-window.png" alt="字幕和 Text+ 第二窗口" />
-              <img class="screen screen-fonts" src="./assets/qinghe-font-window.png" alt="字体工具小窗" />
-            </div>
-            <div class="story-orbit" aria-hidden="true">
-              <span></span><span></span><span></span>
-            </div>
-          </div>
-          <div class="story-copy">
+      <section id="story" class="showcase-section">
+        <div class="section-heading">
           <p class="section-kicker">最新版界面</p>
-          <h2 class="story-title">一条时间线，三种复核视角。</h2>
-          <p class="story-text">
-              主面板负责检测，字幕第二窗口负责快速改字，字体小窗负责 Text+ 样式复核。滚动时界面会随章节切换，就像把一次交付检查拆成几个清晰步骤。
-            </p>
-          </div>
+          <h2>单个界面看清楚，再切到下一个。</h2>
+          <p>
+            下载只是入口，真正重要的是它能在 Resolve 里帮你做什么。这里同一时间只展示一张完整截图，自动轮播也可以手动切换，避免界面互相压住看不清。
+          </p>
         </div>
-        <div class="story-steps" aria-hidden="true">
-          <div data-title="先把画面问题扫出来。" data-text="黑帧、夹帧、重复帧和坏帧会被归类，标记颜色对应风险级别，长时间线也能快速定位。"></div>
-          <div data-title="字幕第二窗口，专心改字。" data-text="SRT 和 Text+ 文字层集中读取，搜索、替换、删除和撤回都放在小窗里，适合边看时间线边处理字幕。"></div>
-          <div data-title="字体小窗，把 Text+ 细节收住。" data-text="字体、样式库、Text+ 图层和候选差异集中复核，减少交付后字体丢失、样式不统一的尴尬。"></div>
+        <div class="interface-switcher" data-active="0">
+          <div class="interface-copy" aria-live="polite">
+            <span class="interface-kicker">主面板</span>
+            <h3>交片前一键扫时间线风险。</h3>
+            <p>黑帧、夹帧、重复、透明遮挡、音频、字幕、字体和更新入口集中在同一个控制面板里。检测结果会写回 Resolve 标记，不需要跳出剪辑现场找问题。</p>
+            <div class="interface-tabs" role="tablist" aria-label="界面截图切换">
+              <button class="is-active" type="button" role="tab" aria-selected="true" data-shot="0">主面板</button>
+              <button type="button" role="tab" aria-selected="false" data-shot="1">字幕第二窗口</button>
+              <button type="button" role="tab" aria-selected="false" data-shot="2">字体窗口</button>
+            </div>
+          </div>
+          <figure class="interface-stage">
+            <img class="is-active" src="./assets/qinghe-main-latest.png" alt="清何剪辑工具箱 v2.0.1 主界面" data-title="交片前一键扫时间线风险。" data-kicker="主面板" data-copy="黑帧、夹帧、重复、透明遮挡、音频、字幕、字体和更新入口集中在同一个控制面板里。检测结果会写回 Resolve 标记，不需要跳出剪辑现场找问题。" />
+            <img src="./assets/qinghe-subtitle-window.png" alt="字幕和 Text+ 第二窗口" data-title="边看时间线，边处理 SRT 和 Text+。" data-kicker="字幕第二窗口" data-copy="SRT、字幕轨和 Text+ 文字集中读取，支持搜索、高亮、替换、删除和撤回，适合短剧、口播、包装字幕的最后一遍校对。" />
+            <img src="./assets/qinghe-font-window.png" alt="字体工具小窗" data-title="把 Text+ 字体和样式统一收住。" data-kicker="字体窗口" data-copy="读取本机字体，识别中文名、英文名和 PostScript 名，扫描时间线 Text+，支持批量替换、样式库和 SRT 转 Text+ 工作流。" />
+            <div class="interface-progress" aria-hidden="true"><span></span></div>
+          </figure>
         </div>
       </section>
 
       <section id="features" class="feature-section">
         <div class="section-heading">
-          <p class="section-kicker">功能覆盖</p>
-          <h2>为剪辑交付做的，不是泛用工具。</h2>
+          <p class="section-kicker">核心功能</p>
+          <h2>围绕达芬奇交付质检做完整闭环。</h2>
+          <p>
+            它不是只找“黑一下”的画面，而是把交片前最容易漏掉的画面、文字、字体、音频和标记问题拆成可复查的模块。
+          </p>
         </div>
-        <div class="feature-row">
+        <div class="function-grid">
           <article>
-            <span>01</span>
-            <h3>画面质检</h3>
-            <p>黑帧、夹帧、卡帧、重复帧、异常画面统一检查，并按风险自动打标。</p>
+            <span>画面异常</span>
+            <h3>黑帧、夹帧、卡帧、转场黑场</h3>
+            <p>检测黑帧、可疑黑帧、短夹帧、卡帧、转场黑场和时间线空位，并按风险写入不同颜色标记。</p>
           </article>
           <article>
-            <span>02</span>
-            <h3>音频复核</h3>
-            <p>辅助检查声道和静音问题，让导出前的最后一遍更有依据。</p>
+            <span>复杂模式</span>
+            <h3>按最终画面像素复核</h3>
+            <p>可渲染 IO 范围后的最终输出画面再分析，用来捕捉调色、OFX、Fusion、遮罩和多轨叠加后才出现的问题。</p>
           </article>
           <article>
-            <span>03</span>
-            <h3>文字与字体</h3>
-            <p>围绕 Text+、字幕模板和字体样式做整理，适合包装、短剧和批量项目。</p>
+            <span>重复检测</span>
+            <h3>路径重复 + 画面指纹重复</h3>
+            <p>不仅看素材路径，还通过画面指纹识别跨文件内容重复，能发现同一画面被换文件名、转码后再次误用。</p>
           </article>
           <article>
-            <span>04</span>
-            <h3>标记回写</h3>
-            <p>检测结果写回 Resolve 时间线，复核路径直接落在你的工作现场。</p>
+            <span>遮挡判断</span>
+            <h3>透明、禁用、PNG/PSD 叠加层</h3>
+            <p>识别透明度、禁用片段、半透明素材和 PNG/PSD 遮挡层，减少多轨包装项目里的误报和漏报。</p>
+          </article>
+          <article>
+            <span>字幕工具</span>
+            <h3>SRT、字幕轨、Text+ 集中校对</h3>
+            <p>优先扫描 SRT 和字幕轨，也能处理 Resolve 文本层与 Text+，搜索高亮不打乱排序，适合边看时间线边改。</p>
+          </article>
+          <article>
+            <span>字体工具</span>
+            <h3>Text+ 字体扫描、替换和样式库</h3>
+            <p>处理中文字体名、英文名和 Fusion 可用名映射，支持字体预览、批量替换、只复制字体和本地 Text+ 样式库。</p>
+          </article>
+          <article>
+            <span>音频辅助</span>
+            <h3>单声道检测、BPM 与节拍标记</h3>
+            <p>可检查音频声道异常，识别选中音频 BPM，并按锚点生成节拍标记，方便音乐卡点和后续复核。</p>
+          </article>
+          <article>
+            <span>标记安全</span>
+            <h3>只清插件标记，保留人工标记</h3>
+            <p>检测结果回写 Resolve 时间线，清理时只处理 `[BFD]`、`[BFD-AUDIO]`、`[QH-BPM]` 等插件标记，避免误删人工备注。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="innovation" class="innovation-section">
+        <div class="section-heading">
+          <p class="section-kicker">创新点</p>
+          <h2>不是“又一个脚本”，而是为真实剪辑现场补漏洞。</h2>
+        </div>
+        <div class="innovation-list">
+          <article>
+            <strong>最终像素检测</strong>
+            <p>复杂模式直接看渲染后的实际画面，能发现只在调色、Fusion、OFX、多轨合成后出现的坏帧。</p>
+          </article>
+          <article>
+            <strong>内容指纹重复</strong>
+            <p>重复判断不只依赖文件名和路径，转码、改名、换容器后的同画面重复也有机会被抓出来。</p>
+          </article>
+          <article>
+            <strong>多轨遮挡语义</strong>
+            <p>把 PNG、PSD、透明度、禁用状态和遮挡关系放进判断，面对包装层、角标、字幕条时更贴近最终成片。</p>
+          </article>
+          <article>
+            <strong>字幕第二窗口</strong>
+            <p>字幕面板独立成小窗，适合把 Resolve 时间线留在屏幕主区域，一边播放定位，一边批量改文字。</p>
+          </article>
+          <article>
+            <strong>Resolve 字体映射</strong>
+            <p>针对 Text+ 和 Fusion 的字体名差异做中文名、英文名、PostScript 名映射，减少“电脑有字体但 Resolve 找不到”的情况。</p>
+          </article>
+          <article>
+            <strong>国内更新链路</strong>
+            <p>更新按钮优先走 CNB 国内源，GitHub 作为备用，同时尽量保留本地样式库、设置和安装身份。</p>
           </article>
         </div>
       </section>
@@ -146,9 +204,9 @@
       <section id="download" class="download-section">
         <div class="download-panel">
           <p class="section-kicker">下载</p>
-          <h2>按系统选择安装包</h2>
+          <h2>普通下载入口</h2>
           <p>
-            macOS 版已发布 DMG 一键安装包。Windows 版上传后会放在这里；百度网盘目录作为国内备用入口，方便同时放 macOS 和 Windows 文件。
+            macOS 版已发布 DMG 一键安装包。Windows 版上传后会补上直链；百度网盘目录作为国内备用入口，方便同时放 macOS 和 Windows 文件。
           </p>
           <div class="platform-grid">
             <article class="platform-card is-ready">
