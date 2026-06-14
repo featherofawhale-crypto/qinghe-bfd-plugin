@@ -1,30 +1,54 @@
-# 清何剪辑工具箱
+# 清何剪辑工具箱（DaVinci Resolve 黑帧/夹帧检测）
 
-面向 DaVinci Resolve 的 macOS 插件安装包，用于黑帧、夹帧、重复片段等剪辑检查工作流。
+这是给 DaVinci Resolve 用户使用的剪辑检查插件。当前公开版本主要用于 macOS，打开安装包后运行一键安装脚本即可使用。
 
-## 下载
+## 它能做什么
 
-请在 GitHub Release 下载 DMG：
+- 检查时间线里的黑帧、疑似夹帧、异常空隙等问题
+- 给检测结果自动打标记，方便回到时间线逐个修正
+- 支持内置 FFmpeg，不要求普通用户自己配置命令行环境
+- 带有插件内“更新”按钮，后续可以直接检查新版本
+
+## 下载 macOS 安装包
+
+请到右侧或下方的 GitHub Release 下载：
 
 - `qinghe-toolbox-v2.0.1-beta.14-macos.dmg`
 
+Release 地址：
 
-当前公开包为 Apple Silicon / arm64 macOS 版本。
+https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest
 
-## 安装
+当前公开包是 Apple Silicon / arm64 macOS 版本。Windows 版本会等在 Windows 电脑上单独打包测试后再发布。
 
-1. 双击打开 DMG。
-2. 右键点击 `一键安装.command`，选择“打开”。
-3. 安装完成后重启 DaVinci Resolve。
-4. 在 DaVinci Resolve 中打开：`工作区 -> 脚本 -> Edit -> 清何黑帧夹帧检测`。
+## 一键安装方法
 
-如果 macOS 提示来自未认证开发者，请使用右键“打开”。这是因为当前公开包未做 Apple Developer notarization。
+1. 下载并双击打开 `qinghe-toolbox-v2.0.1-beta.14-macos.dmg`。
+2. 在打开的窗口里，右键点击 `一键安装.command`。
+3. 选择“打开”，按提示完成安装。
+4. 重启 DaVinci Resolve。
+5. 在 DaVinci Resolve 里打开：`工作区 -> 脚本 -> Edit -> 清何黑帧夹帧检测`。
+
+如果 macOS 提示“无法打开”或“来自未认证开发者”，请不要直接双击脚本，改用右键“打开”。当前公开包没有做 Apple Developer 公证，所以第一次打开时 macOS 会拦一下。
+
+## 插件内更新
+
+插件右上角有“更新”按钮。它会先尝试国内更新源，失败后再走 GitHub 备用源。
+
+当前 macOS 更新清单已经放在：
+
+- `release/latest.json`
+- GitHub Release 附件里的 `latest.json`
+
+macOS 这版更新包使用 DMG。插件会下载 DMG，并提示用户打开安装包后运行一键安装。Windows 更新包暂时不放，等 Windows 端打包测试通过后再同步。
 
 ## 卸载
 
-打开 DMG 后运行：
+重新打开 DMG，运行：
 
 - `一键卸载.command`
+
+也可以手动删除 DaVinci Resolve 脚本目录里的 `清何黑帧夹帧检测.lua` 和 `Modules/black_frame_detector` 文件夹。
 
 ## 打赏支持
 
@@ -33,6 +57,6 @@
 - `donate/wechat.jpg`
 - `donate/alipay.jpg`
 
-## 说明
+## 关于源码
 
-公开仓库只放安装说明、更新清单和打赏素材；安装包放在 GitHub Release。插件源码与内部开发文档不会在此仓库展开发布。
+这个公开仓库只放用户安装说明、更新清单、打赏码和发布包入口。插件源码、内部开发文档、验收文档不会在这里展开发布。
