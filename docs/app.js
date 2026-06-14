@@ -79,7 +79,8 @@
     .from(".eyebrow", { y: 22, autoAlpha: 0 }, "-=0.25")
     .from(".hero h1", { y: 52, autoAlpha: 0, duration: 1.1 }, "-=0.2")
     .from(".hero-copy", { y: 30, autoAlpha: 0 }, "-=0.55")
-    .from(".hero-actions a", { y: 20, autoAlpha: 0, stagger: 0.08 }, "-=0.48")
+    .from(".hero-points span", { y: 18, autoAlpha: 0, stagger: 0.06 }, "-=0.48")
+    .from(".hero-actions a", { y: 20, autoAlpha: 0, stagger: 0.08 }, "-=0.42")
     .from(".hero-product", { x: 80, rotationY: -12, rotationZ: 2, autoAlpha: 0, duration: 1.2 }, "-=0.8")
     .from(".hud", { y: 16, scale: 0.9, autoAlpha: 0, stagger: 0.08 }, "-=0.45");
 

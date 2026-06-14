@@ -118,6 +118,24 @@ img { display: block; width: 100%; height: auto; }
   font-size: clamp(17px, 1.7vw, 22px);
   line-height: 1.8;
 }
+.hero-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
+}
+.hero-points span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid rgba(117,214,157,0.24);
+  border-radius: 999px;
+  background: rgba(117,214,157,0.08);
+  color: rgba(245,241,232,0.86);
+  font-size: 14px;
+  font-weight: 800;
+}
 .hero-actions { flex-wrap: wrap; gap: 12px; margin-top: 34px; }
 
 .hero-product {
@@ -497,12 +515,12 @@ img { display: block; width: 100%; height: auto; }
 }
 
 .legal-section {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 18px;
+  display: block;
   padding-top: 0;
 }
 .legal-section > div {
+  max-width: 860px;
+  margin: 0 auto;
   padding: 30px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -540,6 +558,7 @@ img { display: block; width: 100%; height: auto; }
   .header-action { padding: 0 13px; }
   .hero { padding-inline: 20px; }
   .hero-actions, .download-actions, .primary-button, .secondary-button, .netdisk-panel .primary-button { width: 100%; }
+  .hero-points span { flex: 1 1 160px; justify-content: center; }
   .quick-features { grid-template-columns: 1fr; }
   .quick-features div { min-height: auto; }
   .section-heading h2, .install-copy h2, .download-panel h2 { font-size: 42px; }
