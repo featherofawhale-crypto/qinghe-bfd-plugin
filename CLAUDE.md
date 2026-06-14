@@ -34,7 +34,7 @@ When changing shipped code or docs, update the same version in:
 - `清何黑帧夹帧检测_v1.9.48_Windows/清何黑帧夹帧检测.lua`
 - public docs that mention the version
 
-Current version: `1.9.105`.
+Current version: `2.0.1-beta.14`.
 
 ## Packaging
 

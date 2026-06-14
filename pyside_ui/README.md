@@ -1,6 +1,6 @@
 # PySide Control Panel
 
-Version: 1.9.105
+Version: 2.0.1-beta.14
 
 The PySide control panel is the Windows UI companion for the Resolve Lua script.
 

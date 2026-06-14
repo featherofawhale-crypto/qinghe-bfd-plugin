@@ -1,6 +1,6 @@
 # macOS Release Notes
 
-Version: 1.9.105
+Version: 2.0.1-beta.14
 
 This package is built from the current Qinghe BFD source and the original macOS package's bundled `ffmpeg/macos` runtime.
 
@@ -49,7 +49,7 @@ Then create `Fusion/Scripts/Modules/black_frame_detector/ui_launcher_path.txt` w
 Windows 不能原生生成可签名的 macOS .app/.dmg. This repo can build a macOS-ready zip on Windows. To make a real DMG on a Mac, run:
 
 ```bash
-hdiutil create -volname "Qinghe BFD v1.9.105" -srcfolder "QingheBFD_v1.9.105_macOS" -ov -format UDZO "QingheBFD_v1.9.105_macOS.dmg"
+hdiutil create -volname "Qinghe BFD v2.0.1-beta.14" -srcfolder "QingheBFD_v2.0.1-beta.14_macOS" -ov -format UDZO "QingheBFD_v2.0.1-beta.14_macOS.dmg"
 ```
 
 If a signed `.app` is required, build it on macOS with PyInstaller or py2app, then sign/notarize it with an Apple Developer certificate before creating the DMG.

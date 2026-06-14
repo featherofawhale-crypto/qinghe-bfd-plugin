@@ -1,6 +1,6 @@
 # Development Notes And Cautions
 
-Version: 1.9.105
+Version: 2.0.1-beta.14
 
 This document records the development and packaging rules for Qinghe BFD.
 
@@ -44,8 +44,8 @@ Run from the project root:
 Expected output:
 
 ```text
-release\QingheBFD_v1.9.105_Windows
-release\QingheBFD_v1.9.105_Windows.zip
+release\QingheBFD_v2.0.1-beta.14_Windows
+release\QingheBFD_v2.0.1-beta.14_Windows.zip
 ```
 
 ## Install Command
@@ -77,7 +77,7 @@ install_windows.bat
 - The release embeds the watermark label:
 
 ```text
-QH-BFD:清何:wm-20260603:v1.9.105
+QH-BFD:清何:wm-20260603:v2.0.1-beta.14
 ```
 
 - Marker custom data, reports, and debug logs include the watermark where supported.

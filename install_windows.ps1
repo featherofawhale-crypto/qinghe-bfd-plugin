@@ -8,12 +8,21 @@ $PackageRoot = Get-ChildItem -Path $Root -Directory -Filter "*_Windows" |
 if (-not $PackageRoot) { throw "Cannot find package folder ending with _Windows." }
 
 $SourceModules = Join-Path $PackageRoot.FullName "black_frame_detector"
+if (!(Test-Path $SourceModules)) {
+    $SourceModules = Join-Path $PackageRoot.FullName "modules"
+}
 $SourceMain = Get-ChildItem -Path $PackageRoot.FullName -File -Filter "*.lua" |
     Select-Object -First 1
-$SourceFfmpeg = Join-Path $PackageRoot.FullName "ffmpeg\bin"
+$SourceFfmpeg = Join-Path $PackageRoot.FullName "ffmpeg\windows"
+if (!(Test-Path $SourceFfmpeg)) {
+    $SourceFfmpeg = Join-Path $PackageRoot.FullName "ffmpeg\bin"
+}
 
 if (-not $SourceMain) { throw "Cannot find main Lua script in package folder." }
 if (!(Test-Path $SourceModules)) { throw "Missing module folder: $SourceModules" }
+if (!(Test-Path (Join-Path $SourceFfmpeg "ffmpeg.exe")) -or !(Test-Path (Join-Path $SourceFfmpeg "ffprobe.exe"))) {
+    throw "Missing bundled Windows FFmpeg: expected ffmpeg.exe and ffprobe.exe in package ffmpeg\windows or ffmpeg\bin."
+}
 
 $ScriptsRoot = Join-Path $env:APPDATA "Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts"
 $EditDir = Join-Path $ScriptsRoot "Edit"
@@ -49,8 +58,10 @@ if (Test-Path (Join-Path $Root "pyside_ui")) {
     Copy-Item (Join-Path $Root "pyside_ui\*") $InstalledUiDir -Recurse -Force
 }
 
-if (Test-Path $SourceFfmpeg) {
-    Copy-Item (Join-Path $SourceFfmpeg "*.exe") $BundledFfmpegDir -Force
+Copy-Item (Join-Path $SourceFfmpeg "ffmpeg.exe") $BundledFfmpegDir -Force
+Copy-Item (Join-Path $SourceFfmpeg "ffprobe.exe") $BundledFfmpegDir -Force
+if (Test-Path (Join-Path $SourceFfmpeg "ffplay.exe")) {
+    Copy-Item (Join-Path $SourceFfmpeg "ffplay.exe") $BundledFfmpegDir -Force
 }
 
 $PackagedUiExe = Join-Path $InstalledUiDir "QingheBFDControl\QingheBFDControl.exe"
@@ -82,8 +93,12 @@ if ($ShortcutTarget) {
     $shortcut = $wsh.CreateShortcut($linkPath)
     $shortcut.TargetPath = $ShortcutTarget
     $shortcut.WorkingDirectory = $ShortcutWorkDir
-    $iconPath = Join-Path $InstalledUiDir "icon.svg"
-    if (Test-Path $iconPath) { $shortcut.IconLocation = $iconPath }
+    $iconPath = Join-Path $InstalledUiDir "icon.ico"
+    if (Test-Path $iconPath) {
+        $shortcut.IconLocation = $iconPath
+    } elseif (Test-Path $PackagedUiExe) {
+        $shortcut.IconLocation = $PackagedUiExe
+    }
     $shortcut.Description = "Qinghe Black Frame Detector PySide6 Control"
     $shortcut.Save()
 }
