@@ -38,12 +38,12 @@
             它不打断你的剪辑节奏，只在最后一遍复核时，把风险点清清楚楚标回时间线。
           </p>
           <div class="hero-actions">
-            <a class="primary-button" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">下载 macOS DMG</a>
+            <a class="primary-button" href="#download">选择版本下载</a>
             <a class="secondary-button" href="#story">看看效果</a>
           </div>
         </div>
         <div class="hero-product" aria-hidden="true">
-          <img src="./assets/qinghe-main.jpg" alt="" />
+          <img src="./assets/qinghe-main-latest.png" alt="" />
           <div class="scan-line"></div>
           <div class="hud hud-a">黑帧 02</div>
           <div class="hud hud-b">夹帧 01</div>
@@ -74,26 +74,26 @@
         <div class="story-stage">
           <div class="story-visual">
             <div class="screen-stack">
-              <img class="screen screen-main" src="./assets/qinghe-main.jpg" alt="清何剪辑工具箱主界面" />
-              <img class="screen screen-results" src="./assets/qinghe-results.jpg" alt="检测结果列表界面" />
-              <img class="screen screen-fonts" src="./assets/qinghe-fonts.jpg" alt="Text+ 字体工具界面" />
+              <img class="screen screen-main" src="./assets/qinghe-main-latest.png" alt="清何剪辑工具箱 v2.0.1 主界面" />
+              <img class="screen screen-results" src="./assets/qinghe-subtitle-window.png" alt="字幕和 Text+ 第二窗口" />
+              <img class="screen screen-fonts" src="./assets/qinghe-font-window.png" alt="字体工具小窗" />
             </div>
             <div class="story-orbit" aria-hidden="true">
               <span></span><span></span><span></span>
             </div>
           </div>
           <div class="story-copy">
-            <p class="section-kicker">滚动体验</p>
-            <h2 class="story-title">一条时间线，三种复核视角。</h2>
-            <p class="story-text">
-              先做检测，再看结果，最后回到字体和字幕细节。滚动时界面会随章节切换，就像把一次交付检查拆成几个清晰步骤。
+          <p class="section-kicker">最新版界面</p>
+          <h2 class="story-title">一条时间线，三种复核视角。</h2>
+          <p class="story-text">
+              主面板负责检测，字幕第二窗口负责快速改字，字体小窗负责 Text+ 样式复核。滚动时界面会随章节切换，就像把一次交付检查拆成几个清晰步骤。
             </p>
           </div>
         </div>
         <div class="story-steps" aria-hidden="true">
           <div data-title="先把画面问题扫出来。" data-text="黑帧、夹帧、重复帧和坏帧会被归类，标记颜色对应风险级别，长时间线也能快速定位。"></div>
-          <div data-title="结果不是列表而已，是回到时间线的路标。" data-text="每条记录都服务于复核和修正：看位置、看分类、看持续时间，然后回 Resolve 逐项处理。"></div>
-          <div data-title="字幕和字体，也放进交付检查。" data-text="Text+ 字体、模板和样式库集中管理，减少交付后字体丢失、样式不统一的尴尬。"></div>
+          <div data-title="字幕第二窗口，专心改字。" data-text="SRT 和 Text+ 文字层集中读取，搜索、替换、删除和撤回都放在小窗里，适合边看时间线边处理字幕。"></div>
+          <div data-title="字体小窗，把 Text+ 细节收住。" data-text="字体、样式库、Text+ 图层和候选差异集中复核，减少交付后字体丢失、样式不统一的尴尬。"></div>
         </div>
       </section>
 
@@ -146,17 +146,44 @@
       <section id="download" class="download-section">
         <div class="download-panel">
           <p class="section-kicker">下载</p>
-          <h2>macOS 一键安装版</h2>
+          <h2>按系统选择安装包</h2>
           <p>
-            推荐优先使用 CNB 国内源。GitHub Release 和百度网盘作为备用下载入口。
-            Windows 版等待 Windows 电脑打包测试后发布。
+            macOS 版已发布 DMG 一键安装包。Windows 版上传后会放在这里；百度网盘目录作为国内备用入口，方便同时放 macOS 和 Windows 文件。
           </p>
-          <div class="download-actions">
-            <a class="primary-button" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">CNB 下载 DMG</a>
-            <a class="secondary-button" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">GitHub 下载</a>
-            <a class="secondary-button" href="https://pan.baidu.com/s/1QxhMK7F3-ccMPDn4qNpXqA?pwd=bsv8">百度网盘 提取码 bsv8</a>
+          <div class="platform-grid">
+            <article class="platform-card is-ready">
+              <div class="platform-head">
+                <span>macOS</span>
+                <em>已发布</em>
+              </div>
+              <h3>DMG 一键安装版</h3>
+              <p>适合 macOS 用户。打开 DMG 后右键运行“① 一键安装.command”。</p>
+              <div class="download-actions">
+                <a class="primary-button" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">CNB 下载 DMG</a>
+                <a class="secondary-button" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">GitHub 下载</a>
+              </div>
+              <p class="checksum">SHA256: 72ddb6a588e3b936a9489df1c47e40c7d4188076a015bf32466797c8a68f39dd</p>
+            </article>
+            <article class="platform-card is-pending">
+              <div class="platform-head">
+                <span>Windows</span>
+                <em>准备上传</em>
+              </div>
+              <h3>Windows 安装包</h3>
+              <p>Windows 版会单独打包测试。上传后这里会放 Windows 直链和校验值。</p>
+              <div class="download-actions">
+                <a class="secondary-button disabled-link" aria-disabled="true">Windows 直链待上传</a>
+              </div>
+            </article>
           </div>
-          <p class="checksum">SHA256: 72ddb6a588e3b936a9489df1c47e40c7d4188076a015bf32466797c8a68f39dd</p>
+          <div class="netdisk-panel">
+            <div>
+              <span>百度网盘备用目录</span>
+              <strong>达芬奇-清何剪辑工具箱</strong>
+              <p>用于放置 macOS / Windows 安装文件，国内用户下载不稳定时优先看这里。</p>
+            </div>
+            <a class="primary-button" href="https://pan.baidu.com/s/1QxhMK7F3-ccMPDn4qNpXqA?pwd=bsv8">打开网盘 提取码 bsv8</a>
+          </div>
         </div>
       </section>
 
