@@ -2,6 +2,10 @@
 
 这是给 DaVinci Resolve 用户使用的剪辑检查插件。当前公开版本主要用于 macOS，打开安装包后运行一键安装脚本即可使用。
 
+官网页面：
+
+https://featherofawhale-crypto.github.io/qinghe-bfd-plugin/
+
 ## 它能做什么
 
 - 检查时间线里的黑帧、疑似夹帧、异常空隙等问题
