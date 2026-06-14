@@ -66,7 +66,6 @@ img {
 .motion-ready .preview-layout figure,
 .motion-ready .install-layout > *,
 .motion-ready .download-panel,
-.motion-ready .support-layout > *,
 .motion-ready .legal-grid > div {
   visibility: visible;
 }
@@ -380,7 +379,6 @@ img {
 .feature-card,
 .steps,
 .download-panel,
-.qr-grid figure,
 .legal-grid > div {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -423,7 +421,6 @@ img {
 
 .intro-grid,
 .install-layout,
-.support-layout,
 .legal-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -452,7 +449,6 @@ p {
 .section-heading p,
 .install-layout p,
 .download-panel p,
-.support-layout p,
 .legal-grid p {
   margin: 18px 0 0;
 }
@@ -598,35 +594,8 @@ figcaption {
   overflow-wrap: anywhere;
 }
 
-.support-layout {
-  align-items: center;
-}
-
-.qr-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.qr-grid figure {
-  overflow: hidden;
-  background: var(--paper);
-}
-
-.qr-grid img {
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-}
-
-.qr-grid figcaption {
-  color: #233127;
-  text-align: center;
-  font-weight: 800;
-  border-color: rgba(35, 49, 39, 0.12);
-}
-
 .legal-section {
-  padding-top: 0;
+  padding-top: clamp(72px, 9vw, 124px);
 }
 
 .legal-grid > div {
@@ -672,7 +641,6 @@ figcaption {
   .hero-stats,
   .intro-grid,
   .install-layout,
-  .support-layout,
   .legal-grid,
   .download-panel,
   .preview-layout {
@@ -683,9 +651,6 @@ figcaption {
     grid-template-columns: 1fr;
   }
 
-  .qr-grid {
-    max-width: 460px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -723,7 +688,4 @@ figcaption {
     grid-template-columns: 1fr;
   }
 
-  .qr-grid {
-    grid-template-columns: 1fr;
-  }
 }

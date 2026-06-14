@@ -62,7 +62,7 @@
     ease: "sine.inOut",
   });
 
-  gsap.utils.toArray(".section-heading, .intro-grid > *, .feature-card, .preview-layout figure, .install-layout > *, .download-panel, .support-layout > *, .legal-grid > div").forEach((el) => {
+  gsap.utils.toArray(".section-heading, .intro-grid > *, .feature-card, .preview-layout figure, .install-layout > *, .download-panel, .legal-grid > div").forEach((el) => {
     gsap.from(el, {
       y: 34,
       autoAlpha: 0,
