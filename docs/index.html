@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="清何剪辑工具箱，DaVinci Resolve 黑帧、夹帧、重复帧、坏帧、音频声道和 Text+ 字体检查工具。" />
-    <meta name="theme-color" content="#111614" />
+    <meta name="theme-color" content="#060807" />
     <title>清何剪辑工具箱 | DaVinci Resolve 剪辑检查插件</title>
     <link rel="stylesheet" href="./styles.css" />
     <script defer src="./vendor/gsap.min.js"></script>
@@ -18,202 +18,161 @@
         <span>清何剪辑工具箱</span>
       </a>
       <nav class="nav-links" aria-label="页面导航">
+        <a href="#story">体验</a>
         <a href="#features">功能</a>
-        <a href="#preview">界面</a>
         <a href="#install">安装</a>
         <a href="#download">下载</a>
       </nav>
-      <a class="header-action" href="#download">立即下载</a>
+      <a class="header-action" href="#download">下载 DMG</a>
     </header>
 
     <main id="top">
       <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-backdrop" aria-hidden="true"></div>
-        <div class="signal-board" aria-hidden="true">
-          <div class="signal-header">
-            <span>timeline qc</span>
-            <span>v2.0.1</span>
-          </div>
-          <div class="timeline-rail">
-            <i class="clip clip-a"></i>
-            <i class="clip clip-b"></i>
-            <i class="clip clip-c"></i>
-            <i class="marker marker-red"></i>
-            <i class="marker marker-gold"></i>
-            <i class="marker marker-green"></i>
-          </div>
-          <div class="waveform">
-            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-            <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-          </div>
-          <div class="signal-status">
-            <span>黑帧 02</span>
-            <span>夹帧 01</span>
-            <span>字体 18</span>
-          </div>
-        </div>
-        <div class="hero-content">
+        <canvas id="hero-canvas" aria-hidden="true"></canvas>
+        <div class="hero-vignette" aria-hidden="true"></div>
+        <div class="hero-copy-block">
           <p class="eyebrow">DaVinci Resolve 剪辑质检插件</p>
-          <h1 id="hero-title">清何剪辑工具箱</h1>
+          <h1 id="hero-title">把交片前的漏洞，提前照出来。</h1>
           <p class="hero-copy">
-            把黑帧、夹帧、重复帧、坏帧、音频声道和 Text+ 字体问题集中检查，
-            自动打标回到时间线，少一点漏检，多一点交付前的安心。
+            清何剪辑工具箱为黑帧、夹帧、重复帧、坏帧、音频声道和 Text+ 字体检查而生。
+            它不打断你的剪辑节奏，只在最后一遍复核时，把风险点清清楚楚标回时间线。
           </p>
           <div class="hero-actions">
             <a class="primary-button" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">下载 macOS DMG</a>
-            <a class="secondary-button" href="https://pan.baidu.com/s/1QxhMK7F3-ccMPDn4qNpXqA?pwd=bsv8">百度网盘备用</a>
+            <a class="secondary-button" href="#story">看看效果</a>
           </div>
-          <dl class="hero-stats" aria-label="版本信息">
-            <div>
-              <dt>当前版本</dt>
-              <dd>v2.0.1-beta.14</dd>
-            </div>
-            <div>
-              <dt>安装方式</dt>
-              <dd>DMG 一键安装</dd>
-            </div>
-            <div>
-              <dt>更新源</dt>
-              <dd>CNB 国内优先</dd>
-            </div>
-          </dl>
+        </div>
+        <div class="hero-product" aria-hidden="true">
+          <img src="./assets/qinghe-main.jpg" alt="" />
+          <div class="scan-line"></div>
+          <div class="hud hud-a">黑帧 02</div>
+          <div class="hud hud-b">夹帧 01</div>
+          <div class="hud hud-c">字体 18</div>
         </div>
       </section>
 
-      <section class="intro-band" aria-label="核心用途">
-        <div class="section-inner intro-grid">
-          <div>
-            <p class="section-kicker">给交片前的最后一遍检查</p>
-            <h2>不是替你剪片，而是帮你把容易漏掉的问题抓出来。</h2>
+      <section class="availability" aria-label="版本与下载源">
+        <div>
+          <strong>v2.0.1-beta.14</strong>
+          <span>当前公开版本</span>
+        </div>
+        <div>
+          <strong>DMG</strong>
+          <span>macOS 一键安装</span>
+        </div>
+        <div>
+          <strong>CNB</strong>
+          <span>国内更新源优先</span>
+        </div>
+        <div>
+          <strong>GitHub / 网盘</strong>
+          <span>备用下载入口</span>
+        </div>
+      </section>
+
+      <section id="story" class="story">
+        <div class="story-stage">
+          <div class="story-visual">
+            <div class="screen-stack">
+              <img class="screen screen-main" src="./assets/qinghe-main.jpg" alt="清何剪辑工具箱主界面" />
+              <img class="screen screen-results" src="./assets/qinghe-results.jpg" alt="检测结果列表界面" />
+              <img class="screen screen-fonts" src="./assets/qinghe-fonts.jpg" alt="Text+ 字体工具界面" />
+            </div>
+            <div class="story-orbit" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </div>
           </div>
+          <div class="story-copy">
+            <p class="section-kicker">滚动体验</p>
+            <h2 class="story-title">一条时间线，三种复核视角。</h2>
+            <p class="story-text">
+              先做检测，再看结果，最后回到字体和字幕细节。滚动时界面会随章节切换，就像把一次交付检查拆成几个清晰步骤。
+            </p>
+          </div>
+        </div>
+        <div class="story-steps" aria-hidden="true">
+          <div data-title="先把画面问题扫出来。" data-text="黑帧、夹帧、重复帧和坏帧会被归类，标记颜色对应风险级别，长时间线也能快速定位。"></div>
+          <div data-title="结果不是列表而已，是回到时间线的路标。" data-text="每条记录都服务于复核和修正：看位置、看分类、看持续时间，然后回 Resolve 逐项处理。"></div>
+          <div data-title="字幕和字体，也放进交付检查。" data-text="Text+ 字体、模板和样式库集中管理，减少交付后字体丢失、样式不统一的尴尬。"></div>
+        </div>
+      </section>
+
+      <section id="features" class="feature-section">
+        <div class="section-heading">
+          <p class="section-kicker">功能覆盖</p>
+          <h2>为剪辑交付做的，不是泛用工具。</h2>
+        </div>
+        <div class="feature-row">
+          <article>
+            <span>01</span>
+            <h3>画面质检</h3>
+            <p>黑帧、夹帧、卡帧、重复帧、异常画面统一检查，并按风险自动打标。</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>音频复核</h3>
+            <p>辅助检查声道和静音问题，让导出前的最后一遍更有依据。</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>文字与字体</h3>
+            <p>围绕 Text+、字幕模板和字体样式做整理，适合包装、短剧和批量项目。</p>
+          </article>
+          <article>
+            <span>04</span>
+            <h3>标记回写</h3>
+            <p>检测结果写回 Resolve 时间线，复核路径直接落在你的工作现场。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="install" class="install-section">
+        <div class="install-copy">
+          <p class="section-kicker">安装方法</p>
+          <h2>打开 DMG，运行一键安装。</h2>
           <p>
-            适合短剧、混剪、课程、口播、广告和批量交付项目。工具会把检测结果落到 Resolve 标记里，
-            你可以沿着标记逐条复核，不用在长时间线上来回盲找。
+            当前 macOS 公开包未做 Apple Developer 公证。首次打开时请右键运行安装脚本，
+            安装完成后重启 DaVinci Resolve。
           </p>
         </div>
+        <ol class="steps">
+          <li><span>1</span>下载 `qinghe-toolbox-v2.0.1-beta.14-macos.dmg`。</li>
+          <li><span>2</span>打开 DMG，右键运行“① 一键安装.command”。</li>
+          <li><span>3</span>重启 DaVinci Resolve。</li>
+          <li><span>4</span>打开“工作区 -> 脚本 -> Edit -> 清何黑帧夹帧检测”。</li>
+        </ol>
       </section>
 
-      <section id="features" class="section">
-        <div class="section-inner">
-          <div class="section-heading">
-            <p class="section-kicker">功能覆盖</p>
-            <h2>围绕剪辑交付做的检查清单</h2>
+      <section id="download" class="download-section">
+        <div class="download-panel">
+          <p class="section-kicker">下载</p>
+          <h2>macOS 一键安装版</h2>
+          <p>
+            推荐优先使用 CNB 国内源。GitHub Release 和百度网盘作为备用下载入口。
+            Windows 版等待 Windows 电脑打包测试后发布。
+          </p>
+          <div class="download-actions">
+            <a class="primary-button" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">CNB 下载 DMG</a>
+            <a class="secondary-button" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">GitHub 下载</a>
+            <a class="secondary-button" href="https://pan.baidu.com/s/1QxhMK7F3-ccMPDn4qNpXqA?pwd=bsv8">百度网盘 提取码 bsv8</a>
           </div>
-          <div class="feature-grid">
-            <article class="feature-card">
-              <span class="feature-index">01</span>
-              <h3>黑帧与夹帧检测</h3>
-              <p>识别黑场、短黑帧、疑似夹帧和转场边界，按风险自动分类打标。</p>
-            </article>
-            <article class="feature-card">
-              <span class="feature-index">02</span>
-              <h3>重复帧与坏帧排查</h3>
-              <p>辅助发现卡顿、重复画面、异常画面片段，适合长时间线复核。</p>
-            </article>
-            <article class="feature-card">
-              <span class="feature-index">03</span>
-              <h3>音频声道检查</h3>
-              <p>辅助检查音频声道、静音和节奏相关问题，减少交付后的返工。</p>
-            </article>
-            <article class="feature-card">
-              <span class="feature-index">04</span>
-              <h3>Text+ 字体工具</h3>
-              <p>整理字体样式、检查文字模板，适合字幕、标题和包装类项目。</p>
-            </article>
-            <article class="feature-card">
-              <span class="feature-index">05</span>
-              <h3>时间线标记回写</h3>
-              <p>检测结果直接回到 Resolve 时间线，定位、复核、修正更顺手。</p>
-            </article>
-            <article class="feature-card">
-              <span class="feature-index">06</span>
-              <h3>内置更新入口</h3>
-              <p>插件内可检查新版本，国内优先走 CNB，GitHub 和网盘作为备用。</p>
-            </article>
-          </div>
+          <p class="checksum">SHA256: 72ddb6a588e3b936a9489df1c47e40c7d4188076a015bf32466797c8a68f39dd</p>
         </div>
       </section>
 
-      <section id="preview" class="section section-quiet">
-        <div class="section-inner">
-          <div class="section-heading">
-            <p class="section-kicker">真实界面</p>
-            <h2>检测、结果、字体工具集中在一个控制面板</h2>
-          </div>
-          <div class="preview-layout">
-            <figure class="preview-main">
-              <img class="parallax-image" src="./assets/qinghe-main.jpg" alt="清何剪辑工具箱主界面" loading="lazy" />
-              <figcaption>主控制面板：检测项、阈值、批量模式和操作入口集中管理。</figcaption>
-            </figure>
-            <div class="preview-stack">
-              <figure>
-                <img class="parallax-image" src="./assets/qinghe-results.jpg" alt="检测结果列表界面" loading="lazy" />
-                <figcaption>检测结果列表</figcaption>
-              </figure>
-              <figure>
-                <img class="parallax-image" src="./assets/qinghe-fonts.jpg" alt="Text+ 字体工具界面" loading="lazy" />
-                <figcaption>Text+ 字体工具</figcaption>
-              </figure>
-            </div>
-          </div>
+      <section class="legal-section">
+        <div>
+          <h2>使用前请备份工程。</h2>
+          <p>
+            本工具按“现状”提供，检测结果仅作辅助参考，不保证 100% 找出所有问题。
+            使用者应自行评估适用性，并在使用前做好项目备份。
+          </p>
         </div>
-      </section>
-
-      <section id="install" class="section">
-        <div class="section-inner install-layout">
-          <div class="section-heading align-left">
-            <p class="section-kicker">安装方法</p>
-            <h2>打开 DMG，运行一键安装</h2>
-            <p>
-              当前 macOS 公开包未做 Apple Developer 公证，首次运行脚本时请右键选择“打开”。
-              安装完成后重启 DaVinci Resolve。
-            </p>
-          </div>
-          <ol class="steps">
-            <li><span>1</span>下载 `qinghe-toolbox-v2.0.1-beta.14-macos.dmg`。</li>
-            <li><span>2</span>双击打开 DMG，右键运行“① 一键安装.command”。</li>
-            <li><span>3</span>重启 DaVinci Resolve。</li>
-            <li><span>4</span>打开“工作区 -> 脚本 -> Edit -> 清何黑帧夹帧检测”。</li>
-          </ol>
-        </div>
-      </section>
-
-      <section id="download" class="section download-section">
-        <div class="section-inner">
-          <div class="download-panel">
-            <div>
-              <p class="section-kicker">下载</p>
-              <h2>macOS 一键安装版</h2>
-              <p>
-                推荐优先使用 CNB 国内源。GitHub Release 和百度网盘作为备用下载入口。
-                Windows 版等待 Windows 电脑打包测试后发布。
-              </p>
-            </div>
-            <div class="download-actions">
-              <a class="primary-button" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">CNB 下载 DMG</a>
-              <a class="secondary-button" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg">GitHub 下载</a>
-              <a class="secondary-button" href="https://pan.baidu.com/s/1QxhMK7F3-ccMPDn4qNpXqA?pwd=bsv8">百度网盘 提取码 bsv8</a>
-            </div>
-            <p class="checksum">SHA256: 72ddb6a588e3b936a9489df1c47e40c7d4188076a015bf32466797c8a68f39dd</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="section legal-section">
-        <div class="section-inner legal-grid">
-          <div>
-            <h2>使用前请备份工程</h2>
-            <p>
-              本工具按“现状”提供，检测结果仅作辅助参考，不保证 100% 找出所有问题。
-              使用者应自行评估适用性，并在使用前做好项目备份。
-            </p>
-          </div>
-          <div>
-            <h2>隐私边界</h2>
-            <p>
-              工具不应上传工程文件、素材文件或完整时间线内容。匿名统计仅用于版本、平台和功能使用情况分析。
-            </p>
-          </div>
+        <div>
+          <h2>隐私边界清楚。</h2>
+          <p>
+            工具不应上传工程文件、素材文件或完整时间线内容。匿名统计仅用于版本、平台和功能使用情况分析。
+          </p>
         </div>
       </section>
     </main>
