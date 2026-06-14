@@ -156,7 +156,7 @@ img { display: block; width: 100%; height: auto; }
 .hud-b { right: 8%; top: 20%; color: var(--gold); }
 .hud-c { left: 44%; bottom: 8%; color: var(--green); }
 
-.availability {
+.quick-features {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1px;
@@ -164,13 +164,22 @@ img { display: block; width: 100%; height: auto; }
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
-.availability div {
-  min-height: 128px;
+.quick-features div {
+  min-height: 180px;
   padding: 28px;
   background: #0b0f0d;
 }
-.availability strong { display: block; font-size: clamp(24px, 3vw, 42px); }
-.availability span { display: block; margin-top: 8px; color: var(--muted); }
+.quick-features strong {
+  display: block;
+  font-size: clamp(22px, 2.4vw, 34px);
+  line-height: 1.12;
+}
+.quick-features span {
+  display: block;
+  margin-top: 18px;
+  color: var(--muted);
+  line-height: 1.68;
+}
 
 .showcase-section {
   width: min(1280px, calc(100% - 42px));
@@ -519,7 +528,7 @@ img { display: block; width: 100%; height: auto; }
   }
   .hero { min-height: auto; padding-top: 110px; }
   .hero-product { width: 100%; justify-self: stretch; }
-  .availability { grid-template-columns: repeat(2, 1fr); }
+  .quick-features { grid-template-columns: repeat(2, 1fr); }
   .function-grid, .innovation-list, .platform-grid, .netdisk-panel { grid-template-columns: 1fr; }
   .function-grid article, .innovation-list article { min-height: auto; }
   .function-grid h3 { margin-top: 42px; }
@@ -531,8 +540,8 @@ img { display: block; width: 100%; height: auto; }
   .header-action { padding: 0 13px; }
   .hero { padding-inline: 20px; }
   .hero-actions, .download-actions, .primary-button, .secondary-button, .netdisk-panel .primary-button { width: 100%; }
-  .availability { grid-template-columns: 1fr; }
-  .availability div { min-height: 108px; }
+  .quick-features { grid-template-columns: 1fr; }
+  .quick-features div { min-height: auto; }
   .section-heading h2, .install-copy h2, .download-panel h2 { font-size: 42px; }
 }
 

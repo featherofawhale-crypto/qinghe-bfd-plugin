@@ -102,11 +102,11 @@
     },
   });
 
-  gsap.from(".availability div", {
+  gsap.from(".quick-features div", {
     y: 36,
     autoAlpha: 0,
     stagger: 0.08,
-    scrollTrigger: { trigger: ".availability", start: "top 82%" },
+    scrollTrigger: { trigger: ".quick-features", start: "top 82%" },
   });
 
   const switcher = document.querySelector(".interface-switcher");
