@@ -124,8 +124,25 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn("Missing bundled Windows FFmpeg", source)
         self.assertIn("ui_launcher_path.txt", source)
         self.assertIn("QingheBFDControl.exe", source)
-        self.assertIn("icon.ico", source)
-        self.assertIn("WScript.Shell", source)
+        self.assertIn("legacyDesktopShortcut", source)
+        self.assertNotIn("WScript.Shell", source)
+
+    def test_windows_exe_installer_and_uninstaller_are_defined(self) -> None:
+        build_source = (ROOT / "build_installer_windows.ps1").read_text(encoding="utf-8")
+        iss_source = (ROOT / "installer_windows.iss").read_text(encoding="utf-8")
+        uninstall_source = (ROOT / "uninstall_windows.ps1").read_text(encoding="utf-8")
+
+        self.assertIn('$Version = "2.0.1-beta.14"', build_source)
+        self.assertIn("ISCC.exe", build_source)
+        self.assertIn("QingheBFD_v${Version}_Windows_Setup.exe", build_source)
+        self.assertIn("LicenseFile=", iss_source)
+        self.assertIn("免责声明.txt", iss_source)
+        self.assertIn("install_windows.ps1", iss_source)
+        self.assertIn("uninstall_windows.ps1", iss_source)
+        self.assertIn("UninstallRun", iss_source)
+        self.assertNotIn("Desktop", iss_source)
+        self.assertIn("Remove-Item -LiteralPath $ModulesDir -Recurse -Force", uninstall_source)
+        self.assertIn("Qinghe BFD Control.lnk", uninstall_source)
 
     def test_component_checker_covers_windows_release_requirements(self) -> None:
         source = (ROOT / "check_components.ps1").read_text(encoding="utf-8")

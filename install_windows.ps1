@@ -68,16 +68,12 @@ $PackagedUiExe = Join-Path $InstalledUiDir "QingheBFDControl\QingheBFDControl.ex
 $HiddenRunUi = Join-Path $InstalledUiDir "run_ui_hidden.vbs"
 $RunUi = Join-Path $InstalledUiDir "run_ui.bat"
 $ShortcutTarget = $null
-$ShortcutWorkDir = $null
 if (Test-Path $PackagedUiExe) {
     $ShortcutTarget = $PackagedUiExe
-    $ShortcutWorkDir = Split-Path $PackagedUiExe -Parent
 } elseif (Test-Path $HiddenRunUi) {
     $ShortcutTarget = $HiddenRunUi
-    $ShortcutWorkDir = Split-Path $HiddenRunUi -Parent
 } elseif (Test-Path $RunUi) {
     $ShortcutTarget = $RunUi
-    $ShortcutWorkDir = Split-Path $RunUi -Parent
 }
 
 if ($ShortcutTarget) {
@@ -86,21 +82,11 @@ if ($ShortcutTarget) {
         $ShortcutTarget,
         (New-Object System.Text.UTF8Encoding $false)
     )
+}
 
-    $desktop = [Environment]::GetFolderPath("Desktop")
-    $linkPath = Join-Path $desktop "Qinghe BFD Control.lnk"
-    $wsh = New-Object -ComObject WScript.Shell
-    $shortcut = $wsh.CreateShortcut($linkPath)
-    $shortcut.TargetPath = $ShortcutTarget
-    $shortcut.WorkingDirectory = $ShortcutWorkDir
-    $iconPath = Join-Path $InstalledUiDir "icon.ico"
-    if (Test-Path $iconPath) {
-        $shortcut.IconLocation = $iconPath
-    } elseif (Test-Path $PackagedUiExe) {
-        $shortcut.IconLocation = $PackagedUiExe
-    }
-    $shortcut.Description = "Qinghe Black Frame Detector PySide6 Control"
-    $shortcut.Save()
+$legacyDesktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Qinghe BFD Control.lnk"
+if (Test-Path $legacyDesktopShortcut) {
+    Remove-Item -LiteralPath $legacyDesktopShortcut -Force
 }
 
 $pythonCandidates = @()

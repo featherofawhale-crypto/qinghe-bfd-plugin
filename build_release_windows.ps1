@@ -74,6 +74,7 @@ py -3 (Join-Path $Root "tools\lua_bytecode_builder.py") `
 New-Item -ItemType Directory -Force -Path $StageRoot, $StagePlugin, $StageUi | Out-Null
 Copy-Item (Join-Path $Root "install_windows.ps1") $StageRoot -Force
 Copy-Item (Join-Path $Root "install_windows.bat") $StageRoot -Force
+Copy-Item (Join-Path $Root "uninstall_windows.ps1") $StageRoot -Force
 Copy-Item (Join-Path $Root "check_components.ps1") $StageRoot -Force
 Copy-Item (Join-Path $Root "README.md") $StageRoot -Force
 Copy-Item (Join-Path $Root "docs") $StageRoot -Recurse -Force
