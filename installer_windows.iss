@@ -1,4 +1,4 @@
-#define MyAppName "清何黑帧夹帧检测"
+#define MyAppName "Qinghe BFD"
 #ifndef MyAppVersion
 #define MyAppVersion "2.0.1-beta.14"
 #endif
@@ -13,7 +13,7 @@
 AppId={{A7393D89-0C20-4BC6-A3F4-2B8B9ED87F41}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppPublisher=清何
+AppPublisher=Qinghe
 DefaultDirName={localappdata}\QingheBFD
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
@@ -28,16 +28,16 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-LicenseFile={#SourceDir}\QingheBFD_Plugin_Windows\免责声明.txt
+LicenseFile={#SourceDir}\installer_disclaimer.txt
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install_windows.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "正在安装 DaVinci Resolve 插件..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install_windows.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing DaVinci Resolve plugin..."
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall_windows.ps1"""; Flags: runhidden waituntilterminated

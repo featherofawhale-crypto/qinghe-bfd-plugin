@@ -1,0 +1,7 @@
+Disclaimer
+
+Qinghe BFD is provided as-is as a DaVinci Resolve workflow helper. Detection results are for reference only and may be affected by source media, timeline settings, render cache, Resolve version, and system environment.
+
+Before using this plugin, back up your DaVinci Resolve project and important media. The author is not responsible for project loss, editing mistakes, media damage, business loss, or any indirect loss caused by installing or using this tool.
+
+By continuing installation, you confirm that you understand the above and agree to use the plugin at your own risk.

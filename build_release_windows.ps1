@@ -76,6 +76,7 @@ Copy-Item (Join-Path $Root "install_windows.ps1") $StageRoot -Force
 Copy-Item (Join-Path $Root "install_windows.bat") $StageRoot -Force
 Copy-Item (Join-Path $Root "uninstall_windows.ps1") $StageRoot -Force
 Copy-Item (Join-Path $Root "check_components.ps1") $StageRoot -Force
+Copy-Item (Join-Path $Root "installer_disclaimer.txt") $StageRoot -Force
 Copy-Item (Join-Path $Root "README.md") $StageRoot -Force
 Copy-Item (Join-Path $Root "docs") $StageRoot -Recurse -Force
 Copy-Item (Join-Path $PyInstallerDist "QingheBFDControl") $StageUi -Recurse -Force
