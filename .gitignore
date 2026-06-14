@@ -1,0 +1,13 @@
+.DS_Store
+*.swp
+*.swo
+*~
+.claude/
+dist/**/ffmpeg/macos/ffmpeg
+dist/**/ffmpeg/macos/lib/
+dist/**/*.dylib
+dist/**/*.exe
+dist/**/*.dmg
+dist/**/*.zip
+ui_review_shots/
+dist/protected_release/

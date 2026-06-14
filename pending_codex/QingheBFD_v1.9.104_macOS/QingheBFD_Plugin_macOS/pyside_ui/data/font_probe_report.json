@@ -1,0 +1,27 @@
+{
+  "ok": true,
+  "source": "方正粗楷简体",
+  "accepted": "方正粗楷简体",
+  "accepted_candidate": "方正粗楷简体|||Regular|||FZCKJW.TTF",
+  "local_accepted_candidate": "方正粗楷简体|||Regular|||/Users/qinghe/Library/Fonts/FZCKJW.TTF",
+  "registered_font_file": "FZCKJW.TTF",
+  "registered_font_name": "方正粗楷简体",
+  "candidate_attempts": 1,
+  "candidate_trace": [
+    {
+      "candidate": "方正粗楷简体|||Regular|||FZCKJW.TTF",
+      "font": "方正粗楷简体",
+      "style": "Regular",
+      "path": "FZCKJW.TTF",
+      "registered": true,
+      "accepted": true,
+      "resolved_font": "FZCuKaiS-R-GB",
+      "resolved_style": "Regular"
+    }
+  ],
+  "probe_warning": "",
+  "message": "字体已替换为 方正粗楷简体",
+  "resolve_version": "Resolve 19",
+  "platform": "Darwin",
+  "created_at": "2026-06-09T15:26:30Z"
+}
