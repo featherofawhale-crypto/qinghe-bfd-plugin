@@ -120,11 +120,10 @@
     },
   });
 
-  gsap.from(".quick-features div", {
-    y: 36,
+  gsap.from(".quick-features", {
+    y: 18,
     autoAlpha: 0,
-    stagger: 0.08,
-    scrollTrigger: { trigger: ".quick-features", start: "top 82%" },
+    scrollTrigger: { trigger: ".quick-features", start: "top 86%" },
   });
 
   const switcher = document.querySelector(".interface-switcher");
@@ -200,7 +199,7 @@
     );
   }
 
-  gsap.utils.toArray(".function-grid article, .innovation-list article, .install-copy, .steps, .download-panel, .legal-section > div").forEach((el) => {
+  gsap.utils.toArray(".function-grid article, .innovation-list article, .install-copy, .steps, .download-panel").forEach((el) => {
     gsap.from(el, {
       y: 42,
       autoAlpha: 0,
