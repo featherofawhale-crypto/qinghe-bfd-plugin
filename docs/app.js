@@ -42,13 +42,13 @@
       gyroControls: false,
       minHeight: 200,
       minWidth: 200,
-      highlightColor: 0x92e0d6,
-      midtoneColor: 0x244a46,
-      lowlightColor: 0x0b1217,
-      baseColor: 0x070b0d,
-      blurFactor: 0.54,
-      speed: 0.52,
-      zoom: 0.82,
+      highlightColor: 0x4f8cff,
+      midtoneColor: 0x102a52,
+      lowlightColor: 0x030713,
+      baseColor: 0x050914,
+      blurFactor: 0.58,
+      speed: 0.56,
+      zoom: 0.78,
     });
     window.addEventListener("pagehide", () => effect.destroy());
   } else if (bg) {

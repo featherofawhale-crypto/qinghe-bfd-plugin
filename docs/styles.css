@@ -1,16 +1,16 @@
 :root {
-  --bg: #070b0d;
+  --bg: #050914;
   --ink: #f5f1e8;
-  --muted: #aeb8b2;
+  --muted: #b0bac8;
   --soft: #d8d0c0;
   --line: rgba(245, 241, 232, 0.14);
   --glass: rgba(245, 241, 232, 0.07);
-  --green: #86d99d;
-  --cyan: #92e0d6;
+  --green: #7bd0ff;
+  --cyan: #8bd7ff;
   --gold: #d8b66d;
   --coral: #de7f68;
-  --panel: rgba(12, 18, 18, 0.66);
-  --card-glow: rgba(146, 224, 214, 0.2);
+  --panel: rgba(9, 18, 34, 0.68);
+  --card-glow: rgba(139, 215, 255, 0.2);
 }
 
 * { box-sizing: border-box; }
@@ -19,7 +19,7 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    linear-gradient(180deg, #0a1113 0%, var(--bg) 48%, #050708 100%);
+    linear-gradient(180deg, #07152c 0%, var(--bg) 48%, #030611 100%);
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   letter-spacing: 0;
   overflow-x: hidden;
@@ -37,9 +37,9 @@ img { display: block; width: 100%; height: auto; }
   height: 100%;
   overflow: hidden;
   background:
-    radial-gradient(circle at 74% 16%, rgba(146,224,214,0.16), transparent 34%),
-    radial-gradient(circle at 16% 76%, rgba(216,182,109,0.12), transparent 32%),
-    linear-gradient(180deg, #0b1517 0%, #070b0d 58%, #050708 100%);
+    radial-gradient(circle at 74% 16%, rgba(77,144,255,0.18), transparent 34%),
+    radial-gradient(circle at 16% 76%, rgba(216,182,109,0.10), transparent 32%),
+    linear-gradient(180deg, #071a34 0%, #050914 58%, #030611 100%);
 }
 #vanta-bg::before {
   content: "";
@@ -47,8 +47,8 @@ img { display: block; width: 100%; height: auto; }
   inset: -18%;
   pointer-events: none;
   background:
-    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(146,224,214,0.26), rgba(134,217,157,0.12) 15%, transparent 34%),
-    radial-gradient(circle at calc(var(--mouse-x) + 12%) calc(var(--mouse-y) + 18%), rgba(216,182,109,0.13), transparent 27%);
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(96,165,250,0.28), rgba(37,99,235,0.13) 15%, transparent 34%),
+    radial-gradient(circle at calc(var(--mouse-x) + 12%) calc(var(--mouse-y) + 18%), rgba(216,182,109,0.11), transparent 27%);
   filter: blur(16px);
   opacity: 0.86;
   mix-blend-mode: screen;
@@ -60,8 +60,8 @@ img { display: block; width: 100%; height: auto; }
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 28%, transparent 0 34%, rgba(7,11,13,0.22) 68%, rgba(7,11,13,0.66) 100%),
-    linear-gradient(to bottom, rgba(7,11,13,0.02), rgba(7,11,13,0.52) 100%);
+    radial-gradient(circle at 50% 28%, transparent 0 34%, rgba(5,9,20,0.22) 68%, rgba(5,9,20,0.68) 100%),
+    linear-gradient(to bottom, rgba(5,9,20,0.02), rgba(5,9,20,0.54) 100%);
   mix-blend-mode: multiply;
 }
 #vanta-bg canvas {
@@ -101,7 +101,7 @@ main, .site-footer {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, var(--gold), var(--green) 58%, #173126);
+  background: radial-gradient(circle at 35% 30%, var(--gold), var(--green) 58%, #0d2447);
   color: #08100c;
 }
 .nav-links { gap: 26px; color: rgba(245,241,232,0.72); font-size: 14px; }
@@ -136,8 +136,8 @@ main, .site-footer {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 68% 48%, transparent 0 26%, rgba(7,11,13,0.46) 56%, rgba(7,11,13,0.84) 88%),
-    linear-gradient(to bottom, rgba(7,11,13,0.05), rgba(7,11,13,0.78) 96%);
+    radial-gradient(circle at 68% 48%, transparent 0 26%, rgba(5,9,20,0.42) 56%, rgba(5,9,20,0.86) 88%),
+    linear-gradient(to bottom, rgba(5,9,20,0.05), rgba(5,9,20,0.8) 96%);
 }
 .hero-copy-block, .hero-product { position: relative; z-index: 2; }
 .eyebrow, .section-kicker {
@@ -196,7 +196,7 @@ main, .site-footer {
   width: min(660px, 50vw);
   border-radius: 18px;
   overflow: hidden;
-  background: #101515;
+  background: #081426;
   border: 1px solid rgba(255,255,255,0.18);
   box-shadow: 0 50px 140px rgba(0,0,0,0.58);
   transform-style: preserve-3d;
@@ -210,7 +210,7 @@ main, .site-footer {
   top: 18%;
   height: 2px;
   background: linear-gradient(90deg, transparent, var(--green), var(--gold), transparent);
-  box-shadow: 0 0 28px rgba(117,214,157,0.75);
+  box-shadow: 0 0 28px rgba(96,165,250,0.72);
 }
 .hud {
   position: absolute;
@@ -238,7 +238,7 @@ main, .site-footer {
 .quick-features div {
   min-height: 138px;
   padding: 24px 28px;
-  background: rgba(11, 17, 17, 0.88);
+  background: rgba(8, 18, 35, 0.88);
 }
 .quick-features strong {
   display: block;
@@ -297,7 +297,7 @@ main, .site-footer {
   border-radius: inherit;
   padding: 1px;
   background:
-    linear-gradient(135deg, rgba(146,224,214,0), rgba(146,224,214,0.58), rgba(216,182,109,0.34), rgba(146,224,214,0));
+    linear-gradient(135deg, rgba(139,215,255,0), rgba(139,215,255,0.58), rgba(216,182,109,0.26), rgba(139,215,255,0));
   opacity: 0;
   transition: opacity 220ms ease;
   -webkit-mask:
@@ -326,7 +326,7 @@ main, .site-footer {
   pointer-events: none;
   border-radius: inherit;
   background:
-    radial-gradient(circle at var(--card-x) var(--card-y), rgba(146,224,214,0.18), rgba(134,217,157,0.07) 22%, transparent 48%);
+    radial-gradient(circle at var(--card-x) var(--card-y), rgba(139,215,255,0.18), rgba(59,130,246,0.08) 22%, transparent 48%);
   opacity: 0;
   transition: opacity 220ms ease;
 }
@@ -360,11 +360,11 @@ main, .site-footer {
 .donate-mini:hover,
 .donate-grid article:hover,
 .is-card-hovered {
-  border-color: rgba(146,224,214,0.36);
+  border-color: rgba(139,215,255,0.38);
   box-shadow:
-    0 0 0 1px rgba(146,224,214,0.08),
+    0 0 0 1px rgba(139,215,255,0.09),
     0 18px 56px rgba(0,0,0,0.26),
-    0 0 36px rgba(146,224,214,0.08);
+    0 0 38px rgba(96,165,250,0.10);
 }
 
 .quick-features div:hover::before,
@@ -562,10 +562,10 @@ main, .site-footer {
 .innovation-list article {
   padding: 24px;
   min-height: 210px;
-  border: 1px solid rgba(117,214,157,0.18);
+  border: 1px solid rgba(139,215,255,0.18);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(117,214,157,0.10), transparent 48%),
+    linear-gradient(135deg, rgba(59,130,246,0.12), transparent 48%),
     rgba(255,255,255,0.035);
 }
 .innovation-list strong {
@@ -606,7 +606,7 @@ main, .site-footer {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: rgba(117,214,157,0.18);
+  background: rgba(59,130,246,0.18);
   color: var(--green);
   font-weight: 900;
 }
@@ -653,7 +653,7 @@ main, .site-footer {
   border: 1px solid var(--line);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(146,224,214,0.08), transparent 54%),
+    linear-gradient(135deg, rgba(59,130,246,0.10), transparent 54%),
     rgba(255,255,255,0.04);
 }
 .mac-help-grid article::before {
@@ -664,7 +664,7 @@ main, .site-footer {
   pointer-events: none;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(146,224,214,0), rgba(146,224,214,0.48), rgba(216,182,109,0.28), rgba(146,224,214,0));
+  background: linear-gradient(135deg, rgba(139,215,255,0), rgba(139,215,255,0.48), rgba(216,182,109,0.24), rgba(139,215,255,0));
   opacity: 0;
   transition: opacity 220ms ease;
   -webkit-mask:
@@ -682,7 +682,7 @@ main, .site-footer {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: rgba(146,224,214,0.14);
+  background: rgba(59,130,246,0.18);
   color: var(--cyan);
   font-weight: 900;
 }
@@ -730,17 +730,17 @@ main, .site-footer {
   padding: 26px;
   border: 1px solid rgba(255,255,255,0.16);
   border-radius: 8px;
-  background: rgba(6,8,7,0.45);
+  background: rgba(5,9,20,0.48);
 }
 .platform-card.is-ready {
   background:
-    radial-gradient(circle at 24% 0%, rgba(117,214,157,0.18), transparent 38%),
-    rgba(6,8,7,0.52);
+    radial-gradient(circle at 24% 0%, rgba(59,130,246,0.20), transparent 38%),
+    rgba(5,9,20,0.55);
 }
 .platform-card.is-pending {
   background:
     radial-gradient(circle at 24% 0%, rgba(224,180,91,0.16), transparent 38%),
-    rgba(6,8,7,0.52);
+    rgba(5,9,20,0.55);
 }
 .platform-head {
   display: flex;
@@ -838,7 +838,7 @@ main, .site-footer {
   border: 1px solid var(--line);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(117,214,157,0.10), transparent 44%),
+    linear-gradient(135deg, rgba(59,130,246,0.12), transparent 44%),
     rgba(255,255,255,0.04);
 }
 .community-section h2,

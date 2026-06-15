@@ -4,7 +4,7 @@
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
   "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.17-macos.dmg",
   "package_type": "dmg",
-  "sha256": "794cf6b47d83590003da387dd8c6d7d7731f340a2d0e763eec7c841ccc63edea",
+  "sha256": "f21d671a6c0fd8d211966e96eeb246c42b3b0a81b47a0f45fe1a9ae71cd10974",
   "notes": "macOS 测试版更新：修复 app 化后 Resolve API Bridge 识别问题，改为普通内置可执行目录启动；ffmpeg 改为随包相对动态库路径；所有随包 Mach-O 已补齐 ad-hoc 签名，不依赖用户系统 Python/PySide6/Homebrew。",
   "mandatory": false,
   "mirrors": [
@@ -27,7 +27,7 @@
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
       "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.17-macos.dmg",
       "package_type": "dmg",
-      "sha256": "794cf6b47d83590003da387dd8c6d7d7731f340a2d0e763eec7c841ccc63edea",
+      "sha256": "f21d671a6c0fd8d211966e96eeb246c42b3b0a81b47a0f45fe1a9ae71cd10974",
       "notes": "macOS 完整一键安装版，内置 GUI 运行组件、ffmpeg 及其随包动态库、独立 Resolve API Bridge 和必要文件；所有随包 Mach-O 已做 ad-hoc 签名；GUI 以插件目录内普通可执行目录启动，不会安装到桌面；正式包不默认联网安装依赖。"
     },
     "windows": {
