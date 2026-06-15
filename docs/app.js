@@ -56,7 +56,7 @@
   }
 
   const glowCards = document.querySelectorAll(
-    ".quick-features div, .interface-switcher, .function-grid article, .innovation-list article, .steps, .download-panel, .platform-card, .netdisk-panel, .legal-section > div, .community-section > div:first-child, .donate-mini, .donate-grid article",
+    ".quick-features div, .interface-switcher, .function-grid article, .innovation-list article, .steps, .mac-help-grid article, .download-panel, .platform-card, .netdisk-panel, .legal-section > div, .community-section > div:first-child, .donate-mini, .donate-grid article",
   );
 
   glowCards.forEach((card) => {
