@@ -1,6 +1,38 @@
 (() => {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const bg = document.getElementById("vanta-bg");
+  let bgRaf = 0;
+
+  if (bg && !reduceMotion) {
+    let targetX = 0.52;
+    let targetY = 0.38;
+    let currentX = targetX;
+    let currentY = targetY;
+
+    const renderPointerLight = () => {
+      currentX += (targetX - currentX) * 0.12;
+      currentY += (targetY - currentY) * 0.12;
+      bg.style.setProperty("--mouse-x", `${(currentX * 100).toFixed(2)}%`);
+      bg.style.setProperty("--mouse-y", `${(currentY * 100).toFixed(2)}%`);
+
+      if (Math.abs(targetX - currentX) > 0.001 || Math.abs(targetY - currentY) > 0.001) {
+        bgRaf = window.requestAnimationFrame(renderPointerLight);
+      } else {
+        bgRaf = 0;
+      }
+    };
+
+    window.addEventListener(
+      "pointermove",
+      (event) => {
+        targetX = event.clientX / window.innerWidth;
+        targetY = event.clientY / window.innerHeight;
+        if (!bgRaf) bgRaf = window.requestAnimationFrame(renderPointerLight);
+      },
+      { passive: true },
+    );
+  }
+
   if (bg && !reduceMotion && window.VANTA?.FOG && window.THREE) {
     const effect = window.VANTA.FOG({
       el: bg,
@@ -10,18 +42,46 @@
       gyroControls: false,
       minHeight: 200,
       minWidth: 200,
-      highlightColor: 0x75d69d,
-      midtoneColor: 0x173126,
-      lowlightColor: 0x060807,
-      baseColor: 0x050706,
-      blurFactor: 0.62,
-      speed: 0.75,
-      zoom: 0.72,
+      highlightColor: 0x92e0d6,
+      midtoneColor: 0x244a46,
+      lowlightColor: 0x0b1217,
+      baseColor: 0x070b0d,
+      blurFactor: 0.54,
+      speed: 0.52,
+      zoom: 0.82,
     });
     window.addEventListener("pagehide", () => effect.destroy());
   } else if (bg) {
     bg.classList.add("is-static");
   }
+
+  const glowCards = document.querySelectorAll(
+    ".quick-features div, .interface-switcher, .function-grid article, .innovation-list article, .steps, .download-panel, .platform-card, .netdisk-panel, .legal-section > div, .community-section > div:first-child, .donate-mini, .donate-grid article",
+  );
+
+  glowCards.forEach((card) => {
+    card.addEventListener(
+      "pointermove",
+      (event) => {
+        const rect = card.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * 100;
+        const y = ((event.clientY - rect.top) / rect.height) * 100;
+        card.style.setProperty("--card-x", `${x.toFixed(2)}%`);
+        card.style.setProperty("--card-y", `${y.toFixed(2)}%`);
+        card.classList.add("is-card-hovered");
+      },
+      { passive: true },
+    );
+    card.addEventListener("pointerleave", () => card.classList.remove("is-card-hovered"));
+  });
+
+  window.addEventListener(
+    "pagehide",
+    () => {
+      if (bgRaf) window.cancelAnimationFrame(bgRaf);
+    },
+    { once: true },
+  );
 
   const hasGsap = window.gsap && window.ScrollTrigger;
   if (!hasGsap || reduceMotion) return;
@@ -154,5 +214,4 @@
     card.addEventListener("mouseleave", () => yTo(0));
   });
 
-  window.addEventListener("pagehide", () => cancelAnimationFrame(raf), { once: true });
 })();

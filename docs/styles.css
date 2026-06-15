@@ -1,13 +1,16 @@
 :root {
-  --bg: #060807;
+  --bg: #070b0d;
   --ink: #f5f1e8;
-  --muted: #aeb7ad;
+  --muted: #aeb8b2;
   --soft: #d8d0c0;
   --line: rgba(245, 241, 232, 0.14);
   --glass: rgba(245, 241, 232, 0.07);
-  --green: #75d69d;
-  --gold: #e0b45b;
-  --coral: #e17f63;
+  --green: #86d99d;
+  --cyan: #92e0d6;
+  --gold: #d8b66d;
+  --coral: #de7f68;
+  --panel: rgba(12, 18, 18, 0.66);
+  --card-glow: rgba(146, 224, 214, 0.2);
 }
 
 * { box-sizing: border-box; }
@@ -16,7 +19,7 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    linear-gradient(180deg, #07100c 0%, var(--bg) 44%, #050706 100%);
+    linear-gradient(180deg, #0a1113 0%, var(--bg) 48%, #050708 100%);
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   letter-spacing: 0;
   overflow-x: hidden;
@@ -25,6 +28,8 @@ a { color: inherit; text-decoration: none; }
 img { display: block; width: 100%; height: auto; }
 
 #vanta-bg {
+  --mouse-x: 52%;
+  --mouse-y: 38%;
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -32,9 +37,22 @@ img { display: block; width: 100%; height: auto; }
   height: 100%;
   overflow: hidden;
   background:
-    radial-gradient(circle at 70% 25%, rgba(117,214,157,0.18), transparent 34%),
-    radial-gradient(circle at 20% 78%, rgba(224,180,91,0.12), transparent 30%),
-    linear-gradient(180deg, #07100c 0%, #050706 100%);
+    radial-gradient(circle at 74% 16%, rgba(146,224,214,0.16), transparent 34%),
+    radial-gradient(circle at 16% 76%, rgba(216,182,109,0.12), transparent 32%),
+    linear-gradient(180deg, #0b1517 0%, #070b0d 58%, #050708 100%);
+}
+#vanta-bg::before {
+  content: "";
+  position: absolute;
+  inset: -18%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(146,224,214,0.26), rgba(134,217,157,0.12) 15%, transparent 34%),
+    radial-gradient(circle at calc(var(--mouse-x) + 12%) calc(var(--mouse-y) + 18%), rgba(216,182,109,0.13), transparent 27%);
+  filter: blur(16px);
+  opacity: 0.86;
+  mix-blend-mode: screen;
+  transition: opacity 240ms ease;
 }
 #vanta-bg::after {
   content: "";
@@ -42,12 +60,12 @@ img { display: block; width: 100%; height: auto; }
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 28%, transparent 0 34%, rgba(6,8,7,0.22) 68%, rgba(6,8,7,0.62) 100%),
-    linear-gradient(to bottom, rgba(6,8,7,0.04), rgba(6,8,7,0.5) 100%);
+    radial-gradient(circle at 50% 28%, transparent 0 34%, rgba(7,11,13,0.22) 68%, rgba(7,11,13,0.66) 100%),
+    linear-gradient(to bottom, rgba(7,11,13,0.02), rgba(7,11,13,0.52) 100%);
   mix-blend-mode: multiply;
 }
 #vanta-bg canvas {
-  opacity: 0.86;
+  opacity: 0.78;
 }
 
 main, .site-footer {
@@ -67,7 +85,7 @@ main, .site-footer {
   justify-content: space-between;
   gap: 24px;
   padding: 0 clamp(18px, 4vw, 56px);
-  background: rgba(6, 8, 7, 0.62);
+  background: rgba(7, 11, 13, 0.66);
   border-bottom: 1px solid rgba(255,255,255,0.08);
   backdrop-filter: blur(24px);
 }
@@ -87,7 +105,7 @@ main, .site-footer {
   color: #08100c;
 }
 .nav-links { gap: 26px; color: rgba(245,241,232,0.72); font-size: 14px; }
-.nav-links a:hover, .site-footer a:hover { color: var(--green); }
+.nav-links a:hover, .site-footer a:hover { color: var(--cyan); }
 
 .header-action, .primary-button, .secondary-button {
   min-height: 44px;
@@ -102,7 +120,7 @@ main, .site-footer {
 .primary-button { padding: 0 24px; background: var(--ink); color: #08100c; }
 .secondary-button { padding: 0 22px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); }
 .header-action:hover, .primary-button:hover, .secondary-button:hover { transform: translateY(-2px); }
-.secondary-button:hover { border-color: rgba(117,214,157,0.55); }
+.secondary-button:hover { border-color: rgba(146,224,214,0.55); }
 
 .hero {
   position: relative;
@@ -118,8 +136,8 @@ main, .site-footer {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 68% 48%, transparent 0 26%, rgba(6,8,7,0.54) 56%, rgba(6,8,7,0.86) 88%),
-    linear-gradient(to bottom, rgba(6,8,7,0.08), rgba(6,8,7,0.8) 96%);
+    radial-gradient(circle at 68% 48%, transparent 0 26%, rgba(7,11,13,0.46) 56%, rgba(7,11,13,0.84) 88%),
+    linear-gradient(to bottom, rgba(7,11,13,0.05), rgba(7,11,13,0.78) 96%);
 }
 .hero-copy-block, .hero-product { position: relative; z-index: 2; }
 .eyebrow, .section-kicker {
@@ -148,7 +166,7 @@ main, .site-footer {
   margin: 18px 0 0;
   padding: 12px 16px;
   border-left: 3px solid var(--green);
-  background: rgba(117,214,157,0.08);
+  background: rgba(146,224,214,0.08);
   color: rgba(245,241,232,0.82);
   font-size: 15px;
   line-height: 1.7;
@@ -164,9 +182,9 @@ main, .site-footer {
   align-items: center;
   min-height: 36px;
   padding: 0 13px;
-  border: 1px solid rgba(117,214,157,0.24);
+  border: 1px solid rgba(146,224,214,0.24);
   border-radius: 999px;
-  background: rgba(117,214,157,0.08);
+  background: rgba(146,224,214,0.08);
   color: rgba(245,241,232,0.86);
   font-size: 14px;
   font-weight: 800;
@@ -178,7 +196,7 @@ main, .site-footer {
   width: min(660px, 50vw);
   border-radius: 18px;
   overflow: hidden;
-  background: #0d1110;
+  background: #101515;
   border: 1px solid rgba(255,255,255,0.18);
   box-shadow: 0 50px 140px rgba(0,0,0,0.58);
   transform-style: preserve-3d;
@@ -199,7 +217,7 @@ main, .site-footer {
   padding: 9px 13px;
   border: 1px solid rgba(255,255,255,0.16);
   border-radius: 999px;
-  background: rgba(6,8,7,0.66);
+  background: rgba(7,11,13,0.7);
   backdrop-filter: blur(18px);
   color: var(--ink);
   font-size: 13px;
@@ -220,7 +238,7 @@ main, .site-footer {
 .quick-features div {
   min-height: 138px;
   padding: 24px 28px;
-  background: #0b0f0d;
+  background: rgba(11, 17, 17, 0.88);
 }
 .quick-features strong {
   display: block;
@@ -232,6 +250,153 @@ main, .site-footer {
   margin-top: 14px;
   color: var(--muted);
   line-height: 1.58;
+}
+
+.quick-features div,
+.interface-switcher,
+.function-grid article,
+.innovation-list article,
+.steps,
+.download-panel,
+.platform-card,
+.netdisk-panel,
+.legal-section > div,
+.community-section > div:first-child,
+.donate-mini,
+.donate-grid article {
+  --card-x: 50%;
+  --card-y: 50%;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  z-index: 0;
+  transition:
+    transform 220ms ease,
+    border-color 220ms ease,
+    background 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.quick-features div::before,
+.interface-switcher::before,
+.function-grid article::before,
+.innovation-list article::before,
+.steps::before,
+.download-panel::before,
+.platform-card::before,
+.netdisk-panel::before,
+.legal-section > div::before,
+.community-section > div:first-child::before,
+.donate-mini::before,
+.donate-grid article::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: inherit;
+  padding: 1px;
+  background:
+    linear-gradient(135deg, rgba(146,224,214,0), rgba(146,224,214,0.58), rgba(216,182,109,0.34), rgba(146,224,214,0));
+  opacity: 0;
+  transition: opacity 220ms ease;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.quick-features div::after,
+.interface-switcher::after,
+.function-grid article::after,
+.innovation-list article::after,
+.steps::after,
+.download-panel::after,
+.platform-card::after,
+.netdisk-panel::after,
+.legal-section > div::after,
+.community-section > div:first-child::after,
+.donate-mini::after,
+.donate-grid article::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at var(--card-x) var(--card-y), rgba(146,224,214,0.18), rgba(134,217,157,0.07) 22%, transparent 48%);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.quick-features div > *,
+.interface-switcher > *,
+.function-grid article > *,
+.innovation-list article > *,
+.steps > *,
+.download-panel > *,
+.platform-card > *,
+.netdisk-panel > *,
+.legal-section > div > *,
+.community-section > div:first-child > *,
+.donate-mini > *,
+.donate-grid article > * {
+  position: relative;
+  z-index: 1;
+}
+
+.quick-features div:hover,
+.interface-switcher:hover,
+.function-grid article:hover,
+.innovation-list article:hover,
+.steps:hover,
+.download-panel:hover,
+.platform-card:hover,
+.netdisk-panel:hover,
+.legal-section > div:hover,
+.community-section > div:first-child:hover,
+.donate-mini:hover,
+.donate-grid article:hover,
+.is-card-hovered {
+  border-color: rgba(146,224,214,0.36);
+  box-shadow:
+    0 0 0 1px rgba(146,224,214,0.08),
+    0 18px 56px rgba(0,0,0,0.26),
+    0 0 36px rgba(146,224,214,0.08);
+}
+
+.quick-features div:hover::before,
+.interface-switcher:hover::before,
+.function-grid article:hover::before,
+.innovation-list article:hover::before,
+.steps:hover::before,
+.download-panel:hover::before,
+.platform-card:hover::before,
+.netdisk-panel:hover::before,
+.legal-section > div:hover::before,
+.community-section > div:first-child:hover::before,
+.donate-mini:hover::before,
+.donate-grid article:hover::before,
+.is-card-hovered::before {
+  opacity: 0.82;
+}
+
+.quick-features div:hover::after,
+.interface-switcher:hover::after,
+.function-grid article:hover::after,
+.innovation-list article:hover::after,
+.steps:hover::after,
+.download-panel:hover::after,
+.platform-card:hover::after,
+.netdisk-panel:hover::after,
+.legal-section > div:hover::after,
+.community-section > div:first-child:hover::after,
+.donate-mini:hover::after,
+.donate-grid article:hover::after,
+.is-card-hovered::after {
+  opacity: 1;
 }
 
 .showcase-section {
