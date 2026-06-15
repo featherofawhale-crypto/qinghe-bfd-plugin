@@ -264,14 +264,22 @@ class PySideUiRegressionTests(unittest.TestCase):
     def test_duplicate_detection_and_ffmpeg_runner_are_windows_ready(self) -> None:
         entry_source = WINDOWS_LUA_ENTRY.read_text(encoding="utf-8")
         duplicate_source = (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "duplicate_detector.lua").read_text(encoding="utf-8")
-        ffmpeg_source = (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "ffmpeg_runner.lua").read_text(encoding="utf-8")
+        ffmpeg_sources = [
+            (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "ffmpeg_runner.lua").read_text(encoding="utf-8"),
+            (WINDOWS_PLUGIN_DIR / "modules" / "ffmpeg_runner.lua").read_text(encoding="utf-8"),
+        ]
 
         self.assertIn("pcall(function() left_offset = item:GetLeftOffset() end)", entry_source)
         self.assertIn("pcall(function() source_dur = item:GetDuration() end)", entry_source)
         self.assertIn("local function clip_timeline_duration", duplicate_source)
         self.assertIn("short_duplicate_side", duplicate_source)
-        self.assertIn("raw_file_exists", ffmpeg_source)
-        self.assertIn('self.os ~= "macos" and self:_test_ffmpeg("ffmpeg")', ffmpeg_source)
+        for ffmpeg_source in ffmpeg_sources:
+            self.assertIn("raw_file_exists", ffmpeg_source)
+            self.assertIn("Windows must prefer packaged FFmpeg", ffmpeg_source)
+            self.assertIn('self.os ~= "macos" and self:_test_ffmpeg("ffmpeg")', ffmpeg_source)
+            bundled_idx = ffmpeg_source.index("Windows must prefer packaged FFmpeg")
+            path_idx = ffmpeg_source.index('self.os ~= "macos" and self:_test_ffmpeg("ffmpeg")')
+            self.assertLess(bundled_idx, path_idx)
 
 
 if __name__ == "__main__":

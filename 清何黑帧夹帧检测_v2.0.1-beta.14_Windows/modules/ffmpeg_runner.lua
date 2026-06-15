@@ -72,6 +72,15 @@ function FFmpegRunner:find_ffmpeg()
         return true
     end
 
+    -- Windows must prefer packaged FFmpeg so a system PATH install cannot change detection results.
+    if self.os == "windows" then
+        local bundled = self:_find_bundled_ffmpeg()
+        if bundled and self:_test_ffmpeg(bundled) then
+            runner_log("find_ffmpeg bundled OK: " .. tostring(bundled))
+            return true
+        end
+    end
+
     -- 1. macOS 先走系统/绝对路径。随包 dylib 可能被 Gatekeeper 隔离，
     --    若先探测随包 ffmpeg，系统安全弹窗会让 Resolve 的 io.popen 卡死。
     if self.os ~= "macos" and self:_test_ffmpeg("ffmpeg") then

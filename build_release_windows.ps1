@@ -74,6 +74,15 @@ function Invoke-Python {
     }
 }
 
+function Invoke-PythonCapture {
+    param([string[]]$Arguments)
+    $output = & $PythonCommand.Exe @($PythonCommand.Args) @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python command failed: $($PythonCommand.Label) $($Arguments -join ' ')"
+    }
+    return $output
+}
+
 New-Item -ItemType Directory -Force -Path $BuildRoot, $ReleaseRoot | Out-Null
 
 if (Test-Path $StageRoot) {
@@ -105,6 +114,12 @@ if ($LASTEXITCODE -ne 0) {
 
 Invoke-Python -Arguments @("-m", "pip", "install", "-r", (Join-Path $Root "pyside_ui\requirements.txt"))
 
+$BuildPythonInfo = Invoke-PythonCapture -Arguments @(
+    "-c",
+    "import sys, PyInstaller, PySide6; from PySide6 import QtCore; print(f'python={sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro} exe={sys.executable}'); print(f'pyinstaller={PyInstaller.__version__}'); print(f'pyside6={PySide6.__version__} qt={QtCore.qVersion()}')"
+)
+$BuildPythonInfo | ForEach-Object { Write-Host $_ }
+
 $pyinstallerArgs = @(
     "-m", "PyInstaller",
     "--noconfirm",
@@ -124,6 +139,11 @@ $pyinstallerArgs = @(
     (Join-Path $Root "pyside_ui\app.py")
 )
 Invoke-Python -Arguments $pyinstallerArgs
+
+$BundledQtCore = Join-Path $PyInstallerDist "QingheBFDControl\_internal\PySide6\Qt6Core.dll"
+if (!(Test-Path $BundledQtCore)) {
+    throw "Packaged PySide6/Qt runtime is missing from PyInstaller output: $BundledQtCore"
+}
 
 $bytecodeArgs = @(
     (Join-Path $Root "tools\lua_bytecode_builder.py"),
