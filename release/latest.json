@@ -1,16 +1,16 @@
 {
-  "version": "2.0.1-beta.15",
+  "version": "2.0.1-beta.16",
   "channel": "beta",
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.15-macos.dmg",
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.16-macos.dmg",
   "package_type": "dmg",
-  "sha256": "f3c879b0cd8176fb9f3a53867ec9ed5cc885e5569d48645389ca917c07b0556d",
-  "notes": "macOS 测试版更新：采用中文一键安装 DMG，内置完整 GUI 运行组件但只作为达芬奇插件内部组件使用，不安装到桌面；其他 Mac 即使没有 Python/PySide6、网络不能访问国外源，也可安装后通过达芬奇脚本入口直接使用；同时放宽字幕读取、导出和 SRT 替换的 Resolve API 等待时间，降低 1 小时以上时间线字幕操作超时失败概率。",
+  "sha256": "1e662ca90c9f8403846c549d870b68476bc092553c7c75480233ee25c5d90321",
+  "notes": "macOS 测试版更新：修正内置 GUI 版本号链路，完整包内置 PySide6 运行组件、ffmpeg 和必要文件；其他 Mac 即使没有 Python/PySide6、网络不能访问国外源，也可安装后通过达芬奇脚本入口直接使用；同时安装与更新流程会清理本包隔离属性，降低“无法验证”拦截。",
   "mandatory": false,
   "mirrors": [
     {
       "name": "CNB",
-      "manifest_url": "https://cnb.cool/featherofawhale-crypto/qinghe-bfd-plugin/-/releases/download/latest/latest.json",
+      "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/latest.json",
       "priority": 1,
       "notes": "国内优先更新源，建议公开放 latest.json 和安装包附件。"
     },
@@ -23,11 +23,11 @@
   ],
   "platforms": {
     "mac": {
-      "version": "2.0.1-beta.15",
+      "version": "2.0.1-beta.16",
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.15-macos.dmg",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.16-macos.dmg",
       "package_type": "dmg",
-      "sha256": "f3c879b0cd8176fb9f3a53867ec9ed5cc885e5569d48645389ca917c07b0556d",
+      "sha256": "1e662ca90c9f8403846c549d870b68476bc092553c7c75480233ee25c5d90321",
       "notes": "macOS 完整一键安装版，内置 GUI 运行组件、ffmpeg 和必要文件；app 仅安装到 Resolve 插件目录，不会安装到桌面；正式包不默认联网安装依赖，会覆盖安装并保留本地 Text+ 样式库。"
     },
     "windows": {
