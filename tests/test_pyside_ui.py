@@ -57,6 +57,8 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn("Recent PySide params found; skip launching UI and run detection", entry_source)
         self.assertIn('cmd.exe /C start "" "', entry_source)
         self.assertIn('lower_launcher:sub(-4) == ".vbs"', entry_source)
+        self.assertIn('"pyside_ui" .. sep .. "QingheBFDControl"', entry_source)
+        self.assertIn("PySide UI launcher inferred from module dir", entry_source)
         self.assertIn("detect_mixed_cut = false", bridge_source)
         self.assertIn("MARK_COMPOSITE_NONORMAL", (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "config.lua").read_text(encoding="utf-8"))
         self.assertNotIn("clip.timeline_end_frame", analyzer_source)
@@ -69,6 +71,84 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn("def list_caption_templates", bridge_source)
         self.assertIn("def _estimate_bpm_with_ffmpeg", bridge_source)
         self.assertIn("caption-bin.drb", bridge_source)
+        self.assertIn("qinghe_resolve_bridge_", bridge_source)
+        self.assertIn("last_bridge_error.json", bridge_source)
+        self.assertIn('root / "ffmpeg" / "windows" / "ffmpeg.exe"', bridge_source)
+        self.assertIn('root / "ffmpeg" / "windows" / "ffprobe.exe"', bridge_source)
+        self.assertIn('"black_frame_detector"', bridge_source)
+        self.assertIn("if root == root.parent:", bridge_source)
+        self.assertIn('platform.system().lower() == "windows"', bridge_source)
+        self.assertIn("def find_bundled_python_runtime", bridge_source)
+        self.assertIn('"python_runtime" / "python.exe"', bridge_source)
+        self.assertIn('env["PYTHONHOME"] = str(python_home)', bridge_source)
+        self.assertIn("[sys.executable, BRIDGE_WORKER_ARG]", bridge_source)
+
+    def test_marker_refresh_bridge_builds_without_fstring_regression(self) -> None:
+        from resolve_bridge import ResolveBridge
+
+        bridge = ResolveBridge()
+        bridge._run_resolve_python = lambda _body, timeout=5: {  # type: ignore[method-assign]
+            "ok": True,
+            "records": [],
+            "counts": {"total": 0},
+            "message": "ok",
+        }
+
+        result = bridge.bfd_marker_records(1)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["records"], [])
+
+    def test_update_manifest_does_not_offer_macos_package_on_windows(self) -> None:
+        app_source = (PYSIDE_DIR / "app.py").read_text(encoding="utf-8")
+
+        self.assertIn("def allowed_update_package_suffixes", app_source)
+        self.assertIn("return {\".exe\", \".msi\", \".zip\"}", app_source)
+        self.assertIn("def is_update_package_compatible", app_source)
+        self.assertIn("if platforms and not platform_info:", app_source)
+        self.assertIn("download_url = \"\"", app_source)
+
+        original_update_platform_key = self.pyside_app.update_platform_key
+        try:
+            self.pyside_app.update_platform_key = lambda: "windows"
+            info = self.pyside_app.update_info_from_manifest(
+                {
+                    "version": "9.9.9",
+                    "download_url": "https://example.com/QingheBFD.dmg",
+                    "package_type": "dmg",
+                    "platforms": {
+                        "mac": {
+                            "version": "9.9.9",
+                            "download_url": "https://example.com/QingheBFD.dmg",
+                            "package_type": "dmg",
+                        }
+                    },
+                }
+            )
+            self.assertEqual(info["platform"], "windows")
+            self.assertEqual(info["latest_version"], "")
+            self.assertEqual(info["download_url"], "")
+
+            fallback_info = self.pyside_app.update_info_from_manifest(
+                {
+                    "version": "9.9.9",
+                    "download_url": "https://example.com/QingheBFD.dmg",
+                    "package_type": "dmg",
+                }
+            )
+            self.assertEqual(fallback_info["latest_version"], "9.9.9")
+            self.assertEqual(fallback_info["download_url"], "")
+
+            win_info = self.pyside_app.update_info_from_manifest(
+                {
+                    "version": "9.9.9",
+                    "download_url": "https://example.com/QingheBFD_v9.9.9_Windows_Setup.exe",
+                    "package_type": "exe",
+                }
+            )
+            self.assertTrue(win_info["download_url"].endswith("_Windows_Setup.exe"))
+        finally:
+            self.pyside_app.update_platform_key = original_update_platform_key
 
     def test_timeline_cache_no_longer_overrides_current_resolve_timeline(self) -> None:
         source = (PYSIDE_DIR / "app.py").read_text(encoding="utf-8")
@@ -114,7 +194,12 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn("donate", source)
         self.assertIn("templates", source)
         self.assertIn("data", source)
+        self.assertIn('Copy-Item (Join-Path $Root "pyside_ui\\data") $StageUi -Recurse -Force', source)
+        self.assertIn('Copy-Item (Join-Path $Root "pyside_ui\\templates") $StageUi -Recurse -Force', source)
+        self.assertIn("test_resolve_api_bridge.ps1", source)
         self.assertIn("QingheBFDControl", source)
+        self.assertIn("python_runtime", source)
+        self.assertIn("Bundled Python runtime is missing python.exe", source)
         self.assertNotIn("private_docs", source)
 
     def test_installer_is_one_click_and_installs_icons_ui_and_ffmpeg(self) -> None:
@@ -127,6 +212,9 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn("ui_launcher_path.txt", source)
         self.assertIn("QingheBFDControl.exe", source)
         self.assertIn("legacyDesktopShortcut", source)
+        self.assertIn("cmd.exe /c del /f /q", source)
+        self.assertIn("Move-Item -LiteralPath $TempLauncherPath", source)
+        self.assertIn("Resolve Lua entry will infer the bundled UI path", source)
         self.assertNotIn("WScript.Shell", source)
 
     def test_windows_exe_installer_and_uninstaller_are_defined(self) -> None:
@@ -151,6 +239,7 @@ class PySideUiRegressionTests(unittest.TestCase):
 
     def test_component_checker_covers_windows_release_requirements(self) -> None:
         source = (ROOT / "check_components.ps1").read_text(encoding="utf-8")
+        smoke_source = (ROOT / "tools" / "test_resolve_api_bridge.ps1").read_text(encoding="utf-8")
 
         self.assertIn("Project FFmpeg", source)
         self.assertIn("Project FFprobe", source)
@@ -158,6 +247,19 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn("Packaged Python Runtime", source)
         self.assertIn("ffmpeg\\windows\\ffmpeg.exe", source)
         self.assertIn("ffprobe.exe", source)
+        self.assertIn("MutateTempMarker", smoke_source)
+        self.assertIn("current_timeline_marks", smoke_source)
+        self.assertIn("bfd_marker_records", smoke_source)
+        self.assertIn("current_timeline_clip_snapshot", smoke_source)
+        self.assertIn("scan_mono_audio", smoke_source)
+        self.assertIn("probe_media_pool_api", smoke_source)
+        self.assertIn("list_caption_templates", smoke_source)
+        self.assertIn("scan_font_items", smoke_source)
+        self.assertIn("check_font_available", smoke_source)
+        self.assertIn("font_style_library.json", smoke_source)
+        self.assertIn("estimate_selected_audio_bpm", smoke_source)
+        self.assertIn("_find_ffmpeg_binary", smoke_source)
+        self.assertIn("BFD_SMOKE_TEST_ONLY_DELETE_ME", smoke_source)
 
     def test_duplicate_detection_and_ffmpeg_runner_are_windows_ready(self) -> None:
         entry_source = WINDOWS_LUA_ENTRY.read_text(encoding="utf-8")

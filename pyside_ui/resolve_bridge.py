@@ -7,6 +7,7 @@ import sys
 import json
 import time
 import shutil
+import tempfile
 from array import array
 from dataclasses import dataclass
 from pathlib import Path
@@ -169,6 +170,7 @@ def lua_value(value: Any) -> str:
 def resolve_python_script(body: str) -> str:
     bootstrap = r'''
 import importlib.util
+import builtins
 import json
 import os
 import platform
@@ -207,15 +209,70 @@ def add_default_module_path():
         sys.path.insert(0, path)
 
 add_default_module_path()
-import DaVinciResolveScript as dvr_script
+if "bmd" in globals():
+    class _BmdScriptModule:
+        @staticmethod
+        def scriptapp(name):
+            return bmd.scriptapp(name)
+
+    dvr_script = _BmdScriptModule()
+else:
+    import DaVinciResolveScript as dvr_script
+
+_bridge_output_path = os.environ.get("QINGHE_RESOLVE_BRIDGE_OUTPUT")
+if _bridge_output_path:
+    _original_print = builtins.print
+
+    def _bridge_print(*args, **kwargs):
+        _original_print(*args, **kwargs)
+        text = kwargs.get("sep", " ").join(str(arg) for arg in args) + kwargs.get("end", "\n")
+        try:
+            with open(_bridge_output_path, "a", encoding="utf-8") as _bridge_output:
+                _bridge_output.write(text)
+        except Exception:
+            pass
+
+    builtins.print = _bridge_print
 '''
     return bootstrap + "\n" + body
 
 
+def write_temp_resolve_script(script: str) -> str:
+    handle, path = tempfile.mkstemp(prefix="qinghe_resolve_bridge_", suffix=".py")
+    with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as file:
+        file.write(script)
+    return path
+
+
+def find_bundled_python_runtime() -> Path | None:
+    candidates: list[Path] = []
+    executable = Path(sys.executable).resolve()
+    for parent in [executable.parent, *executable.parents]:
+        candidates.extend(
+            [
+                parent / "python_runtime" / "python.exe",
+                parent / "pyside_ui" / "python_runtime" / "python.exe",
+            ]
+        )
+    module_file = Path(__file__).resolve()
+    for parent in [module_file.parent, *module_file.parents]:
+        candidates.append(parent / "python_runtime" / "python.exe")
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def build_resolve_python_process(body: str) -> tuple[list[str], str | None]:
     script = resolve_python_script(body)
+    if getattr(sys, "frozen", False) and platform.system().lower() == "windows":
+        bundled_python = find_bundled_python_runtime()
+        if bundled_python:
+            return [str(bundled_python), write_temp_resolve_script(script)], None
     if getattr(sys, "frozen", False):
         return [sys.executable, BRIDGE_WORKER_ARG], script
+    if platform.system().lower() == "windows":
+        return [sys.executable, write_temp_resolve_script(script)], None
     return [sys.executable, "-c", script], None
 
 
@@ -2127,7 +2184,34 @@ print(json.dumps({{
         return data
 
     def _find_ffmpeg_binary(self) -> str:
+        local_candidates = []
+        if platform.system().lower() == "windows":
+            appdata = Path(os.environ.get("APPDATA", ""))
+            if appdata:
+                local_candidates.append(
+                    appdata
+                    / "Blackmagic Design"
+                    / "DaVinci Resolve"
+                    / "Support"
+                    / "Fusion"
+                    / "Scripts"
+                    / "Modules"
+                    / "black_frame_detector"
+                    / "ffmpeg"
+                    / "windows"
+                    / "ffmpeg.exe"
+                )
+        here = Path(__file__).resolve()
+        for root in [here.parent, *here.parents]:
+            if root == root.parent:
+                continue
+            local_candidates.extend([
+                root / "ffmpeg" / "windows" / "ffmpeg.exe",
+                root / "QingheBFD_Plugin_Windows" / "ffmpeg" / "windows" / "ffmpeg.exe",
+                root / "ffmpeg" / "bin" / "ffmpeg.exe",
+            ])
         candidates = [
+            *(str(path) for path in local_candidates),
             shutil.which("ffmpeg") or "",
             "/opt/homebrew/bin/ffmpeg",
             "/usr/local/bin/ffmpeg",
@@ -2139,7 +2223,34 @@ print(json.dumps({{
         return ""
 
     def _find_ffprobe_binary(self) -> str:
+        local_candidates = []
+        if platform.system().lower() == "windows":
+            appdata = Path(os.environ.get("APPDATA", ""))
+            if appdata:
+                local_candidates.append(
+                    appdata
+                    / "Blackmagic Design"
+                    / "DaVinci Resolve"
+                    / "Support"
+                    / "Fusion"
+                    / "Scripts"
+                    / "Modules"
+                    / "black_frame_detector"
+                    / "ffmpeg"
+                    / "windows"
+                    / "ffprobe.exe"
+                )
+        here = Path(__file__).resolve()
+        for root in [here.parent, *here.parents]:
+            if root == root.parent:
+                continue
+            local_candidates.extend([
+                root / "ffmpeg" / "windows" / "ffprobe.exe",
+                root / "QingheBFD_Plugin_Windows" / "ffmpeg" / "windows" / "ffprobe.exe",
+                root / "ffmpeg" / "bin" / "ffprobe.exe",
+            ])
         candidates = [
+            *(str(path) for path in local_candidates),
             shutil.which("ffprobe") or "",
             "/opt/homebrew/bin/ffprobe",
             "/usr/local/bin/ffprobe",
@@ -2319,12 +2430,12 @@ def parse_font_candidate(value):
     return text, "", ""
 
 def font_replace_result(ok, font, accepted_font, message, **extra):
-    payload = {
+    payload = {{
         "ok": bool(ok),
         "font": font,
         "accepted_font": accepted_font,
         "message": message,
-    }
+    }}
     payload.update(extra)
     return payload
 
@@ -5598,9 +5709,38 @@ print(json.dumps({"connected": resolve is not None}))
     @staticmethod
     def _run_resolve_python(body: str, timeout: float = 5) -> dict[str, Any] | None:
         command, stdin_script = build_resolve_python_process(body)
+        temp_script_path = ""
+        temp_output_path = ""
+        if len(command) >= 2 and str(command[1]).endswith(".py") and "qinghe_resolve_bridge_" in str(command[1]):
+            temp_script_path = str(command[1])
+        def record_error(kind: str, detail: str = "", stdout: str = "", stderr: str = "", returncode: int | None = None) -> None:
+            try:
+                payload = {
+                    "kind": kind,
+                    "detail": detail,
+                    "stdout_tail": (stdout or "")[-4000:],
+                    "stderr_tail": (stderr or "")[-4000:],
+                    "returncode": returncode,
+                    "command": command[:2],
+                    "time": int(time.time()),
+                }
+                (runtime_dir() / "last_bridge_error.json").write_text(
+                    json.dumps(payload, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
         try:
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
+            if command and Path(str(command[0])).name.lower() == "python.exe":
+                python_home = Path(str(command[0])).resolve().parent
+                if (python_home / "python314.dll").exists() or (python_home / "python312.dll").exists():
+                    env["PYTHONHOME"] = str(python_home)
+            if command and Path(str(command[0])).name.lower() == "fuscript.exe":
+                handle, temp_output_path = tempfile.mkstemp(prefix="qinghe_resolve_bridge_output_", suffix=".jsonl")
+                os.close(handle)
+                env["QINGHE_RESOLVE_BRIDGE_OUTPUT"] = temp_output_path
             if platform.system().lower() == "darwin":
                 script_api = env.get(
                     "RESOLVE_SCRIPT_API",
@@ -5615,6 +5755,9 @@ print(json.dumps({"connected": resolve is not None}))
                     env.setdefault("RESOLVE_SCRIPT_LIB", script_lib)
                 module_path = str(Path(script_api) / "Modules")
                 env["PYTHONPATH"] = module_path + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
+            subprocess_kwargs = {}
+            if not (command and Path(str(command[0])).name.lower() == "fuscript.exe"):
+                subprocess_kwargs = hidden_subprocess_kwargs()
             completed = subprocess.run(
                 command,
                 input=stdin_script,
@@ -5625,16 +5768,43 @@ print(json.dumps({"connected": resolve is not None}))
                 capture_output=True,
                 timeout=timeout,
                 check=False,
-                **hidden_subprocess_kwargs(),
+                **subprocess_kwargs,
             )
-        except Exception:
+        except Exception as exc:
+            record_error("exception", str(exc))
+            if temp_output_path:
+                try:
+                    Path(temp_output_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
             return None
+        finally:
+            if temp_script_path:
+                try:
+                    Path(temp_script_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+        raw_output = completed.stdout or ""
+        if temp_output_path:
+            try:
+                file_output = Path(temp_output_path).read_text(encoding="utf-8")
+                if file_output.strip():
+                    raw_output = file_output
+            except Exception:
+                pass
+            try:
+                Path(temp_output_path).unlink(missing_ok=True)
+            except Exception:
+                pass
         if completed.returncode != 0:
+            record_error("returncode", stdout=raw_output, stderr=completed.stderr or "", returncode=completed.returncode)
             return None
-        output = (completed.stdout or "").strip().splitlines()
+        output = raw_output.strip().splitlines()
         if not output:
+            record_error("empty_stdout", stdout=raw_output, stderr=completed.stderr or "", returncode=completed.returncode)
             return None
         try:
             return json.loads(output[-1])
-        except Exception:
+        except Exception as exc:
+            record_error("json", str(exc), stdout=raw_output, stderr=completed.stderr or "", returncode=completed.returncode)
             return None

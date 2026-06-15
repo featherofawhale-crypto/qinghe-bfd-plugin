@@ -142,6 +142,28 @@ def update_platform_key() -> str:
     return system.lower() or "unknown"
 
 
+def allowed_update_package_suffixes(platform_key: str | None = None) -> set[str]:
+    key = platform_key or update_platform_key()
+    if key == "mac":
+        return {".dmg", ".zip", ".command"}
+    if key == "windows":
+        return {".exe", ".msi", ".zip"}
+    return {".zip", ".tar", ".gz", ".tgz"}
+
+
+def is_update_package_compatible(download_url: str, package_type: str, platform_key: str | None = None) -> bool:
+    suffixes = allowed_update_package_suffixes(platform_key)
+    suffix = Path(urllib.parse.urlparse(str(download_url or "")).path).suffix.lower()
+    pkg_type = str(package_type or "").strip().lower()
+    if pkg_type and not pkg_type.startswith("."):
+        pkg_type = "." + pkg_type
+    if suffix and suffix not in suffixes:
+        return False
+    if pkg_type and pkg_type not in suffixes:
+        return False
+    return bool(download_url)
+
+
 def update_manifest_urls() -> list[str]:
     urls: list[str] = []
     override = os.environ.get("QINGHE_UPDATE_MANIFEST_URL", "").strip()
@@ -222,12 +244,29 @@ def update_info_from_manifest(manifest: dict) -> dict:
     platform_key = update_platform_key()
     platforms = manifest.get("platforms") if isinstance(manifest.get("platforms"), dict) else {}
     platform_info = platforms.get(platform_key) if isinstance(platforms.get(platform_key), dict) else {}
+    if platforms and not platform_info:
+        return {
+            "platform": platform_key,
+            "latest_version": "",
+            "download_url": "",
+            "package_type": "",
+            "sha256": "",
+            "release_url": str(manifest.get("release_url") or "").strip(),
+            "notes": "",
+            "manifest_url": str(manifest.get("_manifest_url") or "").strip(),
+            "mandatory": False,
+        }
     latest_version = str(platform_info.get("version") or manifest.get("version") or "").strip()
+    download_url = str(platform_info.get("download_url") or ("" if platforms else manifest.get("download_url")) or "").strip()
+    package_type = str(platform_info.get("package_type") or ("" if platforms else manifest.get("package_type")) or "").strip().lower()
+    if download_url and not is_update_package_compatible(download_url, package_type, platform_key):
+        download_url = ""
+        package_type = ""
     return {
         "platform": platform_key,
         "latest_version": latest_version,
-        "download_url": str(platform_info.get("download_url") or manifest.get("download_url") or "").strip(),
-        "package_type": str(platform_info.get("package_type") or manifest.get("package_type") or "").strip().lower(),
+        "download_url": download_url,
+        "package_type": package_type,
         "sha256": str(platform_info.get("sha256") or manifest.get("sha256") or "").strip().lower(),
         "release_url": str(platform_info.get("release_url") or manifest.get("release_url") or "").strip(),
         "notes": str(platform_info.get("notes") or manifest.get("notes") or "").strip(),

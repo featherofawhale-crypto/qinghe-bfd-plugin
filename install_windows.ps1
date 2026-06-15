@@ -77,11 +77,25 @@ if (Test-Path $PackagedUiExe) {
 }
 
 if ($ShortcutTarget) {
-    [System.IO.File]::WriteAllText(
-        (Join-Path $ModulesDir "ui_launcher_path.txt"),
-        $ShortcutTarget,
-        (New-Object System.Text.UTF8Encoding $false)
-    )
+    $LauncherPath = Join-Path $ModulesDir "ui_launcher_path.txt"
+    if (Test-Path -LiteralPath $LauncherPath) {
+        try {
+            Remove-Item -LiteralPath $LauncherPath -Force
+        } catch {
+            cmd.exe /c del /f /q "$LauncherPath" | Out-Null
+        }
+    }
+    try {
+        $TempLauncherPath = Join-Path $ModulesDir ("ui_launcher_path." + [guid]::NewGuid().ToString("N") + ".tmp")
+        [System.IO.File]::WriteAllText(
+            $TempLauncherPath,
+            $ShortcutTarget,
+            (New-Object System.Text.UTF8Encoding $false)
+        )
+        Move-Item -LiteralPath $TempLauncherPath -Destination $LauncherPath -Force
+    } catch {
+        Write-Host "Warning: could not write ui_launcher_path.txt; Resolve Lua entry will infer the bundled UI path."
+    }
 }
 
 $legacyDesktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Qinghe BFD Control.lnk"

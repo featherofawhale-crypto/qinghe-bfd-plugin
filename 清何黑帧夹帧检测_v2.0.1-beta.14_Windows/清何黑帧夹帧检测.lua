@@ -891,6 +891,20 @@ local function try_launch_external_ui()
 
     local sep = package.config:sub(1, 1)
     local launcher = read_first_line(BFD_MODULE_DIR .. sep .. "ui_launcher_path.txt")
+    if (not launcher or not file_exists(launcher)) and sep == "\\" then
+        local inferred = BFD_MODULE_DIR .. sep .. "pyside_ui" .. sep .. "QingheBFDControl" .. sep .. "QingheBFDControl.exe"
+        if file_exists(inferred) then
+            launcher = inferred
+            dlog("PySide UI launcher inferred from module dir: " .. launcher)
+        end
+    end
+    if (not launcher or not file_exists(launcher)) and sep ~= "\\" then
+        local inferred = BFD_MODULE_DIR .. sep .. "pyside_ui" .. sep .. "run_ui.sh"
+        if file_exists(inferred) then
+            launcher = inferred
+            dlog("PySide UI launcher inferred from module dir: " .. launcher)
+        end
+    end
     if not launcher or not file_exists(launcher) then
         dlog("PySide UI launcher missing: " .. tostring(launcher))
         return false

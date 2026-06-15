@@ -30,6 +30,50 @@ $StageRoot = Join-Path $ReleaseRoot $ReleaseName
 $StagePlugin = Join-Path $StageRoot "QingheBFD_Plugin_Windows"
 $StageUi = Join-Path $StageRoot "pyside_ui"
 
+function Resolve-PythonCommand {
+    if ($env:QINGHE_PYTHON) {
+        if (!(Test-Path $env:QINGHE_PYTHON)) {
+            throw "QINGHE_PYTHON points to a missing file: $env:QINGHE_PYTHON"
+        }
+        return @{
+            Exe = $env:QINGHE_PYTHON
+            Args = @()
+            Label = $env:QINGHE_PYTHON
+        }
+    }
+
+    $py = Get-Command py -ErrorAction SilentlyContinue
+    if ($py) {
+        return @{
+            Exe = $py.Source
+            Args = @("-3")
+            Label = "py -3"
+        }
+    }
+
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        return @{
+            Exe = $python.Source
+            Args = @()
+            Label = $python.Source
+        }
+    }
+
+    throw "Python was not found. Install Python or set QINGHE_PYTHON to python.exe."
+}
+
+$PythonCommand = Resolve-PythonCommand
+Write-Host "Using Python: $($PythonCommand.Label)"
+
+function Invoke-Python {
+    param([string[]]$Arguments)
+    & $PythonCommand.Exe @($PythonCommand.Args) @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python command failed: $($PythonCommand.Label) $($Arguments -join ' ')"
+    }
+}
+
 New-Item -ItemType Directory -Force -Path $BuildRoot, $ReleaseRoot | Out-Null
 
 if (Test-Path $StageRoot) {
@@ -38,38 +82,57 @@ if (Test-Path $StageRoot) {
     if (-not $resolvedStage.StartsWith($resolvedRelease)) {
         throw "Refusing to remove path outside release root: $resolvedStage"
     }
-    Remove-Item -LiteralPath $StageRoot -Recurse -Force
+    try {
+        Remove-Item -LiteralPath $StageRoot -Recurse -Force
+    } catch {
+        $emptyDir = Join-Path $BuildRoot "empty-dir-for-clean"
+        if (Test-Path $emptyDir) {
+            Remove-Item -LiteralPath $emptyDir -Recurse -Force
+        }
+        New-Item -ItemType Directory -Force -Path $emptyDir | Out-Null
+        robocopy $emptyDir $StageRoot /MIR | Out-Host
+        if ($LASTEXITCODE -gt 7) {
+            throw "Failed to clear stale release folder: $StageRoot"
+        }
+        Remove-Item -LiteralPath $StageRoot -Recurse -Force
+    }
 }
 
-py -3 -m pip show pyinstaller *> $null
+& $PythonCommand.Exe @($PythonCommand.Args) -m pip show pyinstaller *> $null
 if ($LASTEXITCODE -ne 0) {
-    py -3 -m pip install pyinstaller
+    Invoke-Python -Arguments @("-m", "pip", "install", "pyinstaller")
 }
 
-py -3 -m pip install -r (Join-Path $Root "pyside_ui\requirements.txt")
+Invoke-Python -Arguments @("-m", "pip", "install", "-r", (Join-Path $Root "pyside_ui\requirements.txt"))
 
-py -3 -m PyInstaller `
-    --noconfirm `
-    --clean `
-    --onedir `
-    --windowed `
-    --name QingheBFDControl `
-    --icon (Join-Path $Root "pyside_ui\icon.ico") `
-    --paths (Join-Path $Root "pyside_ui") `
-    --add-data "$(Join-Path $Root "pyside_ui\icon.svg");." `
-    --add-data "$(Join-Path $Root "pyside_ui\icon.ico");." `
-    --add-data "$(Join-Path $Root "pyside_ui\donate");donate" `
-    --add-data "$(Join-Path $Root "pyside_ui\templates");templates" `
-    --add-data "$(Join-Path $Root "pyside_ui\data");data" `
-    --distpath $PyInstallerDist `
-    --workpath $PyInstallerWork `
+$pyinstallerArgs = @(
+    "-m", "PyInstaller",
+    "--noconfirm",
+    "--clean",
+    "--onedir",
+    "--windowed",
+    "--name", "QingheBFDControl",
+    "--icon", (Join-Path $Root "pyside_ui\icon.ico"),
+    "--paths", (Join-Path $Root "pyside_ui"),
+    "--add-data", "$(Join-Path $Root "pyside_ui\icon.svg");.",
+    "--add-data", "$(Join-Path $Root "pyside_ui\icon.ico");.",
+    "--add-data", "$(Join-Path $Root "pyside_ui\donate");donate",
+    "--add-data", "$(Join-Path $Root "pyside_ui\templates");templates",
+    "--add-data", "$(Join-Path $Root "pyside_ui\data");data",
+    "--distpath", $PyInstallerDist,
+    "--workpath", $PyInstallerWork,
     (Join-Path $Root "pyside_ui\app.py")
+)
+Invoke-Python -Arguments $pyinstallerArgs
 
-py -3 (Join-Path $Root "tools\lua_bytecode_builder.py") `
-    --modules-dir $SourceModules `
-    --out-dir $ProtectedDir `
-    --core black_frame_analyzer.lua duplicate_detector.lua `
-    --compiler auto
+$bytecodeArgs = @(
+    (Join-Path $Root "tools\lua_bytecode_builder.py"),
+    "--modules-dir", $SourceModules,
+    "--out-dir", $ProtectedDir,
+    "--core", "black_frame_analyzer.lua", "duplicate_detector.lua",
+    "--compiler", "auto"
+)
+Invoke-Python -Arguments $bytecodeArgs
 
 New-Item -ItemType Directory -Force -Path $StageRoot, $StagePlugin, $StageUi | Out-Null
 Copy-Item (Join-Path $Root "install_windows.ps1") $StageRoot -Force
@@ -79,9 +142,30 @@ Copy-Item (Join-Path $Root "check_components.ps1") $StageRoot -Force
 Copy-Item (Join-Path $Root "installer_disclaimer.txt") $StageRoot -Force
 Copy-Item (Join-Path $Root "README.md") $StageRoot -Force
 Copy-Item (Join-Path $Root "docs") $StageRoot -Recurse -Force
+New-Item -ItemType Directory -Force -Path (Join-Path $StageRoot "tools") | Out-Null
+Copy-Item (Join-Path $Root "tools\test_resolve_api_bridge.ps1") (Join-Path $StageRoot "tools") -Force
 Copy-Item (Join-Path $PyInstallerDist "QingheBFDControl") $StageUi -Recurse -Force
 Copy-Item (Join-Path $Root "pyside_ui\icon.ico") $StageUi -Force
 Copy-Item (Join-Path $Root "pyside_ui\icon.svg") $StageUi -Force
+Copy-Item (Join-Path $Root "pyside_ui\data") $StageUi -Recurse -Force
+Copy-Item (Join-Path $Root "pyside_ui\templates") $StageUi -Recurse -Force
+$PythonRuntimeSource = Split-Path -Parent $PythonCommand.Exe
+$StagePythonRuntime = Join-Path $StageUi "python_runtime"
+if (Test-Path $StagePythonRuntime) {
+    Remove-Item -LiteralPath $StagePythonRuntime -Recurse -Force
+}
+robocopy $PythonRuntimeSource $StagePythonRuntime /E `
+    /XD "__pycache__" "Scripts" "Doc" "include" "libs" "site-packages" `
+        (Join-Path $PythonRuntimeSource "Lib\site-packages") `
+        (Join-Path $PythonRuntimeSource "Lib\test") `
+        (Join-Path $PythonRuntimeSource "Lib\idlelib") `
+    /XF "*.pyc" "*.pyo" | Out-Host
+if ($LASTEXITCODE -gt 7) {
+    throw "Failed to copy bundled Python runtime from $PythonRuntimeSource"
+}
+if (!(Test-Path (Join-Path $StagePythonRuntime "python.exe"))) {
+    throw "Bundled Python runtime is missing python.exe"
+}
 
 Copy-Item $SourceMain.FullName (Join-Path $StagePlugin $SourceMain.Name) -Force
 $StageModules = Join-Path $StagePlugin "black_frame_detector"
