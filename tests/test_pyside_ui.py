@@ -59,6 +59,8 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn('lower_launcher:sub(-4) == ".vbs"', entry_source)
         self.assertIn('"pyside_ui" .. sep .. "QingheBFDControl"', entry_source)
         self.assertIn("PySide UI launcher inferred from module dir", entry_source)
+        self.assertIn("tl_dur > stuck_frames and tl_dur > 0 and not clip.skip_stuck", entry_source)
+        self.assertNotIn("tl_dur > stuck_frames and tl_dur > 0 and Analyzer.is_fully_opaque(clip, overlay_config)", entry_source)
         self.assertIn("detect_mixed_cut = false", bridge_source)
         self.assertIn("MARK_COMPOSITE_NONORMAL", (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "config.lua").read_text(encoding="utf-8"))
         self.assertNotIn("clip.timeline_end_frame", analyzer_source)

@@ -2335,7 +2335,7 @@ function Main()
 
             local tl_dur = clip.source_duration_frames or 0
             -- 片段本身≤夹帧阈值的由阶段4.6负责，4.7只处理"长片段被遮挡露出短可见区"
-            if tl_dur > stuck_frames and tl_dur > 0 and Analyzer.is_fully_opaque(clip, overlay_config) then
+            if tl_dur > stuck_frames and tl_dur > 0 and not clip.skip_stuck then
                 -- 第一轮：完全遮挡检测 (opacity ≥ 95)
                 local result = Analyzer.compute_visible_intervals(clip, clips_by_track, max_track, overlay_config, full_threshold)
                 -- 第二轮：半透明遮挡检测 (opacity ≥ 50)
