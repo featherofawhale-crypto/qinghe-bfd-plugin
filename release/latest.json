@@ -1,18 +1,18 @@
 {
-  "version": "2.0.1-beta.14",
+  "version": "2.0.1-beta.15",
   "channel": "beta",
-  "release_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/latest",
-  "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg",
+  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.15-macos.dmg",
   "package_type": "dmg",
-  "sha256": "72ddb6a588e3b936a9489df1c47e40c7d4188076a015bf32466797c8a68f39dd",
-  "notes": "macOS DMG 一键安装包。国内 CNB 源优先，GitHub Release 为备用源。",
+  "sha256": "e3aeda5b0108d19877dffa1945e951535838c4190152ef306f0b585c74935826",
+  "notes": "macOS 完整一键安装 DMG：采用中文安装结构，内置 GUI 运行组件、ffmpeg 和必要文件。内置 app 仅作为达芬奇插件内部组件安装到 Resolve 插件目录，不会安装到桌面；正式包不默认联网安装依赖。放宽字幕读取、导出和 SRT 替换等待时间，降低 1 小时以上时间线超时概率。",
   "mandatory": false,
   "mirrors": [
     {
       "name": "CNB",
       "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/latest.json",
       "priority": 1,
-      "notes": "国内优先更新源。需在 CNB release latest 上传 latest.json 和 macOS DMG。"
+      "notes": "国内优先源。CNB release 上传 latest.json 和 DMG 后自动优先使用。"
     },
     {
       "name": "GitHub",
@@ -23,12 +23,12 @@
   ],
   "platforms": {
     "mac": {
-      "version": "2.0.1-beta.14",
-      "release_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/latest",
-      "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.14-macos.dmg",
+      "version": "2.0.1-beta.15",
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.15-macos.dmg",
       "package_type": "dmg",
-      "sha256": "72ddb6a588e3b936a9489df1c47e40c7d4188076a015bf32466797c8a68f39dd",
-      "notes": "macOS DMG 安装包。插件内更新会下载 DMG，手动打开后运行一键安装。"
+      "sha256": "e3aeda5b0108d19877dffa1945e951535838c4190152ef306f0b585c74935826",
+      "notes": "macOS 完整一键安装版，内置运行组件；通过达芬奇脚本入口启动，不安装到桌面，不默认联网安装依赖。"
     },
     "windows": {
       "version": "2.0.1-beta.14",
