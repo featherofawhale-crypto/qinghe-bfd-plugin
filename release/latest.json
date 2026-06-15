@@ -1,11 +1,11 @@
 {
-  "version": "2.0.1-beta.16",
+  "version": "2.0.1-beta.17",
   "channel": "beta",
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.16-macos.dmg",
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.17-macos.dmg",
   "package_type": "dmg",
-  "sha256": "1e662ca90c9f8403846c549d870b68476bc092553c7c75480233ee25c5d90321",
-  "notes": "macOS 测试版更新：修正内置 GUI 版本号链路，完整包内置 PySide6 运行组件、ffmpeg 和必要文件；其他 Mac 即使没有 Python/PySide6、网络不能访问国外源，也可安装后通过达芬奇脚本入口直接使用；同时安装与更新流程会清理本包隔离属性，降低“无法验证”拦截。",
+  "sha256": "0a43bebeab6e2541c328e2d62b4e6dec9e49b04f64cb3290b592f9bb364f88fe",
+  "notes": "macOS 测试版更新：修复 app 化后 Resolve API Bridge 识别问题，完整包内置 PySide6 运行组件、ffmpeg 和独立 QingheResolveBridge；其他 Mac 即使没有 Python/PySide6、网络不能访问国外源，也可安装后通过达芬奇脚本入口直接使用；安装与更新流程会清理本包隔离属性，降低“无法验证”拦截。",
   "mandatory": false,
   "mirrors": [
     {
@@ -23,12 +23,12 @@
   ],
   "platforms": {
     "mac": {
-      "version": "2.0.1-beta.16",
+      "version": "2.0.1-beta.17",
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.16-macos.dmg",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.17-macos.dmg",
       "package_type": "dmg",
-      "sha256": "1e662ca90c9f8403846c549d870b68476bc092553c7c75480233ee25c5d90321",
-      "notes": "macOS 完整一键安装版，内置 GUI 运行组件、ffmpeg 和必要文件；app 仅安装到 Resolve 插件目录，不会安装到桌面；正式包不默认联网安装依赖，会覆盖安装并保留本地 Text+ 样式库。"
+      "sha256": "0a43bebeab6e2541c328e2d62b4e6dec9e49b04f64cb3290b592f9bb364f88fe",
+      "notes": "macOS 完整一键安装版，内置 GUI 运行组件、ffmpeg、独立 Resolve API Bridge 和必要文件；app 仅安装到 Resolve 插件目录，不会安装到桌面；正式包不默认联网安装依赖，会覆盖安装并保留本地 Text+ 样式库。"
     },
     "windows": {
       "version": "2.0.1-beta.14",
