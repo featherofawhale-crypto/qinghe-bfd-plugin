@@ -65,95 +65,33 @@ if (Test-Path (Join-Path $SourceFfmpeg "ffplay.exe")) {
 }
 
 $PackagedUiExe = Join-Path $InstalledUiDir "QingheBFDControl\QingheBFDControl.exe"
-$HiddenRunUi = Join-Path $InstalledUiDir "run_ui_hidden.vbs"
-$RunUi = Join-Path $InstalledUiDir "run_ui.bat"
-$ShortcutTarget = $null
-if (Test-Path $PackagedUiExe) {
-    $ShortcutTarget = $PackagedUiExe
-} elseif (Test-Path $HiddenRunUi) {
-    $ShortcutTarget = $HiddenRunUi
-} elseif (Test-Path $RunUi) {
-    $ShortcutTarget = $RunUi
+if (!(Test-Path $PackagedUiExe)) {
+    throw "Missing packaged PySide UI executable. This installer must be built with QingheBFDControl.exe and must not rely on system Python."
 }
 
-if ($ShortcutTarget) {
-    $LauncherPath = Join-Path $ModulesDir "ui_launcher_path.txt"
-    if (Test-Path -LiteralPath $LauncherPath) {
-        try {
-            Remove-Item -LiteralPath $LauncherPath -Force
-        } catch {
-            cmd.exe /c del /f /q "$LauncherPath" | Out-Null
-        }
-    }
+$LauncherPath = Join-Path $ModulesDir "ui_launcher_path.txt"
+if (Test-Path -LiteralPath $LauncherPath) {
     try {
-        $TempLauncherPath = Join-Path $ModulesDir ("ui_launcher_path." + [guid]::NewGuid().ToString("N") + ".tmp")
-        [System.IO.File]::WriteAllText(
-            $TempLauncherPath,
-            $ShortcutTarget,
-            (New-Object System.Text.UTF8Encoding $false)
-        )
-        Move-Item -LiteralPath $TempLauncherPath -Destination $LauncherPath -Force
+        Remove-Item -LiteralPath $LauncherPath -Force
     } catch {
-        Write-Host "Warning: could not write ui_launcher_path.txt; Resolve Lua entry will infer the bundled UI path."
+        cmd.exe /c del /f /q "$LauncherPath" | Out-Null
     }
+}
+try {
+    $TempLauncherPath = Join-Path $ModulesDir ("ui_launcher_path." + [guid]::NewGuid().ToString("N") + ".tmp")
+    [System.IO.File]::WriteAllText(
+        $TempLauncherPath,
+        $PackagedUiExe,
+        (New-Object System.Text.UTF8Encoding $false)
+    )
+    Move-Item -LiteralPath $TempLauncherPath -Destination $LauncherPath -Force
+} catch {
+    Write-Host "Warning: could not write ui_launcher_path.txt; Resolve Lua entry will infer the bundled UI path."
 }
 
 $legacyDesktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Qinghe BFD Control.lnk"
 if (Test-Path $legacyDesktopShortcut) {
     Remove-Item -LiteralPath $legacyDesktopShortcut -Force
-}
-
-$pythonCandidates = @()
-$py = Get-Command py -ErrorAction SilentlyContinue
-if ($py) { $pythonCandidates += [pscustomobject]@{ Exe = $py.Source; Arg = "-3" } }
-$python = Get-Command python -ErrorAction SilentlyContinue
-if ($python) { $pythonCandidates += [pscustomobject]@{ Exe = $python.Source; Arg = "" } }
-$fallback = Join-Path $env:USERPROFILE ".cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
-if (Test-Path $fallback) { $pythonCandidates += [pscustomobject]@{ Exe = $fallback; Arg = "" } }
-
-$selectedExe = $null
-$selectedArg = ""
-foreach ($candidate in $pythonCandidates) {
-    $exe = $candidate.Exe
-    $arg = $candidate.Arg
-    try {
-        if ($arg) { & $exe $arg -c "import sys; print(sys.version)" *> $null }
-        else { & $exe -c "import sys; print(sys.version)" *> $null }
-        if ($LASTEXITCODE -eq 0) {
-            $selectedExe = $exe
-            $selectedArg = $arg
-            break
-        }
-    } catch {}
-}
-
-if ($selectedExe -and -not (Test-Path $PackagedUiExe)) {
-    $requirements = Join-Path $Root "pyside_ui\requirements.txt"
-    if (Test-Path $requirements) {
-        if ($selectedArg) { & $selectedExe $selectedArg -c "import PySide6" *> $null }
-        else { & $selectedExe -c "import PySide6" *> $null }
-        if ($LASTEXITCODE -ne 0) {
-            if ($selectedArg) { & $selectedExe $selectedArg -m pip install -r $requirements }
-            else { & $selectedExe -m pip install -r $requirements }
-        }
-    }
-
-    $builder = Join-Path $Root "tools\lua_bytecode_builder.py"
-    $protectedDir = Join-Path $Root "dist\Modules\black_frame_detector"
-    if (Test-Path $builder) {
-        if ($selectedArg) {
-            & $selectedExe $selectedArg $builder --modules-dir $SourceModules --out-dir $protectedDir --core black_frame_analyzer.lua duplicate_detector.lua --compiler auto
-        } else {
-            & $selectedExe $builder --modules-dir $SourceModules --out-dir $protectedDir --core black_frame_analyzer.lua duplicate_detector.lua --compiler auto
-        }
-        if ($LASTEXITCODE -eq 0 -and (Test-Path $protectedDir)) {
-            Copy-Item (Join-Path $protectedDir "black_frame_analyzer.lua") $ModulesDir -Force
-            Copy-Item (Join-Path $protectedDir "duplicate_detector.lua") $ModulesDir -Force
-            Copy-Item (Join-Path $protectedDir "bytecode_manifest.json") $ModulesDir -Force
-        } else {
-            Write-Host "Warning: protected bytecode build failed; source modules remain installed."
-        }
-    }
 }
 
 Write-Host "Installed Resolve script:"
