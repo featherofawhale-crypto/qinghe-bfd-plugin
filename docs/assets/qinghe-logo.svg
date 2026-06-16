@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="清何剪辑工具箱">
+  <defs>
+    <radialGradient id="core" cx="42%" cy="34%" r="68%">
+      <stop offset="0" stop-color="#f8f1d8"/>
+      <stop offset="0.34" stop-color="#7dd3fc"/>
+      <stop offset="0.72" stop-color="#3367ff"/>
+      <stop offset="1" stop-color="#071225"/>
+    </radialGradient>
+    <linearGradient id="scan" x1="18" y1="0" x2="110" y2="0">
+      <stop offset="0" stop-color="#7dd3fc" stop-opacity="0"/>
+      <stop offset="0.28" stop-color="#7dd3fc"/>
+      <stop offset="0.62" stop-color="#f0b85a"/>
+      <stop offset="1" stop-color="#7dd3fc" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3.6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="#050914"/>
+  <circle cx="64" cy="64" r="48" fill="none" stroke="#172948" stroke-width="14"/>
+  <path d="M64 16a48 48 0 0 1 45.7 33.3" fill="none" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
+  <path d="M109.7 49.3A48 48 0 0 1 55 111.2" fill="none" stroke="#f0b85a" stroke-width="14" stroke-linecap="round"/>
+  <path d="M55 111.2A48 48 0 0 1 64 16" fill="none" stroke="#4f7cff" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="64" cy="64" r="33" fill="url(#core)" filter="url(#softGlow)"/>
+  <path d="M36 52h56M36 64h56M36 76h56" stroke="#06111f" stroke-width="7" stroke-linecap="round" opacity="0.82"/>
+  <path d="M27 64h74" stroke="url(#scan)" stroke-width="4" stroke-linecap="round"/>
+  <path d="M47 43v42M64 36v56M81 43v42" stroke="#f8f1d8" stroke-width="5" stroke-linecap="round" opacity="0.92"/>
+  <circle cx="64" cy="64" r="8" fill="#050914"/>
+  <circle cx="64" cy="64" r="3.2" fill="#7dd3fc"/>
+</svg>
