@@ -6,7 +6,7 @@
     <meta name="description" content="清何剪辑工具箱，DaVinci Resolve 黑帧、夹帧、重复帧、坏帧、音频声道和 Text+ 字体检查工具。" />
     <meta name="theme-color" content="#050914" />
     <title>清何剪辑工具箱 | DaVinci Resolve 剪辑检查插件</title>
-    <link rel="icon" href="./assets/qinghe-logo.svg" type="image/svg+xml" />
+    <link rel="icon" href="./assets/qinghe-logo.svg?v=20260617b" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
     <script defer src="./vendor/three.min.js"></script>
     <script defer src="./vendor/gsap.min.js"></script>
@@ -17,7 +17,7 @@
     <div id="vanta-bg" aria-hidden="true"></div>
     <header class="site-header">
       <a class="brand" href="#top" aria-label="清何剪辑工具箱首页">
-        <span class="brand-mark"><img src="./assets/qinghe-logo.svg" alt="" /></span>
+        <span class="brand-mark"><img src="./assets/qinghe-logo.svg?v=20260617b" alt="" /></span>
         <span>清何剪辑工具箱</span>
       </a>
       <nav class="nav-links" aria-label="页面导航">
@@ -57,7 +57,8 @@
           <div class="product-shell">
             <div class="product-bar">
               <span></span><span></span><span></span>
-              <strong>Qinghe Resolve Console</strong>
+              <strong>Qinghe Timeline Inspector</strong>
+              <em>Resolve 已连接</em>
             </div>
             <div class="product-layout">
               <div class="product-sidebar">
@@ -67,20 +68,29 @@
                 <b>节拍</b>
               </div>
               <div class="product-main">
-                <div class="product-timeline">
-                  <i style="--w: 18%; --c: #77e8d5"></i>
-                  <i style="--w: 26%; --c: #4d7dff"></i>
-                  <i style="--w: 14%; --c: #dfbd74"></i>
-                  <i style="--w: 31%; --c: #79c8ff"></i>
-                  <i style="--w: 11%; --c: #ff8b72"></i>
+                <div class="product-status">
+                  <span><i></i>扫描中</span>
+                  <strong>00:10:36:11</strong>
+                  <em>复杂时间线模式</em>
                 </div>
-                <div class="product-metrics">
-                  <span><em>02</em> 黑帧</span>
-                  <span><em>01</em> 夹帧</span>
-                  <span><em>18</em> 字体</span>
-                </div>
-                <div class="product-wave">
-                  <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                <div class="product-workspace">
+                  <div class="product-tracks">
+                    <div class="track-row"><span>V3</span><i class="clip clip-a"></i><i class="clip clip-b warn"></i><i class="clip clip-c"></i></div>
+                    <div class="track-row"><span>V2</span><i class="clip clip-d"></i><i class="clip clip-e"></i><i class="clip clip-f bad"></i></div>
+                    <div class="track-row"><span>V1</span><i class="clip clip-g"></i><i class="clip clip-h"></i></div>
+                    <div class="track-row audio-row"><span>A1</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                    <b class="playhead"></b>
+                  </div>
+                  <div class="product-inspector">
+                    <small>风险结果</small>
+                    <strong>夹帧 01</strong>
+                    <p>同源片段异常复用，已标回时间线。</p>
+                    <div class="inspect-list">
+                      <span>黑帧 02</span>
+                      <span>字体 18</span>
+                      <span>BPM 96</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -133,9 +143,21 @@
           </div>
           <figure class="interface-stage">
             <div class="mock-shot is-active" role="img" aria-label="清何剪辑工具箱主面板视觉示意" data-title="交片前一键扫时间线风险。" data-kicker="主面板" data-copy="黑帧、夹帧、重复、透明遮挡、音频、字幕、字体和更新入口集中在同一个控制面板里。检测结果会写回 Resolve 标记，不需要跳出剪辑现场找问题。">
-              <div class="mock-toolbar"><span></span><b>Timeline Risk Scan</b><em>Resolve</em></div>
-              <div class="mock-timeline">
-                <i class="ok"></i><i class="warn"></i><i class="ok wide"></i><i class="bad"></i><i class="ok"></i><i class="warn wide"></i>
+              <div class="mock-toolbar"><span></span><b>Timeline Risk Scan</b><em>Resolve Marker</em></div>
+              <div class="scan-board">
+                <div class="scan-tracks">
+                  <div><span>V4</span><i class="w30"></i><i class="w18 amber"></i><i class="w36"></i></div>
+                  <div><span>V3</span><i class="w22"></i><i class="w42 blue"></i><i class="w14 red"></i></div>
+                  <div><span>V2</span><i class="w48 blue"></i><i class="w28"></i></div>
+                  <div><span>A1</span><i class="wave"></i><i class="wave tall"></i><i class="wave"></i><i class="wave tall"></i></div>
+                  <b class="scan-cursor"></b>
+                </div>
+                <div class="scan-side">
+                  <small>当前帧</small>
+                  <strong>00:10:36:11</strong>
+                  <p>夹帧风险，已写入 Resolve 标记。</p>
+                  <span>复杂模式</span>
+                </div>
               </div>
               <div class="mock-dashboard">
                 <div><strong>02</strong><span>黑帧</span></div>
@@ -143,16 +165,11 @@
                 <div><strong>06</strong><span>重复</span></div>
                 <div><strong>18</strong><span>字体</span></div>
               </div>
-              <div class="mock-result-list">
-                <p><span></span>00:10:36:11 夹帧风险</p>
-                <p><span></span>00:24:08:02 透明遮挡</p>
-                <p><span></span>00:41:19:18 字体不一致</p>
-              </div>
             </div>
-            <div class="mock-shot subtitle-shot" role="img" aria-label="字幕面板视觉示意" data-title="字幕查找替换，Text+ 也能当字幕用。" data-kicker="字幕面板" data-copy="SRT、字幕轨和 Text+ 查找、替换、删除、撤回，一键 SRT 转 Text+，按多版本 Resolve 持续适配，适合边看时间线边校对。">
+            <div class="mock-shot subtitle-shot" role="img" aria-label="字幕面板视觉示意" data-title="字幕查找替换，Text+ 字幕化。" data-kicker="字幕面板" data-copy="SRT、字幕轨和 Text+ 查找、替换、删除、撤回，一键 SRT 转 Text+，按多版本 Resolve 持续适配，适合边看时间线边校对。">
               <div class="mock-toolbar"><span></span><b>Subtitle Command</b><em>SRT / Text+</em></div>
               <div class="subtitle-grid">
-                <div class="subtitle-search"><b>搜索替换</b><span>广告片</span><span>包装字幕</span></div>
+                <div class="subtitle-search"><b>搜索替换</b><span>广告片</span><span>包装字幕</span><small>SRT -> Text+</small></div>
                 <div class="subtitle-lines">
                   <p><em>01</em> 主标题检查完成</p>
                   <p><em>02</em> Text+ 样式同步</p>
@@ -165,7 +182,7 @@
               <div class="mock-toolbar"><span></span><b>Font Probe</b><em>Text+</em></div>
               <div class="font-preview">
                 <strong>清何</strong>
-                <span>PostScript / 中文名 / 英文名</span>
+                <span>Source Han Sans / PostScript / 中文名</span>
               </div>
               <div class="font-pills">
                 <b>收藏</b><b>探针</b><b>完整复制</b><b>只复制字体</b>
