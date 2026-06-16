@@ -1,19 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="清何剪辑工具箱">
   <defs>
-    <radialGradient id="core" cx="42%" cy="34%" r="68%">
-      <stop offset="0" stop-color="#f8f1d8"/>
-      <stop offset="0.34" stop-color="#7dd3fc"/>
-      <stop offset="0.72" stop-color="#3367ff"/>
-      <stop offset="1" stop-color="#071225"/>
-    </radialGradient>
-    <linearGradient id="scan" x1="18" y1="0" x2="110" y2="0">
-      <stop offset="0" stop-color="#7dd3fc" stop-opacity="0"/>
-      <stop offset="0.28" stop-color="#7dd3fc"/>
-      <stop offset="0.62" stop-color="#f0b85a"/>
-      <stop offset="1" stop-color="#7dd3fc" stop-opacity="0"/>
+    <linearGradient id="ring-blue" x1="22" y1="18" x2="104" y2="58">
+      <stop offset="0" stop-color="#8bd7ff"/>
+      <stop offset="1" stop-color="#4d7dff"/>
     </linearGradient>
-    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="3.6" result="blur"/>
+    <linearGradient id="ring-gold" x1="112" y1="46" x2="54" y2="116">
+      <stop offset="0" stop-color="#f2c66d"/>
+      <stop offset="1" stop-color="#ff8b72"/>
+    </linearGradient>
+    <linearGradient id="ring-green" x1="50" y1="114" x2="24" y2="20">
+      <stop offset="0" stop-color="#77e8d5"/>
+      <stop offset="1" stop-color="#4d7dff"/>
+    </linearGradient>
+    <radialGradient id="face" cx="36%" cy="28%" r="72%">
+      <stop offset="0" stop-color="#1d3158"/>
+      <stop offset="0.58" stop-color="#08172f"/>
+      <stop offset="1" stop-color="#030712"/>
+    </radialGradient>
+    <filter id="glow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
       <feMerge>
         <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
@@ -21,14 +26,12 @@
     </filter>
   </defs>
   <rect width="128" height="128" rx="30" fill="#050914"/>
-  <circle cx="64" cy="64" r="48" fill="none" stroke="#172948" stroke-width="14"/>
-  <path d="M64 16a48 48 0 0 1 45.7 33.3" fill="none" stroke="#7dd3fc" stroke-width="14" stroke-linecap="round"/>
-  <path d="M109.7 49.3A48 48 0 0 1 55 111.2" fill="none" stroke="#f0b85a" stroke-width="14" stroke-linecap="round"/>
-  <path d="M55 111.2A48 48 0 0 1 64 16" fill="none" stroke="#4f7cff" stroke-width="14" stroke-linecap="round"/>
-  <circle cx="64" cy="64" r="33" fill="url(#core)" filter="url(#softGlow)"/>
-  <path d="M36 52h56M36 64h56M36 76h56" stroke="#06111f" stroke-width="7" stroke-linecap="round" opacity="0.82"/>
-  <path d="M27 64h74" stroke="url(#scan)" stroke-width="4" stroke-linecap="round"/>
-  <path d="M47 43v42M64 36v56M81 43v42" stroke="#f8f1d8" stroke-width="5" stroke-linecap="round" opacity="0.92"/>
-  <circle cx="64" cy="64" r="8" fill="#050914"/>
-  <circle cx="64" cy="64" r="3.2" fill="#7dd3fc"/>
+  <circle cx="64" cy="64" r="50" fill="none" stroke="#13213a" stroke-width="13"/>
+  <path d="M64 14a50 50 0 0 1 47 33" fill="none" stroke="url(#ring-blue)" stroke-width="13" stroke-linecap="round"/>
+  <path d="M111 47a50 50 0 0 1-55 66" fill="none" stroke="url(#ring-gold)" stroke-width="13" stroke-linecap="round"/>
+  <path d="M56 113A50 50 0 0 1 64 14" fill="none" stroke="url(#ring-green)" stroke-width="13" stroke-linecap="round"/>
+  <circle cx="64" cy="64" r="37" fill="url(#face)" stroke="#f6f3eb" stroke-opacity="0.16" stroke-width="1.5"/>
+  <rect x="40" y="45" width="48" height="38" rx="9" fill="none" stroke="#f6f3eb" stroke-width="7"/>
+  <path d="M49 64h29" stroke="#8bd7ff" stroke-width="7" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="84" cy="64" r="8" fill="#77e8d5" filter="url(#glow)"/>
 </svg>
