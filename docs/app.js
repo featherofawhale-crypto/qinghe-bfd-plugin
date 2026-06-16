@@ -33,30 +33,92 @@
     );
   }
 
-  if (bg && !reduceMotion && window.VANTA?.FOG && window.THREE) {
-    const effect = window.VANTA.FOG({
-      el: bg,
-      THREE: window.THREE,
-      mouseControls: true,
-      touchControls: true,
-      gyroControls: false,
-      minHeight: 200,
-      minWidth: 200,
-      highlightColor: 0x4f8cff,
-      midtoneColor: 0x102a52,
-      lowlightColor: 0x030713,
-      baseColor: 0x050914,
-      blurFactor: 0.58,
-      speed: 0.56,
-      zoom: 0.78,
+  if (bg && !reduceMotion && window.THREE) {
+    const scene = new window.THREE.Scene();
+    const camera = new window.THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 1600);
+    camera.position.z = 520;
+
+    const renderer = new window.THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    bg.appendChild(renderer.domElement);
+
+    const count = window.innerWidth < 720 ? 520 : 980;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const palette = [
+      [0.30, 0.49, 1.0],
+      [0.47, 0.78, 1.0],
+      [0.47, 0.91, 0.84],
+      [0.87, 0.74, 0.45],
+    ];
+
+    for (let i = 0; i < count; i += 1) {
+      const ix = i * 3;
+      positions[ix] = (Math.random() - 0.5) * 1250;
+      positions[ix + 1] = (Math.random() - 0.5) * 720;
+      positions[ix + 2] = (Math.random() - 0.5) * 760;
+      const color = palette[Math.floor(Math.random() * palette.length)];
+      colors[ix] = color[0];
+      colors[ix + 1] = color[1];
+      colors[ix + 2] = color[2];
+    }
+
+    const geometry = new window.THREE.BufferGeometry();
+    geometry.setAttribute("position", new window.THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new window.THREE.BufferAttribute(colors, 3));
+    const material = new window.THREE.PointsMaterial({
+      size: 2.2,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false,
+      blending: window.THREE.AdditiveBlending,
     });
-    window.addEventListener("pagehide", () => effect.destroy());
+    const particles = new window.THREE.Points(geometry, material);
+    scene.add(particles);
+
+    const pointer = { x: 0, y: 0 };
+    window.addEventListener(
+      "pointermove",
+      (event) => {
+        pointer.x = (event.clientX / window.innerWidth - 0.5) * 2;
+        pointer.y = (event.clientY / window.innerHeight - 0.5) * 2;
+      },
+      { passive: true },
+    );
+
+    let running = true;
+    const tick = () => {
+      if (!running) return;
+      const time = performance.now() * 0.00018;
+      particles.rotation.y += (pointer.x * 0.12 - particles.rotation.y) * 0.018;
+      particles.rotation.x += (-pointer.y * 0.08 - particles.rotation.x) * 0.018;
+      particles.position.x = Math.sin(time * 2.2) * 18 + pointer.x * 12;
+      particles.position.y = Math.cos(time * 1.7) * 10 - pointer.y * 8;
+      renderer.render(scene, camera);
+      window.requestAnimationFrame(tick);
+    };
+    tick();
+
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    window.addEventListener("pagehide", () => {
+      running = false;
+      geometry.dispose();
+      material.dispose();
+      renderer.dispose();
+      renderer.domElement.remove();
+    });
   } else if (bg) {
     bg.classList.add("is-static");
   }
 
   const glowCards = document.querySelectorAll(
-    ".quick-features div, .interface-switcher, .function-grid article, .innovation-list article, .steps, .mac-help-grid article, .download-panel, .platform-card, .netdisk-panel, .legal-section > div, .community-section > div:first-child, .donate-mini, .donate-grid article",
+    ".hero-product, .quick-features div, .interface-switcher, .function-grid article, .innovation-list article, .steps, .mac-help-grid article, .download-panel, .platform-card, .netdisk-panel, .legal-section > div, .community-section > div:first-child, .donate-mini, .donate-grid article",
   );
 
   glowCards.forEach((card) => {
@@ -92,14 +154,14 @@
 
   const intro = gsap.timeline();
   intro
-    .from(".site-header", { y: -18, autoAlpha: 0 })
-    .from(".eyebrow", { y: 22, autoAlpha: 0 }, "-=0.25")
-    .from(".hero h1", { y: 52, autoAlpha: 0, duration: 1.1 }, "-=0.2")
-    .from(".hero-copy", { y: 30, autoAlpha: 0 }, "-=0.55")
-    .from(".hero-points span", { y: 18, autoAlpha: 0, stagger: 0.06 }, "-=0.48")
-    .from(".hero-actions a", { y: 20, autoAlpha: 0, stagger: 0.08 }, "-=0.42")
-    .from(".hero-product", { x: 80, rotationY: -12, rotationZ: 2, autoAlpha: 0, duration: 1.2 }, "-=0.8")
-    .from(".hud", { y: 16, scale: 0.9, autoAlpha: 0, stagger: 0.08 }, "-=0.45");
+    .from(".site-header", { y: -14, autoAlpha: 0, duration: 0.42 })
+    .from(".eyebrow", { y: 18, autoAlpha: 0, duration: 0.42 }, "-=0.2")
+    .from(".hero h1", { y: 38, autoAlpha: 0, duration: 0.72 }, "-=0.14")
+    .from(".hero-copy, .beta-note", { y: 22, autoAlpha: 0, stagger: 0.06, duration: 0.52 }, "-=0.36")
+    .from(".hero-points span", { y: 14, autoAlpha: 0, stagger: 0.045, duration: 0.42 }, "-=0.32")
+    .from(".hero-actions a", { y: 16, autoAlpha: 0, stagger: 0.06, duration: 0.42 }, "-=0.28")
+    .from(".hero-product", { x: 54, rotationY: -8, rotationZ: 1.4, autoAlpha: 0, duration: 0.82 }, "-=0.68")
+    .from(".hud", { y: 12, scale: 0.94, autoAlpha: 0, stagger: 0.06, duration: 0.36 }, "-=0.32");
 
   gsap.to(".scan-line", {
     yPercent: 310,
@@ -128,7 +190,7 @@
 
   const switcher = document.querySelector(".interface-switcher");
   if (switcher) {
-    const shots = [...switcher.querySelectorAll(".interface-stage img")];
+    const shots = [...switcher.querySelectorAll(".interface-stage .mock-shot")];
     const buttons = [...switcher.querySelectorAll(".interface-tabs button")];
     const kicker = switcher.querySelector(".interface-kicker");
     const title = switcher.querySelector(".interface-copy h3");

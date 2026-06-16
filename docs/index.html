@@ -9,7 +9,6 @@
     <link rel="icon" href="./assets/qinghe-logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
     <script defer src="./vendor/three.min.js"></script>
-    <script defer src="./vendor/vanta.fog.min.js"></script>
     <script defer src="./vendor/gsap.min.js"></script>
     <script defer src="./vendor/ScrollTrigger.min.js"></script>
     <script defer src="./app.js"></script>
@@ -36,7 +35,7 @@
         <div class="hero-vignette" aria-hidden="true"></div>
         <div class="hero-copy-block">
           <p class="eyebrow">DaVinci Resolve 剪辑质检插件</p>
-          <h1 id="hero-title">复杂时间线，也能快速查。</h1>
+          <h1 id="hero-title"><span>复杂时间线，</span><span>也能快速查。</span></h1>
           <p class="hero-copy">
             清何剪辑工具箱不是普通黑帧检测脚本。它面向真实剪辑工程，兼容多个 DaVinci Resolve 版本，
             能快速处理多轨、Fusion、Text+、字幕和音频节拍，把交片前的风险点标回时间线。
@@ -55,7 +54,37 @@
           </div>
         </div>
         <div class="hero-product" aria-hidden="true">
-          <img src="./assets/qinghe-main-latest.png" alt="" />
+          <div class="product-shell">
+            <div class="product-bar">
+              <span></span><span></span><span></span>
+              <strong>Qinghe Resolve Console</strong>
+            </div>
+            <div class="product-layout">
+              <div class="product-sidebar">
+                <b class="is-on">质检</b>
+                <b>字幕</b>
+                <b>字体</b>
+                <b>节拍</b>
+              </div>
+              <div class="product-main">
+                <div class="product-timeline">
+                  <i style="--w: 18%; --c: #77e8d5"></i>
+                  <i style="--w: 26%; --c: #4d7dff"></i>
+                  <i style="--w: 14%; --c: #dfbd74"></i>
+                  <i style="--w: 31%; --c: #79c8ff"></i>
+                  <i style="--w: 11%; --c: #ff8b72"></i>
+                </div>
+                <div class="product-metrics">
+                  <span><em>02</em> 黑帧</span>
+                  <span><em>01</em> 夹帧</span>
+                  <span><em>18</em> 字体</span>
+                </div>
+                <div class="product-wave">
+                  <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="scan-line"></div>
           <div class="hud hud-a">黑帧 02</div>
           <div class="hud hud-b">夹帧 01</div>
@@ -84,7 +113,7 @@
 
       <section id="story" class="showcase-section">
         <div class="section-heading">
-          <p class="section-kicker">最新版界面</p>
+          <p class="section-kicker">功能视觉</p>
           <h2>主面板、字幕面板、字体面板。</h2>
           <p>
             主面板负责扫描时间线风险，字幕面板负责集中校对 SRT 和 Text+，字体面板负责统一 Text+ 字体与样式。
@@ -103,9 +132,46 @@
             </div>
           </div>
           <figure class="interface-stage">
-            <img class="is-active" src="./assets/qinghe-main-latest.png" alt="清何剪辑工具箱 v2.0.1 主界面" data-title="交片前一键扫时间线风险。" data-kicker="主面板" data-copy="黑帧、夹帧、重复、透明遮挡、音频、字幕、字体和更新入口集中在同一个控制面板里。检测结果会写回 Resolve 标记，不需要跳出剪辑现场找问题。" />
-            <img src="./assets/qinghe-subtitle-window.png" alt="字幕面板" data-title="字幕查找替换，Text+ 也能当字幕用。" data-kicker="字幕面板" data-copy="SRT、字幕轨和 Text+ 查找、替换、删除、撤回，一键 SRT 转 Text+，按多版本 Resolve 持续适配，适合边看时间线边校对。" />
-            <img src="./assets/qinghe-font-window.png" alt="字体面板" data-title="达芬奇字体管理，专门为 Text+ 做。" data-kicker="字体面板" data-copy="支持字体搜索、收藏、字体探针、本地样式库；样式库既能完整复制 Text+ 外观，也能只复制字体。" />
+            <div class="mock-shot is-active" role="img" aria-label="清何剪辑工具箱主面板视觉示意" data-title="交片前一键扫时间线风险。" data-kicker="主面板" data-copy="黑帧、夹帧、重复、透明遮挡、音频、字幕、字体和更新入口集中在同一个控制面板里。检测结果会写回 Resolve 标记，不需要跳出剪辑现场找问题。">
+              <div class="mock-toolbar"><span></span><b>Timeline Risk Scan</b><em>Resolve</em></div>
+              <div class="mock-timeline">
+                <i class="ok"></i><i class="warn"></i><i class="ok wide"></i><i class="bad"></i><i class="ok"></i><i class="warn wide"></i>
+              </div>
+              <div class="mock-dashboard">
+                <div><strong>02</strong><span>黑帧</span></div>
+                <div><strong>01</strong><span>夹帧</span></div>
+                <div><strong>06</strong><span>重复</span></div>
+                <div><strong>18</strong><span>字体</span></div>
+              </div>
+              <div class="mock-result-list">
+                <p><span></span>00:10:36:11 夹帧风险</p>
+                <p><span></span>00:24:08:02 透明遮挡</p>
+                <p><span></span>00:41:19:18 字体不一致</p>
+              </div>
+            </div>
+            <div class="mock-shot subtitle-shot" role="img" aria-label="字幕面板视觉示意" data-title="字幕查找替换，Text+ 也能当字幕用。" data-kicker="字幕面板" data-copy="SRT、字幕轨和 Text+ 查找、替换、删除、撤回，一键 SRT 转 Text+，按多版本 Resolve 持续适配，适合边看时间线边校对。">
+              <div class="mock-toolbar"><span></span><b>Subtitle Command</b><em>SRT / Text+</em></div>
+              <div class="subtitle-grid">
+                <div class="subtitle-search"><b>搜索替换</b><span>广告片</span><span>包装字幕</span></div>
+                <div class="subtitle-lines">
+                  <p><em>01</em> 主标题检查完成</p>
+                  <p><em>02</em> Text+ 样式同步</p>
+                  <p><em>03</em> SRT 转包装字幕</p>
+                </div>
+              </div>
+              <div class="mock-wave compact"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div class="mock-shot font-shot" role="img" aria-label="字体面板视觉示意" data-title="达芬奇字体管理，专门为 Text+ 做。" data-kicker="字体面板" data-copy="支持字体搜索、收藏、字体探针、本地样式库；样式库既能完整复制 Text+ 外观，也能只复制字体。">
+              <div class="mock-toolbar"><span></span><b>Font Probe</b><em>Text+</em></div>
+              <div class="font-preview">
+                <strong>清何</strong>
+                <span>PostScript / 中文名 / 英文名</span>
+              </div>
+              <div class="font-pills">
+                <b>收藏</b><b>探针</b><b>完整复制</b><b>只复制字体</b>
+              </div>
+              <div class="font-samples"><i></i><i></i><i></i><i></i></div>
+            </div>
             <div class="interface-progress" aria-hidden="true"><span></span></div>
           </figure>
         </div>
