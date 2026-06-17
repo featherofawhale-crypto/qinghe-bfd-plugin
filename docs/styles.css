@@ -224,8 +224,20 @@ main {
   text-wrap: balance;
 }
 
+.hero h1 span,
+.section-copy h2 span,
+.workflow-head h2 span,
+.install-copy h2 span,
+.download-copy h2 span,
+.notice-section h2 span,
+.community-section h2 span,
+.tour-copy h3 span,
+.feature-stack h3 span {
+  display: block;
+}
+
 .hero h1 {
-  max-width: 11ch;
+  max-width: 13ch;
   font-size: clamp(52px, 7.3vw, 96px);
   font-weight: 860;
 }
@@ -1018,7 +1030,7 @@ main {
   }
 
   .hero h1 {
-    font-size: clamp(44px, 15vw, 64px);
+    font-size: clamp(40px, 12vw, 58px);
   }
 
   .hero-text {
