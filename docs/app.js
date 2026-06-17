@@ -1,278 +1,253 @@
 (() => {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const bg = document.getElementById("vanta-bg");
-  let bgRaf = 0;
+  const root = document.documentElement;
 
-  if (bg && !reduceMotion) {
-    let targetX = 0.52;
-    let targetY = 0.38;
-    let currentX = targetX;
-    let currentY = targetY;
+  const setPointer = (event) => {
+    const x = (event.clientX / window.innerWidth) * 100;
+    const y = (event.clientY / window.innerHeight) * 100;
+    root.style.setProperty("--mouse-x", `${x.toFixed(2)}%`);
+    root.style.setProperty("--mouse-y", `${y.toFixed(2)}%`);
+  };
 
-    const renderPointerLight = () => {
-      currentX += (targetX - currentX) * 0.12;
-      currentY += (targetY - currentY) * 0.12;
-      bg.style.setProperty("--mouse-x", `${(currentX * 100).toFixed(2)}%`);
-      bg.style.setProperty("--mouse-y", `${(currentY * 100).toFixed(2)}%`);
+  window.addEventListener("pointermove", setPointer, { passive: true });
 
-      if (Math.abs(targetX - currentX) > 0.001 || Math.abs(targetY - currentY) > 0.001) {
-        bgRaf = window.requestAnimationFrame(renderPointerLight);
-      } else {
-        bgRaf = 0;
-      }
-    };
-
-    window.addEventListener(
-      "pointermove",
-      (event) => {
-        targetX = event.clientX / window.innerWidth;
-        targetY = event.clientY / window.innerHeight;
-        if (!bgRaf) bgRaf = window.requestAnimationFrame(renderPointerLight);
-      },
-      { passive: true },
-    );
-  }
-
-  if (bg && !reduceMotion && window.THREE) {
-    const scene = new window.THREE.Scene();
-    const camera = new window.THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 1600);
-    camera.position.z = 520;
-
-    const renderer = new window.THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    bg.appendChild(renderer.domElement);
-
-    const count = window.innerWidth < 720 ? 520 : 980;
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const palette = [
-      [0.30, 0.49, 1.0],
-      [0.47, 0.78, 1.0],
-      [0.47, 0.91, 0.84],
-      [0.87, 0.74, 0.45],
-    ];
-
-    for (let i = 0; i < count; i += 1) {
-      const ix = i * 3;
-      positions[ix] = (Math.random() - 0.5) * 1250;
-      positions[ix + 1] = (Math.random() - 0.5) * 720;
-      positions[ix + 2] = (Math.random() - 0.5) * 760;
-      const color = palette[Math.floor(Math.random() * palette.length)];
-      colors[ix] = color[0];
-      colors[ix + 1] = color[1];
-      colors[ix + 2] = color[2];
-    }
-
-    const geometry = new window.THREE.BufferGeometry();
-    geometry.setAttribute("position", new window.THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new window.THREE.BufferAttribute(colors, 3));
-    const material = new window.THREE.PointsMaterial({
-      size: 2.2,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.72,
-      depthWrite: false,
-      blending: window.THREE.AdditiveBlending,
-    });
-    const particles = new window.THREE.Points(geometry, material);
-    scene.add(particles);
-
-    const pointer = { x: 0, y: 0 };
-    window.addEventListener(
-      "pointermove",
-      (event) => {
-        pointer.x = (event.clientX / window.innerWidth - 0.5) * 2;
-        pointer.y = (event.clientY / window.innerHeight - 0.5) * 2;
-      },
-      { passive: true },
-    );
-
-    let running = true;
-    const tick = () => {
-      if (!running) return;
-      const time = performance.now() * 0.00018;
-      particles.rotation.y += (pointer.x * 0.12 - particles.rotation.y) * 0.018;
-      particles.rotation.x += (-pointer.y * 0.08 - particles.rotation.x) * 0.018;
-      particles.position.x = Math.sin(time * 2.2) * 18 + pointer.x * 12;
-      particles.position.y = Math.cos(time * 1.7) * 10 - pointer.y * 8;
-      renderer.render(scene, camera);
-      window.requestAnimationFrame(tick);
-    };
-    tick();
-
-    window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-    window.addEventListener("pagehide", () => {
-      running = false;
-      geometry.dispose();
-      material.dispose();
-      renderer.dispose();
-      renderer.domElement.remove();
-    });
-  } else if (bg) {
-    bg.classList.add("is-static");
-  }
-
-  const glowCards = document.querySelectorAll(
-    ".hero-product, .quick-features div, .interface-switcher, .function-grid article, .innovation-list article, .steps, .mac-help-grid article, .download-panel, .platform-card, .netdisk-panel, .legal-section > div, .community-section > div:first-child, .donate-mini, .donate-grid article",
+  const cards = document.querySelectorAll(
+    ".screenshot-frame, .tour-stage, .download-card, .feature-stack article, .workflow-grid article, .panel-gallery figure, .proof-strip article, .install-steps article, .star-panel, .donate-panel, .notice-section > div"
   );
 
-  glowCards.forEach((card) => {
-    card.addEventListener(
-      "pointermove",
-      (event) => {
-        const rect = card.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * 100;
-        const y = ((event.clientY - rect.top) / rect.height) * 100;
-        card.style.setProperty("--card-x", `${x.toFixed(2)}%`);
-        card.style.setProperty("--card-y", `${y.toFixed(2)}%`);
-        card.classList.add("is-card-hovered");
-      },
-      { passive: true },
-    );
-    card.addEventListener("pointerleave", () => card.classList.remove("is-card-hovered"));
+  cards.forEach((card) => {
+    card.addEventListener("pointermove", (event) => {
+      const rect = card.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 100;
+      const y = ((event.clientY - rect.top) / rect.height) * 100;
+      card.style.setProperty("--card-x", `${x.toFixed(2)}%`);
+      card.style.setProperty("--card-y", `${y.toFixed(2)}%`);
+      card.classList.add("is-card-hovered");
+    });
+    card.addEventListener("pointerleave", () => {
+      card.classList.remove("is-card-hovered");
+    });
   });
 
-  window.addEventListener(
-    "pagehide",
-    () => {
-      if (bgRaf) window.cancelAnimationFrame(bgRaf);
-    },
-    { once: true },
-  );
+  const tour = document.querySelector(".screen-tour");
+  if (tour) {
+    const buttons = Array.from(tour.querySelectorAll("[data-shot]"));
+    const shots = Array.from(tour.querySelectorAll(".tour-shot"));
+    const title = tour.querySelector(".tour-copy h3");
+    const label = tour.querySelector(".tour-index");
+    const copy = tour.querySelector(".tour-copy p");
+    let active = 0;
+    let timer = null;
 
-  const hasGsap = window.gsap && window.ScrollTrigger;
-  if (!hasGsap || reduceMotion) return;
-
-  const { gsap } = window;
-  gsap.registerPlugin(window.ScrollTrigger);
-  gsap.defaults({ duration: 0.9, ease: "power3.out" });
-
-  const intro = gsap.timeline();
-  intro
-    .from(".site-header", { y: -14, autoAlpha: 0, duration: 0.42 })
-    .from(".eyebrow", { y: 18, autoAlpha: 0, duration: 0.42 }, "-=0.2")
-    .from(".hero h1", { y: 38, autoAlpha: 0, duration: 0.72 }, "-=0.14")
-    .from(".hero-copy, .beta-note", { y: 22, autoAlpha: 0, stagger: 0.06, duration: 0.52 }, "-=0.36")
-    .from(".hero-points span", { y: 14, autoAlpha: 0, stagger: 0.045, duration: 0.42 }, "-=0.32")
-    .from(".hero-actions a", { y: 16, autoAlpha: 0, stagger: 0.06, duration: 0.42 }, "-=0.28")
-    .from(".hero-product", { x: 54, rotationY: -8, rotationZ: 1.4, autoAlpha: 0, duration: 0.82 }, "-=0.68")
-    .from(".hud", { y: 12, scale: 0.94, autoAlpha: 0, stagger: 0.06, duration: 0.36 }, "-=0.32");
-
-  gsap.to(".scan-line", {
-    yPercent: 310,
-    duration: 2.2,
-    repeat: -1,
-    yoyo: true,
-    ease: "sine.inOut",
-  });
-
-  gsap.to(".hero-product", {
-    y: -80,
-    scale: 0.92,
-    scrollTrigger: {
-      trigger: ".hero",
-      start: "top top",
-      end: "bottom top",
-      scrub: true,
-    },
-  });
-
-  gsap.from(".quick-features", {
-    y: 18,
-    autoAlpha: 0,
-    scrollTrigger: { trigger: ".quick-features", start: "top 86%" },
-  });
-
-  const switcher = document.querySelector(".interface-switcher");
-  if (switcher) {
-    const shots = [...switcher.querySelectorAll(".interface-stage .mock-shot")];
-    const buttons = [...switcher.querySelectorAll(".interface-tabs button")];
-    const kicker = switcher.querySelector(".interface-kicker");
-    const title = switcher.querySelector(".interface-copy h3");
-    const copy = switcher.querySelector(".interface-copy p");
-    let activeShot = 0;
-    let timer = 0;
-
-    const showShot = (index) => {
-      activeShot = (index + shots.length) % shots.length;
-      switcher.style.setProperty("--shot-index", String(activeShot));
+    const setShot = (index, userInitiated = false) => {
+      active = (index + shots.length) % shots.length;
+      tour.style.setProperty("--shot-index", active);
       shots.forEach((shot, shotIndex) => {
-        shot.classList.toggle("is-active", shotIndex === activeShot);
+        shot.classList.toggle("is-active", shotIndex === active);
       });
       buttons.forEach((button, buttonIndex) => {
-        const selected = buttonIndex === activeShot;
+        const selected = buttonIndex === active;
         button.classList.toggle("is-active", selected);
         button.setAttribute("aria-selected", String(selected));
       });
-      const shot = shots[activeShot];
-      if (shot && kicker && title && copy) {
-        gsap.to([kicker, title, copy], {
-          y: -8,
-          autoAlpha: 0,
-          duration: 0.16,
-          onComplete: () => {
-            kicker.textContent = shot.dataset.kicker || "";
-            title.textContent = shot.dataset.title || "";
-            copy.textContent = shot.dataset.copy || "";
-            gsap.fromTo([kicker, title, copy], { y: 10, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.28, stagger: 0.035 });
-          },
-        });
-      }
+      const shot = shots[active];
+      if (title) title.textContent = shot.dataset.title || "";
+      if (label) label.textContent = shot.dataset.label || "";
+      if (copy) copy.textContent = shot.dataset.copy || "";
+      if (userInitiated) restartTimer();
     };
 
     const restartTimer = () => {
-      window.clearInterval(timer);
-      timer = window.setInterval(() => showShot(activeShot + 1), 4200);
+      if (timer) window.clearInterval(timer);
+      if (!reduceMotion) {
+        timer = window.setInterval(() => setShot(active + 1), 5200);
+      }
     };
 
     buttons.forEach((button) => {
-      button.addEventListener("click", () => {
-        showShot(Number(button.dataset.shot || 0));
-        restartTimer();
-      });
+      button.addEventListener("click", () => setShot(Number(button.dataset.shot), true));
     });
 
+    setShot(0);
     restartTimer();
+  }
 
-    gsap.from(switcher, {
-      y: 54,
-      clipPath: "inset(10% 0 10% 0)",
-      autoAlpha: 0,
-      scrollTrigger: { trigger: switcher, start: "top 82%" },
+  if (window.gsap && !reduceMotion) {
+    if (window.ScrollTrigger) {
+      gsap.registerPlugin(ScrollTrigger);
+    }
+
+    gsap.from(".hero-copy > *", {
+      y: 24,
+      opacity: 0,
+      duration: 0.8,
+      ease: "power3.out",
+      stagger: 0.08,
     });
 
-    gsap.fromTo(
-      ".interface-stage",
-      { y: 28 },
-      {
+    gsap.from(".hero-visual", {
+      y: 32,
+      opacity: 0,
+      rotateX: 3,
+      duration: 0.95,
+      ease: "power3.out",
+      delay: 0.12,
+    });
+
+    if (window.ScrollTrigger) {
+      gsap.utils
+        .toArray(".proof-strip article, .section-copy, .screen-tour, .scan-layout, .workflow-grid article, .panel-gallery figure, .install-steps article, .download-card, .notice-section > div, .community-section > div")
+        .forEach((element) => {
+          gsap.from(element, {
+            y: 34,
+            opacity: 0,
+            duration: 0.75,
+            ease: "power3.out",
+            scrollTrigger: {
+              trigger: element,
+              start: "top 84%",
+              once: true,
+            },
+          });
+        });
+
+      gsap.to(".hero-frame", {
         y: -18,
+        ease: "none",
         scrollTrigger: {
-          trigger: switcher,
-          start: "top bottom",
+          trigger: ".hero",
+          start: "top top",
           end: "bottom top",
           scrub: true,
         },
-      },
-    );
+      });
+    }
   }
 
-  gsap.utils.toArray(".function-grid article, .innovation-list article, .install-copy, .steps, .download-panel").forEach((el) => {
-    gsap.from(el, {
-      y: 42,
-      autoAlpha: 0,
-      scrollTrigger: { trigger: el, start: "top 84%" },
+  const canvas = document.getElementById("field-canvas");
+  if (!canvas || reduceMotion) return;
+
+  const ctx = canvas.getContext("2d", { alpha: true });
+  let width = 0;
+  let height = 0;
+  let dpr = 1;
+  let pointerX = window.innerWidth * 0.58;
+  let pointerY = window.innerHeight * 0.34;
+  let targetX = pointerX;
+  let targetY = pointerY;
+  const particles = [];
+  const bands = [];
+
+  const resize = () => {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    particles.length = 0;
+    bands.length = 0;
+    const count = Math.min(90, Math.max(42, Math.floor((width * height) / 21000)));
+    for (let i = 0; i < count; i += 1) {
+      particles.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.18,
+        vy: (Math.random() - 0.5) * 0.18,
+        r: Math.random() * 1.8 + 0.5,
+        a: Math.random() * 0.26 + 0.08,
+      });
+    }
+    for (let i = 0; i < 6; i += 1) {
+      bands.push({
+        y: height * (0.08 + i * 0.18),
+        speed: 0.15 + i * 0.025,
+        amp: 20 + i * 9,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  window.addEventListener("resize", resize, { passive: true });
+  window.addEventListener(
+    "pointermove",
+    (event) => {
+      targetX = event.clientX;
+      targetY = event.clientY;
+    },
+    { passive: true }
+  );
+
+  const drawBand = (band, time) => {
+    const gradient = ctx.createLinearGradient(0, band.y - 80, width, band.y + 100);
+    gradient.addColorStop(0, "rgba(60, 122, 255, 0)");
+    gradient.addColorStop(0.45, "rgba(96, 152, 255, 0.12)");
+    gradient.addColorStop(1, "rgba(125, 214, 255, 0)");
+    ctx.beginPath();
+    ctx.moveTo(0, band.y);
+    for (let x = 0; x <= width + 24; x += 24) {
+      const wave =
+        Math.sin(x * 0.004 + time * band.speed + band.phase) * band.amp +
+        Math.sin(x * 0.011 + time * 0.08) * 8;
+      ctx.lineTo(x, band.y + wave);
+    }
+    ctx.lineTo(width, band.y + 120);
+    ctx.lineTo(0, band.y + 120);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+  };
+
+  const render = (timeMs) => {
+    const time = timeMs * 0.001;
+    pointerX += (targetX - pointerX) * 0.08;
+    pointerY += (targetY - pointerY) * 0.08;
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.globalCompositeOperation = "source-over";
+
+    bands.forEach((band) => drawBand(band, time));
+
+    const halo = ctx.createRadialGradient(pointerX, pointerY, 0, pointerX, pointerY, Math.min(width, height) * 0.42);
+    halo.addColorStop(0, "rgba(98, 159, 255, 0.18)");
+    halo.addColorStop(0.38, "rgba(74, 132, 255, 0.07)");
+    halo.addColorStop(1, "rgba(74, 132, 255, 0)");
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.globalCompositeOperation = "lighter";
+    particles.forEach((particle) => {
+      const dx = pointerX - particle.x;
+      const dy = pointerY - particle.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < 36000) {
+        const force = (1 - distSq / 36000) * 0.015;
+        particle.vx -= dx * force * 0.01;
+        particle.vy -= dy * force * 0.01;
+      }
+
+      particle.x += particle.vx + Math.sin(time * 0.35 + particle.y * 0.006) * 0.12;
+      particle.y += particle.vy + Math.cos(time * 0.28 + particle.x * 0.005) * 0.08;
+      particle.vx *= 0.995;
+      particle.vy *= 0.995;
+
+      if (particle.x < -20) particle.x = width + 20;
+      if (particle.x > width + 20) particle.x = -20;
+      if (particle.y < -20) particle.y = height + 20;
+      if (particle.y > height + 20) particle.y = -20;
+
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(126, 211, 255, ${particle.a})`;
+      ctx.fill();
     });
-  });
 
-  gsap.utils.toArray(".function-grid article, .innovation-list article").forEach((card) => {
-    const yTo = gsap.quickTo(card, "y", { duration: 0.35, ease: "power3.out" });
-    card.addEventListener("mouseenter", () => yTo(-8));
-    card.addEventListener("mouseleave", () => yTo(0));
-  });
+    requestAnimationFrame(render);
+  };
 
+  resize();
+  requestAnimationFrame(render);
 })();
