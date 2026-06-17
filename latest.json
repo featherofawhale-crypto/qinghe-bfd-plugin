@@ -4,7 +4,7 @@
   "release_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/latest",
   "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.19-macos.dmg",
   "package_type": "dmg",
-  "sha256": "10c27b95c4110f4d36be6b8a878cde212bfbff34616c73daa8dc54b592dab6c1",
+  "sha256": "336b77ab141bab9bfa2c500e05ccd14d51e7aa94239b90550adeb147ddabc4e9",
   "notes": "macOS 测试版更新：升至 v2.0.1-beta.19，修复短 I/O 范围下路径重复检测漏检夹帧的问题；macOS 包为完整一键安装版，内置 Python 3.9、PySide6/Qt、ffmpeg 和独立 Resolve API Bridge，并已从最终 DMG 挂载安装验证；同步更新原创深蓝三色检测 logo。",
   "mandatory": false,
   "mirrors": [
@@ -27,9 +27,9 @@
       "release_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/latest",
       "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.19-macos.dmg",
       "package_type": "dmg",
-      "sha256": "10c27b95c4110f4d36be6b8a878cde212bfbff34616c73daa8dc54b592dab6c1",
+      "sha256": "336b77ab141bab9bfa2c500e05ccd14d51e7aa94239b90550adeb147ddabc4e9",
       "notes": "macOS 完整一键安装版，内置 Python 3.9、PySide6/Qt GUI、ffmpeg、主 GUI Resolve API Bridge 和独立 Bridge；不依赖用户系统 Python/PySide6/Homebrew；最终 DMG 已挂载安装，验证 Resolve API、签名、隔离属性和 UI 短启动。本包已同步原创深蓝三色检测 logo。",
-      "size": 106616347
+      "size": 106615225
     },
     "windows": {
       "version": "2.0.1-beta.14",
@@ -40,5 +40,5 @@
       "notes": "Windows 包等待 Windows 电脑打包测试后再发布。"
     }
   },
-  "size": 106616347
+  "size": 106615225
 }
