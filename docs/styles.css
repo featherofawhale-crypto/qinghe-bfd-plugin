@@ -16,13 +16,28 @@
   --shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
   --radius: 8px;
   --container: min(1180px, calc(100vw - 40px));
-  font-family:
-    ui-sans-serif,
+  --font-sans:
+    "PingFang SC",
+    "HarmonyOS Sans SC",
+    "MiSans",
+    "Alibaba PuHuiTi 3.0",
+    "Noto Sans CJK SC",
+    "Source Han Sans SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
     system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "SF Pro Display",
-    "Segoe UI",
+    sans-serif;
+  --font-display:
+    "PingFang SC",
+    "HarmonyOS Sans SC",
+    "MiSans",
+    "Alibaba PuHuiTi 3.0",
+    "Noto Sans CJK SC",
+    "Source Han Sans SC",
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    system-ui,
     sans-serif;
 }
 
@@ -42,9 +57,17 @@ body {
     radial-gradient(circle at 20% 0%, rgba(66, 124, 255, 0.22), transparent 32rem),
     linear-gradient(180deg, #06152b 0%, #061121 42%, #030915 100%);
   color: var(--text);
+  font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.6;
   overflow-x: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
 body::after {
@@ -129,8 +152,8 @@ main,
   align-items: center;
   gap: 12px;
   min-width: 0;
-  font-weight: 780;
-  letter-spacing: -0.02em;
+  font-weight: 760;
+  letter-spacing: 0;
 }
 
 .brand img {
@@ -145,7 +168,7 @@ main,
   gap: 26px;
   color: var(--muted);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
 .nav-links a,
@@ -168,7 +191,7 @@ main,
   border-radius: 999px;
   background: #f6f1e8;
   color: #07101f;
-  font-weight: 800;
+  font-weight: 750;
   transition:
     transform 0.2s ease,
     background 0.2s ease;
@@ -208,7 +231,7 @@ main {
   margin: 0 0 18px;
   color: var(--accent);
   font-size: 14px;
-  font-weight: 760;
+  font-weight: 700;
 }
 
 .hero h1,
@@ -219,8 +242,9 @@ main {
 .notice-section h2,
 .community-section h2 {
   margin: 0;
-  letter-spacing: -0.035em;
-  line-height: 1.02;
+  font-family: var(--font-display);
+  letter-spacing: 0;
+  line-height: 1.08;
   text-wrap: balance;
 }
 
@@ -237,9 +261,13 @@ main {
 }
 
 .hero h1 {
-  max-width: 13ch;
+  max-width: none;
   font-size: clamp(52px, 7.3vw, 96px);
-  font-weight: 860;
+  font-weight: 760;
+}
+
+.hero h1 span {
+  white-space: nowrap;
 }
 
 .hero-text {
@@ -266,7 +294,7 @@ main {
   min-height: 48px;
   padding: 0 20px;
   border-radius: 999px;
-  font-weight: 790;
+  font-weight: 750;
   white-space: nowrap;
   transition:
     transform 0.2s ease,
@@ -384,8 +412,8 @@ main {
 .proof-strip strong {
   display: block;
   font-size: clamp(24px, 2.7vw, 34px);
-  line-height: 1.1;
-  letter-spacing: -0.035em;
+  line-height: 1.16;
+  letter-spacing: 0;
 }
 
 .proof-strip p {
@@ -473,7 +501,7 @@ main {
 .download-card span,
 .feature-stack span {
   color: var(--accent);
-  font-weight: 800;
+  font-weight: 750;
 }
 
 .tour-copy h3,
@@ -482,8 +510,8 @@ main {
 .download-card h3 {
   margin: 18px 0 0;
   font-size: clamp(25px, 3vw, 40px);
-  line-height: 1.12;
-  letter-spacing: -0.03em;
+  line-height: 1.18;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
@@ -510,7 +538,7 @@ main {
   background: rgba(255, 255, 255, 0.04);
   color: var(--muted);
   font: inherit;
-  font-weight: 760;
+  font-weight: 700;
   cursor: pointer;
   transition:
     color 0.2s ease,
@@ -654,7 +682,7 @@ main {
 .track-row span {
   color: var(--soft);
   font-size: 13px;
-  font-weight: 760;
+  font-weight: 700;
 }
 
 .clip,
@@ -790,7 +818,7 @@ main {
   margin-top: 12px;
   color: var(--muted);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 650;
 }
 
 .install-section {
@@ -818,7 +846,7 @@ main {
 .security-note strong {
   display: block;
   font-size: 22px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .install-steps span {
@@ -924,7 +952,7 @@ main {
   margin-top: 8px;
   color: var(--muted);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 650;
 }
 
 .site-footer {
