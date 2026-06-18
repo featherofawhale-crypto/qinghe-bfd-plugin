@@ -19,8 +19,10 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 import time
+import tempfile
 import urllib.parse
 import urllib.request
 import zlib
@@ -55,6 +57,7 @@ STYLE_NAMES = (
     "Black",
 )
 VISUAL_SAMPLE_TEXT = "\u6e05 \u4f55 \u9ed1 \u5e27 \u68c0 \u6d4b"
+RESOLVE_PYTHON_ENV = "QINGHE_RESOLVE_PYTHON"
 
 
 @dataclass(frozen=True)
@@ -266,6 +269,80 @@ def parse_font_names(path: Path) -> dict[str, Any]:
         "styles": styles or ["Regular"],
         "names_by_id": names_by_id,
     }
+
+
+def candidate_resolve_pythons() -> list[Path]:
+    candidates: list[Path] = []
+    override = os.environ.get(RESOLVE_PYTHON_ENV)
+    if override:
+        candidates.append(Path(override))
+    home = Path.home()
+    candidates.extend(
+        [
+            home / "AppData" / "Local" / "Programs" / "Python" / "Python314" / "python.exe",
+            home / "AppData" / "Local" / "davinci-resolve-mcp" / "venv" / "Scripts" / "python.exe",
+            home / "AppData" / "Roaming" / "uv" / "tools" / "resolve-mcp" / "Scripts" / "python.exe",
+            Path(sys.executable),
+        ]
+    )
+    seen: set[Path] = set()
+    existing: list[Path] = []
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except Exception:
+            resolved = candidate
+        if resolved in seen or not resolved.exists():
+            continue
+        seen.add(resolved)
+        existing.append(resolved)
+    return existing
+
+
+def run_resolve_python(code: str, *, timeout: int = 45) -> dict[str, Any] | None:
+    sys.path.insert(0, str(PYSIDE_DIR))
+    from resolve_bridge import resolve_python_script
+
+    script = resolve_python_script(code)
+    last_error = ""
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".py", delete=False) as handle:
+        handle.write(script)
+        script_path = Path(handle.name)
+    try:
+        for python_exe in candidate_resolve_pythons():
+            try:
+                completed = subprocess.run(
+                    [str(python_exe), str(script_path)],
+                    cwd=str(ROOT),
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=max(5, int(timeout)),
+                )
+            except subprocess.TimeoutExpired:
+                last_error = f"{python_exe}: timeout"
+                continue
+            except Exception as exc:
+                last_error = f"{python_exe}: {exc}"
+                continue
+            if completed.returncode != 0:
+                last_error = f"{python_exe}: exit {completed.returncode} {completed.stderr.strip()}"
+                continue
+            lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+            for line in reversed(lines):
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(data, dict):
+                    data.setdefault("_resolve_python", str(python_exe))
+                    return data
+            last_error = f"{python_exe}: no-json stdout={completed.stdout[-500:]} stderr={completed.stderr[-500:]}"
+    finally:
+        script_path.unlink(missing_ok=True)
+    return {"ok": False, "error": "resolve-python-failed", "detail": last_error}
 
 
 def read_png_rgb(path: Path) -> tuple[int, int, list[tuple[int, int, int]]]:
@@ -484,9 +561,6 @@ def candidate_names(source: str, metadata: dict[str, Any]) -> list[str]:
 
 
 def resolve_probe(source: str, font_path: Path, metadata: dict[str, Any]) -> dict[str, Any]:
-    sys.path.insert(0, str(PYSIDE_DIR))
-    from resolve_bridge import ResolveBridge
-
     candidates = candidate_names(source, metadata)
     style = str((metadata.get("styles") or ["Regular"])[0] or "Regular")
     payload = {
@@ -571,8 +645,7 @@ print(json.dumps({
     "needs_rule": bool((not direct_before) and accepted and accepted != source and textplus_ok),
 }, ensure_ascii=False))
 ''' % json.dumps(payload, ensure_ascii=False)
-    bridge = ResolveBridge()
-    result = bridge._run_resolve_python(code, timeout=45)
+    result = run_resolve_python(code, timeout=45)
     return result or {"ok": False, "error": "resolve-no-json"}
 
 
@@ -581,9 +654,6 @@ def visual_probe(accepted_font: str, style: str, args: argparse.Namespace, font_
         return {"ok": True, "skipped": True}
     visual_dir = Path(args.visual_dir)
     visual_dir.mkdir(parents=True, exist_ok=True)
-    sys.path.insert(0, str(PYSIDE_DIR))
-    from resolve_bridge import ResolveBridge
-
     payload = {
         "timeline_index": int(args.timeline_index),
         "track_index": int(args.track_index),
@@ -693,7 +763,7 @@ print(json.dumps({
     "style": readback_style,
 }, ensure_ascii=False))
 ''' % json.dumps(payload, ensure_ascii=False)
-    data = ResolveBridge()._run_resolve_python(code, timeout=90) or {"ok": False, "error": "visual-no-json"}
+    data = run_resolve_python(code, timeout=90) or {"ok": False, "error": "visual-no-json"}
     image_path = Path(str(data.get("path") or ""))
     if data.get("ok") and image_path.exists():
         try:
@@ -903,9 +973,6 @@ def self_check() -> dict[str, Any]:
 
 
 def resolve_preflight(timeout: int = 20) -> dict[str, Any]:
-    sys.path.insert(0, str(PYSIDE_DIR))
-    from resolve_bridge import ResolveBridge
-
     code = r'''
 import json
 resolve = dvr_script.scriptapp("Resolve")
@@ -924,7 +991,7 @@ print(json.dumps({
     "timeline": timeline.GetName() if timeline else "",
 }, ensure_ascii=False))
 '''
-    result = ResolveBridge()._run_resolve_python(code, timeout=max(5, int(timeout)))
+    result = run_resolve_python(code, timeout=max(5, int(timeout)))
     if not isinstance(result, dict):
         return {"ok": False, "error": "resolve-preflight-no-json"}
     result["ok"] = bool(result.get("resolve") and result.get("fusion"))
