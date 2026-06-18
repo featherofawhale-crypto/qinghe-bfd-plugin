@@ -58,6 +58,13 @@ python tools\font_probe_rules.py `
   --keep-visual-png
 ```
 
+One-command runner with self-checks, unit tests, Resolve preflight, strict batch,
+and final validation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\run_font_probe_1000.ps1 -KeepVisualPng
+```
+
 Validate any JSONL result file:
 
 ```powershell
