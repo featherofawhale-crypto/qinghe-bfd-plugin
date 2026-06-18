@@ -29,7 +29,7 @@ import zlib
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,10 +103,23 @@ def decode_html(payload: bytes) -> str:
 
 def crawl_listings(limit: int, start_page: int = 1, max_pages: int = 200) -> list[FontListing]:
     listings: list[FontListing] = []
+    for listing in iter_listings(limit, start_page, max_pages=max_pages):
+        listings.append(listing)
+    return listings
+
+
+def iter_listings(limit: int, start_page: int = 1, max_pages: int = 200) -> Iterator[FontListing]:
     seen: set[str] = set()
     page = start_page
-    while len(listings) < limit and page < start_page + max_pages:
-        text = decode_html(read_url(LIST_URL.format(page=page)))
+    yielded = 0
+    while yielded < limit and page < start_page + max_pages:
+        try:
+            text = decode_html(read_url(LIST_URL.format(page=page), timeout=15, retries=2))
+        except Exception as exc:
+            print(f"[crawl] SKIP page={page} error={exc}", flush=True)
+            page += 1
+            continue
+        page_count = 0
         for match in re.finditer(
             r'<a[^>]+href="(?P<href>/font-(?P<id>\d+)\.html)"[^>]+title="(?P<title>[^"]+)"',
             text,
@@ -116,11 +129,13 @@ def crawl_listings(limit: int, start_page: int = 1, max_pages: int = 200) -> lis
                 continue
             seen.add(font_id)
             source = html.unescape(match.group("title")).strip()
-            listings.append(FontListing(font_id, source, urllib.parse.urljoin("https://www.fonts.net.cn", match.group("href"))))
-            if len(listings) >= limit:
+            yield FontListing(font_id, source, urllib.parse.urljoin("https://www.fonts.net.cn", match.group("href")))
+            yielded += 1
+            page_count += 1
+            if yielded >= limit:
                 break
+        print(f"[crawl] page={page} listings={page_count} total={yielded}", flush=True)
         page += 1
-    return listings
 
 
 def checkpointed_ids(path: Path) -> set[str]:
@@ -1118,10 +1133,9 @@ def main(argv: list[str]) -> int:
             return 2
     TEMP_ROOT.mkdir(parents=True, exist_ok=True)
     done = checkpointed_ids(args.output) if args.resume else set()
-    listings = crawl_listings(args.limit, args.start_page)
     processed = 0
     strict_rule_count = 0
-    for font in listings:
+    for font in iter_listings(args.limit, args.start_page):
         if font.font_id in done:
             continue
         result = process_font(font, args)
@@ -1131,7 +1145,7 @@ def main(argv: list[str]) -> int:
             strict_rule_count = write_rules_from_results(args.output, args.rules_output, require_visual=True)
         status = "RULE" if result.get("needs_rule") else ("OK" if result.get("ok") else "SKIP")
         suffix = f" strict_rules={strict_rule_count}" if args.target_rules > 0 else ""
-        print(f"[{processed}/{len(listings)}] {status} {font.font_id} {font.source}{suffix}", flush=True)
+        print(f"[{processed}] {status} {font.font_id} {font.source}{suffix}", flush=True)
         if args.target_rules > 0 and strict_rule_count >= args.target_rules:
             break
         if args.delay > 0:
