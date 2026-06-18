@@ -902,15 +902,50 @@ def self_check() -> dict[str, Any]:
     }
 
 
+def resolve_preflight(timeout: int = 20) -> dict[str, Any]:
+    sys.path.insert(0, str(PYSIDE_DIR))
+    from resolve_bridge import ResolveBridge
+
+    code = r'''
+import json
+resolve = dvr_script.scriptapp("Resolve")
+fusion = dvr_script.scriptapp("Fusion")
+project = None
+timeline = None
+if resolve:
+    pm = resolve.GetProjectManager()
+    project = pm.GetCurrentProject() if pm else None
+    timeline = project.GetCurrentTimeline() if project else None
+print(json.dumps({
+    "resolve": bool(resolve),
+    "fusion": bool(fusion),
+    "version": resolve.GetVersionString() if resolve else "",
+    "project": project.GetName() if project else "",
+    "timeline": timeline.GetName() if timeline else "",
+}, ensure_ascii=False))
+'''
+    result = ResolveBridge()._run_resolve_python(code, timeout=max(5, int(timeout)))
+    if not isinstance(result, dict):
+        return {"ok": False, "error": "resolve-preflight-no-json"}
+    result["ok"] = bool(result.get("resolve") and result.get("fusion"))
+    if not result["ok"] and not result.get("error"):
+        result["error"] = "resolve-or-fusion-unavailable"
+    return result
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Probe Chinese font fallback rules for DaVinci Resolve Text+.")
     parser.add_argument("--self-check", action="store_true", help="Run offline checks for this probe script and exit.")
     parser.add_argument("--validate-results", type=Path, help="Summarize a JSONL probe result file and count strict visual rules.")
+    parser.add_argument("--check-resolve", action="store_true", help="Check Resolve/Fusion scripting availability and exit.")
     parser.add_argument("--limit", type=int, default=20, help="Number of font listings to inspect.")
     parser.add_argument("--start-page", type=int, default=1)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--rules-output", type=Path, default=DEFAULT_RULES)
     parser.add_argument("--rules-require-visual", action="store_true", help="Only write rules whose Resolve visual proof passed.")
+    parser.add_argument("--target-rules", type=int, default=0, help="Stop after this many strict visual rules are present.")
+    parser.add_argument("--resolve-preflight-timeout", type=int, default=20, help="Seconds to wait for the initial Resolve scripting check.")
+    parser.add_argument("--skip-resolve-preflight", action="store_true", help="Do not fail fast when Resolve/Fusion scripting is unavailable.")
     parser.add_argument("--resume", action="store_true", help="Skip font IDs already present in the JSONL output.")
     parser.add_argument("--keep-temp", action="store_true", help="Keep downloaded/extracted temporary font files for debugging.")
     parser.add_argument("--visual", action="store_true", help="Require an exported Resolve still to contain visible text before writing a rule.")
@@ -937,22 +972,38 @@ def main(argv: list[str]) -> int:
         result = validate_results(args.validate_results)
         print(json.dumps(result, ensure_ascii=True, indent=2))
         return 0 if result.get("ok") else 1
+    if args.check_resolve:
+        result = resolve_preflight(args.resolve_preflight_timeout)
+        print(json.dumps(result, ensure_ascii=True, indent=2))
+        return 0 if result.get("ok") else 1
+    if not args.no_resolve and not args.skip_resolve_preflight:
+        result = resolve_preflight(args.resolve_preflight_timeout)
+        if not result.get("ok"):
+            print(json.dumps({"ok": False, "stage": "resolve-preflight", **result}, ensure_ascii=True, indent=2))
+            return 2
     TEMP_ROOT.mkdir(parents=True, exist_ok=True)
     done = checkpointed_ids(args.output) if args.resume else set()
     listings = crawl_listings(args.limit, args.start_page)
     processed = 0
+    strict_rule_count = 0
     for font in listings:
         if font.font_id in done:
             continue
         result = process_font(font, args)
         append_jsonl(args.output, result)
         processed += 1
+        if args.output.exists() and (args.target_rules > 0 or args.rules_require_visual):
+            strict_rule_count = write_rules_from_results(args.output, args.rules_output, require_visual=True)
         status = "RULE" if result.get("needs_rule") else ("OK" if result.get("ok") else "SKIP")
-        print(f"[{processed}/{len(listings)}] {status} {font.font_id} {font.source}", flush=True)
+        suffix = f" strict_rules={strict_rule_count}" if args.target_rules > 0 else ""
+        print(f"[{processed}/{len(listings)}] {status} {font.font_id} {font.source}{suffix}", flush=True)
+        if args.target_rules > 0 and strict_rule_count >= args.target_rules:
+            break
         if args.delay > 0:
             time.sleep(args.delay)
+    require_visual_rules = bool(args.rules_require_visual or args.target_rules > 0)
     rule_count = (
-        write_rules_from_results(args.output, args.rules_output, require_visual=bool(args.rules_require_visual))
+        write_rules_from_results(args.output, args.rules_output, require_visual=require_visual_rules)
         if args.output.exists()
         else 0
     )
