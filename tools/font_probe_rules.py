@@ -363,10 +363,12 @@ def read_png_rgb(path: Path) -> tuple[int, int, list[tuple[int, int, int]]]:
             payload.extend(chunk)
         elif chunk_type == b"IEND":
             break
-    if width is None or height is None or bit_depth != 8 or color_type not in (2, 6):
+    if width is None or height is None or bit_depth not in (8, 16) or color_type not in (2, 6):
         raise ValueError(f"unsupported PNG format: bit_depth={bit_depth} color_type={color_type}")
     channels = 3 if color_type == 2 else 4
-    row_bytes = int(width) * channels
+    bytes_per_sample = 2 if bit_depth == 16 else 1
+    pixel_bytes = channels * bytes_per_sample
+    row_bytes = int(width) * pixel_bytes
     raw = zlib.decompress(bytes(payload))
     rows: list[bytes] = []
     cursor = 0
@@ -377,9 +379,9 @@ def read_png_rgb(path: Path) -> tuple[int, int, list[tuple[int, int, int]]]:
         row = bytearray(raw[cursor : cursor + row_bytes])
         cursor += row_bytes
         for index in range(row_bytes):
-            left = row[index - channels] if index >= channels else 0
+            left = row[index - pixel_bytes] if index >= pixel_bytes else 0
             up = previous[index]
-            up_left = previous[index - channels] if index >= channels else 0
+            up_left = previous[index - pixel_bytes] if index >= pixel_bytes else 0
             if filter_type == 1:
                 row[index] = (row[index] + left) & 0xFF
             elif filter_type == 2:
@@ -399,8 +401,11 @@ def read_png_rgb(path: Path) -> tuple[int, int, list[tuple[int, int, int]]]:
         previous = row
     pixels: list[tuple[int, int, int]] = []
     for row in rows:
-        for index in range(0, len(row), channels):
-            pixels.append((row[index], row[index + 1], row[index + 2]))
+        for index in range(0, len(row), pixel_bytes):
+            if bit_depth == 16:
+                pixels.append((row[index], row[index + 2], row[index + 4]))
+            else:
+                pixels.append((row[index], row[index + 1], row[index + 2]))
     return int(width), int(height), pixels
 
 
@@ -649,7 +654,7 @@ print(json.dumps({
     return result or {"ok": False, "error": "resolve-no-json"}
 
 
-def visual_probe(accepted_font: str, style: str, args: argparse.Namespace, font_id: str) -> dict[str, Any]:
+def visual_probe(accepted_font: str, style: str, font_path: Path, args: argparse.Namespace, font_id: str) -> dict[str, Any]:
     if not args.visual:
         return {"ok": True, "skipped": True}
     visual_dir = Path(args.visual_dir)
@@ -661,8 +666,10 @@ def visual_probe(accepted_font: str, style: str, args: argparse.Namespace, font_
         "tool_name": str(args.tool_name),
         "timecode": str(args.timecode or ""),
         "font": str(accepted_font),
+        "font_path": str(font_path),
         "style": str(style or "Regular"),
         "visual_dir": str(visual_dir.resolve()),
+        "render_dir": str((TEMP_ROOT / "visual_render").resolve()),
         "prefix": f"font_probe_{font_id}",
         "sample_text": VISUAL_SAMPLE_TEXT,
     }
@@ -679,24 +686,58 @@ def safe(callable_obj, default=None):
     except Exception:
         return default
 
+resolve = dvr_script.scriptapp("Resolve")
 fusion = dvr_script.scriptapp("Fusion")
-if not fusion:
-    print(json.dumps({"ok": False, "error": "fusion-unavailable"}, ensure_ascii=False))
+if not resolve:
+    print(json.dumps({"ok": False, "error": "resolve-unavailable"}, ensure_ascii=False))
     raise SystemExit(0)
-comp = safe(lambda: fusion.NewComp(), None)
+manager = fusion.FontManager if fusion else None
+if manager:
+    safe(lambda: manager.AddFont(str(PAYLOAD["font_path"]), str(PAYLOAD["font"])), None)
+    safe(lambda: manager.AddFont(str(PAYLOAD["font_path"])), None)
+project = resolve.GetProjectManager().GetCurrentProject()
+if not project:
+    print(json.dumps({"ok": False, "error": "no-project"}, ensure_ascii=False))
+    raise SystemExit(0)
+timeline = project.GetTimelineByIndex(int(PAYLOAD["timeline_index"])) or project.GetCurrentTimeline()
+if not timeline:
+    print(json.dumps({"ok": False, "error": "timeline-not-found"}, ensure_ascii=False))
+    raise SystemExit(0)
+project.SetCurrentTimeline(timeline)
+timecode = str(PAYLOAD.get("timecode") or "")
+if timecode:
+    safe(lambda: timeline.SetCurrentTimecode(timecode), None)
+clips = timeline.GetItemListInTrack("video", int(PAYLOAD["track_index"])) or []
+item_index = int(PAYLOAD["item_index"])
+if item_index < 0 or item_index >= len(clips):
+    print(json.dumps({"ok": False, "error": "timeline-item-not-found", "clip_count": len(clips)}, ensure_ascii=False))
+    raise SystemExit(0)
+clip = clips[item_index]
+comp = safe(lambda: clip.GetFusionCompByIndex(1), None)
 if not comp:
-    print(json.dumps({"ok": False, "error": "fusion-new-comp-failed"}, ensure_ascii=False))
+    print(json.dumps({"ok": False, "error": "fusion-comp-not-found"}, ensure_ascii=False))
     raise SystemExit(0)
 
-bg = safe(lambda: comp.AddTool("Background", 0, 1), None)
-tool = safe(lambda: comp.AddTool("TextPlus", 1, 1), None)
-merge = safe(lambda: comp.AddTool("Merge", 2, 1), None)
-if not bg or not tool or not merge:
+for _, old_tool in list((comp.GetToolList(False) or {}).items()):
+    attrs = safe(lambda tool=old_tool: tool.GetAttrs(), {}) or {}
+    name = str(attrs.get("TOOLS_Name") or "")
+    reg = str(attrs.get("TOOLS_RegID") or "")
+    if name.startswith("QHProbe") or reg == "Saver":
+        safe(lambda tool=old_tool: tool.Delete(), None)
+        safe(lambda n=name: comp.DeleteTool(n), None)
+        safe(lambda tool=old_tool: comp.DeleteTool(tool), None)
+
+bg = safe(lambda: comp.AddTool("Background", -4, 0), None)
+tool = safe(lambda: comp.AddTool("TextPlus", -3, 0), None)
+transform = safe(lambda: comp.AddTool("Transform", -2, 0), None)
+merge = safe(lambda: comp.AddTool("Merge", -1, 0), None)
+if not bg or not tool or not transform or not merge:
     print(json.dumps({"ok": False, "error": "probe-tools-create-failed"}, ensure_ascii=False))
     raise SystemExit(0)
 
 safe(lambda: bg.SetAttrs({"TOOLS_Name": "QHProbeBG"}), None)
 safe(lambda: tool.SetAttrs({"TOOLS_Name": "QHProbeText"}), None)
+safe(lambda: transform.SetAttrs({"TOOLS_Name": "QHProbeTransform"}), None)
 safe(lambda: merge.SetAttrs({"TOOLS_Name": "QHProbeMerge"}), None)
 safe(lambda: bg.SetInput("Width", 1920), None)
 safe(lambda: bg.SetInput("Height", 1080), None)
@@ -709,7 +750,7 @@ for corner in ("TopLeft", "TopRight", "BottomLeft", "BottomRight"):
 safe(lambda: tool.SetInput("StyledText", str(PAYLOAD["sample_text"])), None)
 safe(lambda: tool.SetInput("Font", str(PAYLOAD["font"])), None)
 safe(lambda: tool.SetInput("Style", str(PAYLOAD["style"])), None)
-safe(lambda: tool.SetInput("Size", 0.35), None)
+safe(lambda: tool.SetInput("Size", 0.14), None)
 safe(lambda: tool.SetInput("Center", {1: 0.5, 2: 0.5, 3: 0.0}), None)
 safe(lambda: tool.SetInput("Start", 0), None)
 safe(lambda: tool.SetInput("End", 1), None)
@@ -720,14 +761,17 @@ for name in ("Red1", "Green1", "Blue1", "Red1Clone", "Green1Clone", "Blue1Clone"
 for name in ("Alpha1", "Alpha1Clone"):
     safe(lambda n=name: tool.SetInput(n, 1), None)
 
+safe(lambda: transform.SetInput("Size", 0.58), None)
+safe(lambda: transform.ConnectInput("Input", tool.Output), None)
 safe(lambda: merge.ConnectInput("Background", bg.Output), None)
-safe(lambda: merge.ConnectInput("Foreground", tool.Output), None)
+safe(lambda: merge.ConnectInput("Foreground", transform.Output), None)
 safe(lambda: comp.SetAttrs({"COMPB_Modified": True}), None)
 
-folder = str(PAYLOAD["visual_dir"])
+folder = str(PAYLOAD["render_dir"])
 prefix = str(PAYLOAD["prefix"])
 os.makedirs(folder, exist_ok=True)
 path = os.path.join(folder, prefix + ".png")
+before_files = set(os.listdir(folder))
 for name in os.listdir(folder):
     if name.startswith(prefix) and name.lower().endswith(".png"):
         safe(lambda n=name: os.remove(os.path.join(folder, n)), None)
@@ -736,25 +780,37 @@ saver = comp.AddTool("Saver", 2, 2)
 safe(lambda: saver.SetAttrs({"TOOLS_Name": "QHProbeSaver"}), None)
 safe(lambda: saver.SetInput("Clip", path), None)
 safe(lambda: saver.ConnectInput("Input", merge.Output), None)
-safe(lambda: comp.SetAttrs({"COMPN_RenderStart": 0, "COMPN_RenderEnd": 0}), None)
+safe(lambda: comp.SetAttrs({"COMPN_RenderStart": 0, "COMPN_RenderEnd": 0, "COMPN_GlobalStart": 0, "COMPN_GlobalEnd": 119}), None)
+render_started = time.time()
 export_ok = bool(safe(lambda: comp.Render(), False))
 time.sleep(0.2)
 actual_path = ""
 if os.path.exists(path):
     actual_path = path
 else:
-    matches = [
+    names_after = os.listdir(folder)
+    new_matches = [
         os.path.join(folder, name)
-        for name in os.listdir(folder)
+        for name in names_after
+        if name not in before_files and name.lower().endswith(".png")
+    ]
+    prefix_matches = [
+        os.path.join(folder, name)
+        for name in names_after
         if name.startswith(prefix) and name.lower().endswith(".png")
     ]
+    recent_matches = [
+        os.path.join(folder, name)
+        for name in names_after
+        if name.lower().endswith(".png") and os.path.getmtime(os.path.join(folder, name)) >= render_started - 1.0
+    ]
+    matches = new_matches or prefix_matches or recent_matches
     matches.sort(key=lambda item: os.path.getmtime(item), reverse=True)
     if matches:
         actual_path = matches[0]
 safe(lambda: comp.DeleteTool(saver), None)
 readback_font = str(safe(lambda: tool.GetInput("Font"), "") or "")
 readback_style = str(safe(lambda: tool.GetInput("Style"), "") or "")
-safe(lambda: comp.Close(), None)
 print(json.dumps({
     "ok": bool(export_ok and actual_path and os.path.exists(actual_path)),
     "export_ok": export_ok,
@@ -766,6 +822,12 @@ print(json.dumps({
     data = run_resolve_python(code, timeout=90) or {"ok": False, "error": "visual-no-json"}
     image_path = Path(str(data.get("path") or ""))
     if data.get("ok") and image_path.exists():
+        report_path = visual_dir / image_path.name
+        if image_path.resolve() != report_path.resolve():
+            shutil.copy2(image_path, report_path)
+            data["render_path"] = str(image_path)
+            data["path"] = str(report_path)
+            image_path = report_path
         try:
             stats = png_nonblank_stats(image_path)
         except Exception as exc:
@@ -819,7 +881,13 @@ def process_font(font: FontListing, args: argparse.Namespace) -> dict[str, Any]:
         probe = resolve_probe(font.source, ascii_font, metadata) if not args.no_resolve else {"ok": True, "skipped": True}
         visual = {"ok": True, "skipped": True}
         if probe.get("needs_rule"):
-            visual = visual_probe(str(probe.get("accepted") or ""), str(probe.get("style") or "Regular"), args, font.font_id)
+            visual = visual_probe(
+                str(probe.get("accepted") or ""),
+                str(probe.get("style") or "Regular"),
+                ascii_font,
+                args,
+                font.font_id,
+            )
         rule = None
         if probe.get("needs_rule") and visual.get("visible", bool(visual.get("skipped"))):
             rule = build_rule(font, font_file, metadata, probe)

@@ -55,6 +55,10 @@ python tools\font_probe_rules.py `
   --rules-require-visual `
   --output artifacts\font_probe_reports\visual_1000.jsonl `
   --rules-output artifacts\font_probe_reports\visual_1000_rules.json `
+  --timeline-index 7 `
+  --track-index 1 `
+  --item-index 5 `
+  --timecode 01:00:19:07 `
   --keep-visual-png
 ```
 
@@ -62,7 +66,12 @@ One-command runner with self-checks, unit tests, Resolve preflight, strict batch
 and final validation:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\run_font_probe_1000.ps1 -KeepVisualPng
+powershell -ExecutionPolicy Bypass -File tools\run_font_probe_1000.ps1 `
+  -TimelineIndex 7 `
+  -TrackIndex 1 `
+  -ItemIndex 5 `
+  -Timecode 01:00:19:07 `
+  -KeepVisualPng
 ```
 
 Validate any JSONL result file:

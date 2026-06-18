@@ -2,6 +2,10 @@ param(
     [int]$Limit = 5000,
     [int]$TargetRules = 1000,
     [int]$ResolvePreflightTimeout = 20,
+    [int]$TimelineIndex = 7,
+    [int]$TrackIndex = 1,
+    [int]$ItemIndex = 5,
+    [string]$Timecode = "01:00:19:07",
     [string]$Output = "artifacts\font_probe_reports\visual_1000.jsonl",
     [string]$RulesOutput = "artifacts\font_probe_reports\visual_1000_rules.json",
     [switch]$KeepVisualPng
@@ -49,6 +53,10 @@ $argsList = @(
     "--rules-require-visual",
     "--output", $Output,
     "--rules-output", $RulesOutput,
+    "--timeline-index", "$TimelineIndex",
+    "--track-index", "$TrackIndex",
+    "--item-index", "$ItemIndex",
+    "--timecode", $Timecode,
     "--resolve-preflight-timeout", "$ResolvePreflightTimeout"
 )
 
