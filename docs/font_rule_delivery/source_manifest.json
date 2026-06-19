@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "generated_at": "2026-06-19T04:26:43+00:00",
+  "source_results": "artifacts\\font_probe_reports\\visual_1000.jsonl",
+  "source_rules": "artifacts\\font_probe_reports\\visual_1000_rules.json",
+  "basic_rule_count": 1000,
+  "fallback_rule_count": 6,
+  "validation": {
+    "rules": 1000,
+    "unique_keys": 1000,
+    "bad_rules": 0,
+    "bad_samples": []
+  }
+}
