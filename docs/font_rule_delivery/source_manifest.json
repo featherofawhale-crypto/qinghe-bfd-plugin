@@ -1,13 +1,13 @@
 {
-  "version": 2,
-  "generated_at": "2026-06-19T04:26:43+00:00",
-  "source_results": "artifacts\\font_probe_reports\\visual_1000.jsonl",
-  "source_rules": "artifacts\\font_probe_reports\\visual_1000_rules.json",
-  "basic_rule_count": 1000,
+  "version": 3,
+  "generated_at": "2026-06-20T11:51:55+00:00",
+  "source_results": "artifacts\\font_probe_reports\\visual_6000.jsonl",
+  "source_rules": "artifacts\\font_probe_reports\\visual_6000_rules.json",
+  "basic_rule_count": 2809,
   "fallback_rule_count": 6,
   "validation": {
-    "rules": 1000,
-    "unique_keys": 1000,
+    "rules": 2809,
+    "unique_keys": 2809,
     "bad_rules": 0,
     "bad_samples": []
   }

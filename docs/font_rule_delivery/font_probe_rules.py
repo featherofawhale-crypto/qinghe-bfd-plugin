@@ -31,6 +31,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[1]
 PYSIDE_DIR = ROOT / "pyside_ui"
@@ -429,25 +433,43 @@ def png_nonblank_stats(path: Path, *, step: int = 4) -> dict[str, Any]:
     sampled = 0
     non_white = 0
     very_dark = 0
+    near_white = 0
     for y in range(0, height, max(1, step)):
         base = y * width
         for x in range(0, width, max(1, step)):
             red, green, blue = pixels[base + x]
             lum = int(0.299 * red + 0.587 * green + 0.114 * blue)
             sampled += 1
+            if lum >= 245:
+                near_white += 1
             if lum < 245:
                 non_white += 1
             if lum < 80:
                 very_dark += 1
     tofu = cjk_tofu_stats(width, height, pixels)
+    near_white_pct = round((100.0 * near_white / sampled) if sampled else 0.0, 4)
+    non_white_pct = round((100.0 * non_white / sampled) if sampled else 0.0, 4)
+    very_dark_pct = round((100.0 * very_dark / sampled) if sampled else 0.0, 4)
+    error_frame_suspect = near_white_pct < 50.0 or non_white_pct > 15.0 or very_dark_pct > 10.0
+    error_frame_reason = ""
+    if near_white_pct < 50.0:
+        error_frame_reason = "non-white-background"
+    elif non_white_pct > 15.0:
+        error_frame_reason = "too-much-non-white"
+    elif very_dark_pct > 10.0:
+        error_frame_reason = "too-much-dark-area"
     return {
         "width": width,
         "height": height,
         "samples": sampled,
         "non_white": non_white,
+        "near_white": near_white,
         "very_dark": very_dark,
-        "non_white_pct": round((100.0 * non_white / sampled) if sampled else 0.0, 4),
-        "very_dark_pct": round((100.0 * very_dark / sampled) if sampled else 0.0, 4),
+        "near_white_pct": near_white_pct,
+        "non_white_pct": non_white_pct,
+        "very_dark_pct": very_dark_pct,
+        "error_frame_suspect": bool(error_frame_suspect),
+        "error_frame_reason": error_frame_reason,
         **tofu,
     }
 
@@ -851,6 +873,7 @@ print(json.dumps({
         data["visible"] = bool(
             stats.get("non_white_pct", 0) >= float(args.visual_threshold_pct)
             and not stats.get("tofu_suspect", True)
+            and not stats.get("error_frame_suspect", True)
         )
         if not args.keep_visual_png:
             for path in image_path.parent.glob(f"{payload['prefix']}*"):
@@ -943,6 +966,7 @@ def is_visual_rule_result(item: dict[str, Any]) -> bool:
         visual.get("visible") is True
         and isinstance(stats, dict)
         and stats.get("tofu_suspect") is False
+        and stats.get("error_frame_suspect", False) is False
         and int(stats.get("glyph_segments") or 0) >= 4
     )
 

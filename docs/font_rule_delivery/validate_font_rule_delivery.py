@@ -18,6 +18,10 @@ for index, rule in enumerate(rules):
         or not proof.get("visual_ok")
         or not proof.get("visible")
         or proof.get("tofu_suspect") is True
+        or proof.get("error_frame_suspect") is True
+        or float(proof.get("near_white_pct", 100.0)) < 50.0
+        or float(proof.get("non_white_pct", 0.0)) > 15.0
+        or float(proof.get("very_dark_pct", 0.0)) > 10.0
         or int(proof.get("glyph_segments") or 0) < 4
         or str(rule.get("source") or "") == str(rule.get("accepted") or "")
     ):

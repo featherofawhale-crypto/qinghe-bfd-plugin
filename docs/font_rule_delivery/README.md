@@ -16,8 +16,8 @@
 
 ## 当前验证结果
 
-- 基础映射条数：`1000`
-- 去重映射键：`1000`
+- 基础映射条数：`2809`
+- 去重映射键：`2809`
 - 失败规则：`0`
 
 ## 规则成立标准
@@ -29,6 +29,8 @@
 - Resolve Text+ 接受修正候选名，并且读回匹配
 - 渲染 PNG 可见真实中文
 - `tofu_suspect=false`
+- `error_frame_suspect=false`锛屼笉鑳芥槸 Resolve 鐨?`Font Not Found` 绛夐粦搴曢敊璇彁绀哄抚
+- 鐢婚潰蹇呴』淇濇寔鐧藉簳瀛楀舰锛歯ear_white_pct>=50銆乶on_white_pct<=15銆乿ery_dark_pct<=10
 - `glyph_segments>=4`
 
 ## 文件说明

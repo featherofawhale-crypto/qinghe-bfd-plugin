@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS = ROOT / "artifacts" / "font_probe_reports" / "visual_1000.jsonl"
 DEFAULT_RULES = ROOT / "artifacts" / "font_probe_reports" / "visual_1000_rules.json"
 DEFAULT_OUT = ROOT / "docs" / "font_rule_delivery"
-DELIVERY_VERSION = 2
+DELIVERY_VERSION = 3
 
 
 def has_cjk(text: str) -> bool:
@@ -46,7 +46,10 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
-        item = json.loads(line)
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
         if isinstance(item, dict):
             records.append(item)
     return records
@@ -78,6 +81,11 @@ def normalize_rule(rule: dict[str, Any], record: dict[str, Any]) -> dict[str, An
             "visible": bool(visual.get("visible")),
             "glyph_segments": int(stats.get("glyph_segments") or 0),
             "tofu_suspect": bool(stats.get("tofu_suspect")),
+            "error_frame_suspect": bool(stats.get("error_frame_suspect", False)),
+            "error_frame_reason": str(stats.get("error_frame_reason") or ""),
+            "near_white_pct": float(stats.get("near_white_pct", 100.0)),
+            "non_white_pct": float(stats.get("non_white_pct", 0.0)),
+            "very_dark_pct": float(stats.get("very_dark_pct", 0.0)),
         },
         "metadata": {
             "families": metadata.get("families") if isinstance(metadata.get("families"), list) else [],
@@ -200,6 +208,10 @@ def validate_basic_rules(basic_rules: list[dict[str, Any]]) -> dict[str, Any]:
             or not proof.get("visual_ok")
             or not proof.get("visible")
             or proof.get("tofu_suspect") is True
+            or proof.get("error_frame_suspect") is True
+            or float(proof.get("near_white_pct", 100.0)) < 50.0
+            or float(proof.get("non_white_pct", 0.0)) > 15.0
+            or float(proof.get("very_dark_pct", 0.0)) > 10.0
             or int(proof.get("glyph_segments") or 0) < 4
             or str(rule.get("source") or "") == str(rule.get("accepted") or "")
         ):
@@ -248,6 +260,8 @@ def build_readme(out_dir: Path, basic_count: int, validation: dict[str, Any]) ->
 - Resolve Text+ 接受修正候选名，并且读回匹配
 - 渲染 PNG 可见真实中文
 - `tofu_suspect=false`
+- `error_frame_suspect=false`锛屼笉鑳芥槸 Resolve 鐨?`Font Not Found` 绛夐粦搴曢敊璇彁绀哄抚
+- 鐢婚潰蹇呴』淇濇寔鐧藉簳瀛楀舰锛歯ear_white_pct>=50銆乶on_white_pct<=15銆乿ery_dark_pct<=10
 - `glyph_segments>=4`
 
 ## 文件说明
@@ -282,6 +296,10 @@ for index, rule in enumerate(rules):
         or not proof.get("visual_ok")
         or not proof.get("visible")
         or proof.get("tofu_suspect") is True
+        or proof.get("error_frame_suspect") is True
+        or float(proof.get("near_white_pct", 100.0)) < 50.0
+        or float(proof.get("non_white_pct", 0.0)) > 15.0
+        or float(proof.get("very_dark_pct", 0.0)) > 10.0
         or int(proof.get("glyph_segments") or 0) < 4
         or str(rule.get("source") or "") == str(rule.get("accepted") or "")
     ):

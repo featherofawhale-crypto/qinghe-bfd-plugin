@@ -1,13 +1,13 @@
 {
-  "version": 2,
+  "version": 3,
   "purpose": "Fallback probe rules for fonts not covered by exact basic mappings.",
   "summary": {
-    "sample_rules": 1000,
-    "source_has_cjk": 1000,
-    "accepted_ascii_only": 1000,
+    "sample_rules": 2809,
+    "source_has_cjk": 2809,
+    "accepted_ascii_only": 2809,
     "pattern_counts": {
-      "postscript_name": 493,
-      "ascii_family_name": 507
+      "postscript_name": 1282,
+      "ascii_family_name": 1527
     }
   },
   "rules": [
@@ -30,7 +30,7 @@
         "ASCII family name",
         "ASCII full name without style suffix"
       ],
-      "evidence": "493 verified mappings accepted a PostScript name.",
+      "evidence": "1282 verified mappings accepted a PostScript name.",
       "success_gate": "Text+ readback font equals candidate and visual render has >=4 glyph segments with tofu_suspect=false."
     },
     {
@@ -42,7 +42,7 @@
         "first ASCII family returned by the font name table",
         "first ASCII full name returned by the font name table"
       ],
-      "evidence": "507 verified mappings accepted an ASCII family name.",
+      "evidence": "1527 verified mappings accepted an ASCII family name.",
       "success_gate": "Fusion FontManager reports candidate available or Text+ readback changes from previous font."
     },
     {
