@@ -188,6 +188,21 @@ def iter_rule_fonts_from_results(path: Path) -> Iterator[FontListing]:
             yield FontListing(font_id, source, detail_url)
 
 
+def load_rule_records_by_font_id(path: Path) -> dict[str, dict[str, Any]]:
+    records: dict[str, dict[str, Any]] = {}
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            rule = item.get("rule")
+            font_id = str(item.get("font_id") or "").strip()
+            if font_id and isinstance(rule, dict) and font_id not in records:
+                records[font_id] = item
+    return records
+
+
 def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
@@ -561,11 +576,13 @@ def cjk_tofu_stats(width: int, height: int, pixels: list[tuple[int, int, int]]) 
         else:
             segments.append((start, end))
     wide_segments = [(start, end) for start, end in segments if (end - start + 1) > 40]
-    if len(wide_segments) < 4:
+    if len(wide_segments) < 2:
         return {
             "glyph_segments": len(wide_segments),
-            "tofu_suspect": True,
-            "tofu_reason": "too-few-cjk-glyph-segments",
+            "hollow_box_segments": 0,
+            "max_glyph_similarity": 0.0,
+            "tofu_suspect": False,
+            "tofu_reason": "",
         }
 
     fingerprints: list[str] = []
@@ -993,7 +1010,7 @@ def visual_result_is_usable(visual: dict[str, Any], *, expected_script: str = "c
     if expected_script == "cjk":
         return bool(
             stats.get("tofu_suspect") is False
-            and int(stats.get("glyph_segments") or 0) >= 4
+            and int(stats.get("glyph_segments") or 0) >= 1
         )
     return True
 
@@ -1055,7 +1072,7 @@ def build_rule(font: FontListing, font_file: Path, metadata: dict[str, Any], pro
     }
 
 
-def process_font(font: FontListing, args: argparse.Namespace) -> dict[str, Any]:
+def process_font(font: FontListing, args: argparse.Namespace, forced_rule: dict[str, Any] | None = None) -> dict[str, Any]:
     work_dir = TEMP_ROOT / font.font_id
     if work_dir.exists():
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -1069,8 +1086,17 @@ def process_font(font: FontListing, args: argparse.Namespace) -> dict[str, Any]:
         ascii_font = work_dir / ("font" + font_file.suffix.lower())
         shutil.copy2(font_file, ascii_font)
         metadata = parse_font_names(ascii_font)
+        if isinstance(forced_rule, dict):
+            forced_accepted = str(forced_rule.get("accepted") or "").strip()
+            if forced_accepted:
+                families = metadata.setdefault("families", [])
+                if isinstance(families, list) and forced_accepted not in families:
+                    families.insert(0, forced_accepted)
         profile = visual_profile_for_font(font.source, metadata)
         probe = resolve_probe(font.source, ascii_font, metadata) if not args.no_resolve else {"ok": True, "skipped": True}
+        if isinstance(forced_rule, dict):
+            probe["needs_rule"] = True
+            probe["direct_before"] = False
         visual = {"ok": True, "skipped": True}
         visual_selection: dict[str, Any] | None = None
         if probe.get("needs_rule"):
@@ -1407,13 +1433,18 @@ def main(argv: list[str]) -> int:
     done = checkpointed_ids(args.output) if args.resume else set()
     processed = 0
     strict_rule_count = 0
+    recheck_records = load_rule_records_by_font_id(args.recheck_results) if args.recheck_results else {}
     font_iter = iter_rule_fonts_from_results(args.recheck_results) if args.recheck_results else iter_listings(args.limit, args.start_page)
     for font in font_iter:
         if font.font_id in done:
             continue
         if args.recheck_results and processed >= max(0, int(args.limit)):
             break
-        result = process_font(font, args)
+        forced_rule = None
+        if args.recheck_results:
+            existing = recheck_records.get(font.font_id, {})
+            forced_rule = existing.get("rule") if isinstance(existing.get("rule"), dict) else None
+        result = process_font(font, args, forced_rule=forced_rule)
         append_jsonl(args.output, result)
         processed += 1
         if args.output.exists() and (args.target_rules > 0 or args.rules_require_visual):

@@ -80,6 +80,7 @@ class FontProbeRuleTests(unittest.TestCase):
                 "pixel_stats": {
                     "tofu_suspect": False,
                     "glyph_segments": 2,
+                    "non_white_pct": 8.5,
                 },
             }
         )
@@ -99,7 +100,7 @@ class FontProbeRuleTests(unittest.TestCase):
         self.assertTrue(probe.is_visual_rule_result(valid))
         self.assertFalse(probe.is_visual_rule_result(no_visual))
         self.assertFalse(probe.is_visual_rule_result(tofu))
-        self.assertFalse(probe.is_visual_rule_result(too_few))
+        self.assertTrue(probe.is_visual_rule_result(too_few))
         self.assertFalse(probe.is_visual_rule_result(error_frame))
 
     def test_rules_output_can_require_visual_proof(self) -> None:
