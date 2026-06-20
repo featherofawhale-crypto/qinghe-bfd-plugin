@@ -60,7 +60,8 @@ STYLE_NAMES = (
     "Heavy",
     "Black",
 )
-VISUAL_SAMPLE_TEXT = "\u6e05 \u4f55 \u9ed1 \u5e27 \u68c0 \u6d4b"
+VISUAL_SAMPLE_TEXT = "\u6e05 \u4f55 \u9ed1 \u5e27 \u68c0 \u6d4b Qinghe Black Frame 123ABC"
+LATIN_VISUAL_SAMPLE_TEXT = VISUAL_SAMPLE_TEXT
 RESOLVE_PYTHON_ENV = "QINGHE_RESOLVE_PYTHON"
 
 
@@ -158,10 +159,49 @@ def checkpointed_ids(path: Path) -> set[str]:
     return found
 
 
+def iter_rule_fonts_from_results(path: Path) -> Iterator[FontListing]:
+    seen: set[str] = set()
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(item.get("rule"), dict):
+                continue
+            font_id = str(item.get("font_id") or "").strip()
+            source = str(item.get("source") or item.get("rule", {}).get("source") or "").strip()
+            detail_url = str(item.get("detail_url") or "").strip()
+            if not font_id or font_id in seen:
+                continue
+            seen.add(font_id)
+            if not detail_url:
+                detail_url = DETAIL_URL.format(font_id=font_id)
+            yield FontListing(font_id, source, detail_url)
+
+
 def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def text_has_cjk(text: str) -> bool:
+    return bool(re.search(r"[\u3400-\u9fff]", str(text or "")))
+
+
+def visual_profile_for_font(source: str, metadata: dict[str, Any]) -> dict[str, Any]:
+    values = [str(source or "")]
+    for group in ("families", "full_names", "postscript_names"):
+        raw = metadata.get(group) if isinstance(metadata, dict) else None
+        if isinstance(raw, list):
+            values.extend(str(item or "") for item in raw)
+    expected_script = "cjk" if any(text_has_cjk(value) for value in values) else "latin"
+    return {
+        "expected_script": expected_script,
+        "sample_text": VISUAL_SAMPLE_TEXT,
+        "require_tofu_check": expected_script == "cjk",
+    }
 
 
 def download_font_zip(font: FontListing, work_dir: Path) -> Path:
@@ -708,7 +748,16 @@ print(json.dumps({
     return result or {"ok": False, "error": "resolve-no-json"}
 
 
-def visual_probe(accepted_font: str, style: str, font_path: Path, args: argparse.Namespace, font_id: str) -> dict[str, Any]:
+def visual_probe(
+    accepted_font: str,
+    style: str,
+    font_path: Path,
+    args: argparse.Namespace,
+    font_id: str,
+    *,
+    sample_text: str = VISUAL_SAMPLE_TEXT,
+    expected_script: str = "cjk",
+) -> dict[str, Any]:
     if not args.visual:
         return {"ok": True, "skipped": True}
     visual_dir = Path(args.visual_dir)
@@ -725,7 +774,8 @@ def visual_probe(accepted_font: str, style: str, font_path: Path, args: argparse
         "visual_dir": str(visual_dir.resolve()),
         "render_dir": str((TEMP_ROOT / "visual_render").resolve()),
         "prefix": f"font_probe_{font_id}",
-        "sample_text": VISUAL_SAMPLE_TEXT,
+        "sample_text": str(sample_text or VISUAL_SAMPLE_TEXT),
+        "expected_script": str(expected_script or "cjk"),
     }
     code = r'''
 import json
@@ -887,11 +937,8 @@ print(json.dumps({
         except Exception as exc:
             stats = {"error": str(exc)}
         data["pixel_stats"] = stats
-        data["visible"] = bool(
-            stats.get("non_white_pct", 0) >= float(args.visual_threshold_pct)
-            and not stats.get("tofu_suspect", True)
-            and not stats.get("error_frame_suspect", True)
-        )
+        data["expected_script"] = payload["expected_script"]
+        data["visible"] = visual_result_is_usable(data, expected_script=payload["expected_script"])
         if not args.keep_visual_png:
             for path in image_path.parent.glob(f"{payload['prefix']}*"):
                 if path.suffix.lower() in {".png", ".drx"}:
@@ -923,19 +970,24 @@ def iter_textplus_candidates(probe: dict[str, Any]) -> list[dict[str, str]]:
     return candidates
 
 
-def visual_result_is_usable(visual: dict[str, Any]) -> bool:
+def visual_result_is_usable(visual: dict[str, Any], *, expected_script: str = "cjk") -> bool:
     if not isinstance(visual, dict):
         return False
     if visual.get("skipped"):
         return True
     stats = visual.get("pixel_stats")
-    return bool(
-        visual.get("visible") is True
-        and isinstance(stats, dict)
-        and stats.get("tofu_suspect") is False
-        and stats.get("error_frame_suspect", False) is False
-        and int(stats.get("glyph_segments") or 0) >= 4
-    )
+    if not isinstance(stats, dict):
+        return False
+    if stats.get("error_frame_suspect", False) is True:
+        return False
+    if float(stats.get("non_white_pct", 0.0)) <= 0:
+        return False
+    if expected_script == "cjk":
+        return bool(
+            stats.get("tofu_suspect") is False
+            and int(stats.get("glyph_segments") or 0) >= 4
+        )
+    return True
 
 
 def select_visual_candidate(
@@ -944,14 +996,24 @@ def select_visual_candidate(
     args: argparse.Namespace,
     font_id: str,
     *,
+    profile: dict[str, Any] | None = None,
     visual_runner=visual_probe,
 ) -> dict[str, Any]:
+    profile = profile or {"expected_script": "cjk", "sample_text": VISUAL_SAMPLE_TEXT, "require_tofu_check": True}
     rejected: list[dict[str, Any]] = []
     for candidate in iter_textplus_candidates(probe):
         accepted = candidate["accepted"]
         style = candidate["style"]
-        visual = visual_runner(accepted, style, font_path, args, font_id)
-        if visual_result_is_usable(visual):
+        visual = visual_runner(
+            accepted,
+            style,
+            font_path,
+            args,
+            font_id,
+            sample_text=str(profile.get("sample_text") or VISUAL_SAMPLE_TEXT),
+            expected_script=str(profile.get("expected_script") or "cjk"),
+        )
+        if visual_result_is_usable(visual, expected_script=str(profile.get("expected_script") or "cjk")):
             return {
                 "accepted": accepted,
                 "style": style,
@@ -999,11 +1061,12 @@ def process_font(font: FontListing, args: argparse.Namespace) -> dict[str, Any]:
         ascii_font = work_dir / ("font" + font_file.suffix.lower())
         shutil.copy2(font_file, ascii_font)
         metadata = parse_font_names(ascii_font)
+        profile = visual_profile_for_font(font.source, metadata)
         probe = resolve_probe(font.source, ascii_font, metadata) if not args.no_resolve else {"ok": True, "skipped": True}
         visual = {"ok": True, "skipped": True}
         visual_selection: dict[str, Any] | None = None
         if probe.get("needs_rule"):
-            visual_selection = select_visual_candidate(probe, ascii_font, args, font.font_id)
+            visual_selection = select_visual_candidate(probe, ascii_font, args, font.font_id, profile=profile)
             visual = visual_selection["visual"]
             if visual_selection.get("accepted"):
                 probe["accepted"] = str(visual_selection.get("accepted") or "")
@@ -1022,6 +1085,7 @@ def process_font(font: FontListing, args: argparse.Namespace) -> dict[str, Any]:
             "downloaded": True,
             "font_file": font_file.name,
             "metadata": {key: metadata.get(key) for key in ("families", "full_names", "postscript_names", "styles")},
+            "visual_profile": profile,
             "probe": probe,
             "visual": visual,
             "rejected_visual_candidates": rejected_visual_candidates,
@@ -1119,10 +1183,12 @@ def validate_results(results_path: Path) -> dict[str, Any]:
 
 def self_check() -> dict[str, Any]:
     errors: list[str] = []
-    if VISUAL_SAMPLE_TEXT != "清 何 黑 帧 检 测":
-        errors.append("visual-sample-text-mojibake")
-    if not all("\u4e00" <= char <= "\u9fff" or char.isspace() for char in VISUAL_SAMPLE_TEXT):
-        errors.append("visual-sample-text-not-cjk")
+    if VISUAL_SAMPLE_TEXT != "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC":
+        errors.append("visual-sample-text-changed")
+    if not any("\u4e00" <= char <= "\u9fff" for char in VISUAL_SAMPLE_TEXT):
+        errors.append("visual-sample-text-missing-cjk")
+    if not re.search(r"[A-Za-z]", VISUAL_SAMPLE_TEXT):
+        errors.append("visual-sample-text-missing-latin")
 
     source = Path(__file__).read_text(encoding="utf-8")
     try:
@@ -1191,6 +1257,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--self-check", action="store_true", help="Run offline checks for this probe script and exit.")
     parser.add_argument("--validate-results", type=Path, help="Summarize a JSONL probe result file and count strict visual rules.")
     parser.add_argument("--check-resolve", action="store_true", help="Check Resolve/Fusion scripting availability and exit.")
+    parser.add_argument("--recheck-results", type=Path, help="Re-download and visually recheck fonts that produced rules in an existing JSONL file.")
     parser.add_argument("--limit", type=int, default=20, help="Number of font listings to inspect.")
     parser.add_argument("--start-page", type=int, default=1)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
@@ -1238,7 +1305,8 @@ def main(argv: list[str]) -> int:
     done = checkpointed_ids(args.output) if args.resume else set()
     processed = 0
     strict_rule_count = 0
-    for font in iter_listings(args.limit, args.start_page):
+    font_iter = iter_rule_fonts_from_results(args.recheck_results) if args.recheck_results else iter_listings(args.limit, args.start_page)
+    for font in font_iter:
         if font.font_id in done:
             continue
         result = process_font(font, args)

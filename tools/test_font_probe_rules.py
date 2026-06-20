@@ -47,10 +47,10 @@ def write_rgb_png(path: Path, width: int, height: int, pixels: list[tuple[int, i
 
 
 class FontProbeRuleTests(unittest.TestCase):
-    def test_self_check_keeps_real_cjk_sample_text(self) -> None:
+    def test_self_check_keeps_real_mixed_sample_text(self) -> None:
         result = probe.self_check()
         self.assertTrue(result["ok"], result)
-        self.assertEqual(result["visual_sample_text"], "清 何 黑 帧 检 测")
+        self.assertEqual(result["visual_sample_text"], "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC")
 
     def test_visual_rule_requires_real_visible_non_tofu_glyphs(self) -> None:
         valid = result_record(
@@ -114,6 +114,7 @@ class FontProbeRuleTests(unittest.TestCase):
                         "pixel_stats": {
                             "tofu_suspect": False,
                             "glyph_segments": 6,
+                            "non_white_pct": 8.5,
                         },
                     }
                 ),
@@ -129,6 +130,26 @@ class FontProbeRuleTests(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(len(rules["rules"]), 1)
 
+    def test_iter_rule_fonts_from_results_only_rechecks_existing_rule_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            results_path = Path(temp) / "results.jsonl"
+            records = [
+                {"font_id": "1", "source": "A", "detail_url": "https://example.test/a", "rule": {"source": "A"}},
+                {"font_id": "2", "source": "B", "rule": None},
+                {"font_id": "1", "source": "A duplicate", "rule": {"source": "A duplicate"}},
+                {"font_id": "3", "source": "C", "rule": {"source": "C"}},
+            ]
+            results_path.write_text(
+                "\n".join(json.dumps(item, ensure_ascii=False) for item in records) + "\n",
+                encoding="utf-8",
+            )
+
+            fonts = list(probe.iter_rule_fonts_from_results(results_path))
+
+        self.assertEqual([font.font_id for font in fonts], ["1", "3"])
+        self.assertEqual(fonts[0].detail_url, "https://example.test/a")
+        self.assertEqual(fonts[1].detail_url, "https://www.fonts.net.cn/font-3.html")
+
     def test_black_error_overlay_frame_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "font_not_found_like.png"
@@ -142,6 +163,17 @@ class FontProbeRuleTests(unittest.TestCase):
 
         self.assertTrue(stats["error_frame_suspect"], stats)
         self.assertEqual(stats["error_frame_reason"], "non-white-background")
+
+    def test_visual_profile_uses_mixed_sample_with_script_specific_gate(self) -> None:
+        cjk_profile = probe.visual_profile_for_font("段宁毛笔古韵体", {"families": ["DuanNing MaoBi GuYunTI"]})
+        latin_profile = probe.visual_profile_for_font("Clean Sans", {"families": ["Clean Sans"]})
+
+        self.assertEqual(cjk_profile["expected_script"], "cjk")
+        self.assertEqual(cjk_profile["sample_text"], "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC")
+        self.assertTrue(cjk_profile["require_tofu_check"])
+        self.assertEqual(latin_profile["expected_script"], "latin")
+        self.assertEqual(latin_profile["sample_text"], "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC")
+        self.assertFalse(latin_profile["require_tofu_check"])
 
     def test_known_font_not_found_rule_is_blocked(self) -> None:
         rule = {
@@ -166,7 +198,7 @@ class FontProbeRuleTests(unittest.TestCase):
     def test_visual_candidate_selection_tries_next_candidate_after_font_not_found_frame(self) -> None:
         calls: list[tuple[str, str]] = []
 
-        def fake_visual_runner(font: str, style: str, _font_path: Path, _args: object, _font_id: str) -> dict:
+        def fake_visual_runner(font: str, style: str, _font_path: Path, _args: object, _font_id: str, **_kwargs) -> dict:
             calls.append((font, style))
             if font == "Bad Family":
                 return {
@@ -187,6 +219,7 @@ class FontProbeRuleTests(unittest.TestCase):
                     "tofu_suspect": False,
                     "error_frame_suspect": False,
                     "glyph_segments": 6,
+                    "non_white_pct": 8.5,
                 },
             }
 
@@ -202,6 +235,11 @@ class FontProbeRuleTests(unittest.TestCase):
             Path("font.ttf"),
             object(),
             "case",
+            profile={
+                "expected_script": "cjk",
+                "sample_text": "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC",
+                "require_tofu_check": True,
+            },
             visual_runner=fake_visual_runner,
         )
 
