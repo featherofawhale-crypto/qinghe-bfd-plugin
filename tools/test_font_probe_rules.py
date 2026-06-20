@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import font_probe_rules as probe
+import build_font_rule_delivery as delivery
 
 
 def result_record(*, visual: dict | None, needs_rule: bool = True) -> dict:
@@ -141,6 +142,72 @@ class FontProbeRuleTests(unittest.TestCase):
 
         self.assertTrue(stats["error_frame_suspect"], stats)
         self.assertEqual(stats["error_frame_reason"], "non-white-background")
+
+    def test_known_font_not_found_rule_is_blocked(self) -> None:
+        rule = {
+            "source": "段宁毛笔古韵体",
+            "accepted": "DuanNing MaoBi GuYunTI",
+            "accepted_candidate": "DuanNing MaoBi GuYunTI|||Regular",
+            "style": "Regular",
+            "proof": {
+                "direct_before": False,
+                "textplus_ok": True,
+                "visual_ok": True,
+                "visible": True,
+                "glyph_segments": 6,
+                "tofu_suspect": False,
+            },
+        }
+
+        self.assertIn("Font Not Found", delivery.blocked_rule_reason(rule))
+        validation = delivery.validate_basic_rules([rule])
+        self.assertEqual(validation["bad_rules"], 1)
+
+    def test_visual_candidate_selection_tries_next_candidate_after_font_not_found_frame(self) -> None:
+        calls: list[tuple[str, str]] = []
+
+        def fake_visual_runner(font: str, style: str, _font_path: Path, _args: object, _font_id: str) -> dict:
+            calls.append((font, style))
+            if font == "Bad Family":
+                return {
+                    "ok": True,
+                    "visible": False,
+                    "pixel_stats": {
+                        "error_frame_suspect": True,
+                        "error_frame_reason": "font not found",
+                        "glyph_segments": 6,
+                    },
+                }
+            return {
+                "ok": True,
+                "visible": True,
+                "font": font,
+                "style": style,
+                "pixel_stats": {
+                    "tofu_suspect": False,
+                    "error_frame_suspect": False,
+                    "glyph_segments": 6,
+                },
+            }
+
+        selected = probe.select_visual_candidate(
+            {
+                "accepted": "Bad Family",
+                "style": "Regular",
+                "textplus_candidates": [
+                    {"accepted": "Bad Family", "style": "Regular", "textplus_ok": True},
+                    {"accepted": "GoodPSName", "style": "Regular", "textplus_ok": True},
+                ],
+            },
+            Path("font.ttf"),
+            object(),
+            "case",
+            visual_runner=fake_visual_runner,
+        )
+
+        self.assertEqual(selected["accepted"], "GoodPSName")
+        self.assertEqual(calls, [("Bad Family", "Regular"), ("GoodPSName", "Regular")])
+        self.assertEqual(len(selected["rejected_visual_candidates"]), 1)
 
 
 if __name__ == "__main__":

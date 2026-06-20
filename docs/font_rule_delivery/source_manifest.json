@@ -1,13 +1,21 @@
 {
-  "version": 3,
-  "generated_at": "2026-06-20T11:51:55+00:00",
+  "version": 4,
+  "generated_at": "2026-06-20T12:04:10+00:00",
   "source_results": "artifacts\\font_probe_reports\\visual_6000.jsonl",
   "source_rules": "artifacts\\font_probe_reports\\visual_6000_rules.json",
-  "basic_rule_count": 2809,
+  "basic_rule_count": 2808,
   "fallback_rule_count": 6,
+  "blocked_rule_count": 1,
+  "blocked_rules": [
+    {
+      "source": "段宁毛笔古韵体",
+      "accepted_candidate": "DuanNing MaoBi GuYunTI|||Regular",
+      "reason": "Resolve Text+ shows Font Not Found for DuanNing MaoBi GuYunTI Regular in live UI."
+    }
+  ],
   "validation": {
-    "rules": 2809,
-    "unique_keys": 2809,
+    "rules": 2808,
+    "unique_keys": 2808,
     "bad_rules": 0,
     "bad_samples": []
   }

@@ -6,14 +6,20 @@ root = Path(__file__).resolve().parent
 basic = json.loads((root / "basic_font_rules.json").read_text(encoding="utf-8"))
 fallback = json.loads((root / "fallback_probe_rules.json").read_text(encoding="utf-8"))
 rules = basic.get("rules", [])
+blocked = {
+    ("段宁毛笔古韵体", "DuanNing MaoBi GuYunTI|||Regular"): "Resolve Text+ shows Font Not Found for DuanNing MaoBi GuYunTI Regular in live UI.",
+}
 bad = []
 keys = set()
 for index, rule in enumerate(rules):
     key = (str(rule.get("source") or ""), str(rule.get("accepted_candidate") or ""))
     keys.add(key)
     proof = rule.get("proof") if isinstance(rule.get("proof"), dict) else {}
+    block_reason = blocked.get(key, "")
     if (
-        proof.get("direct_before") is True
+        block_reason
+        or "font not found" in str(proof.get("error_frame_reason") or "").lower()
+        or proof.get("direct_before") is True
         or not proof.get("textplus_ok")
         or not proof.get("visual_ok")
         or not proof.get("visible")
@@ -25,7 +31,7 @@ for index, rule in enumerate(rules):
         or int(proof.get("glyph_segments") or 0) < 4
         or str(rule.get("source") or "") == str(rule.get("accepted") or "")
     ):
-        bad.append({"index": index, "source": rule.get("source"), "accepted": rule.get("accepted")})
+        bad.append({"index": index, "source": rule.get("source"), "accepted": rule.get("accepted"), "block_reason": block_reason})
 result = {
     "basic_rules": len(rules),
     "unique_keys": len(keys),

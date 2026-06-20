@@ -648,30 +648,46 @@ safe(lambda: manager.AddFont(font_path), False)
 after = font_list()
 
 accepted = ""
+textplus_candidates = []
 for name in candidates:
-    if name in after:
-        accepted = name
-        break
+    if name not in after:
+        continue
 
-textplus_ok = False
-textplus_font = ""
-textplus_style = ""
-textplus_error = ""
-if accepted:
+    textplus_ok = False
+    textplus_font = ""
+    textplus_style = ""
+    textplus_error = ""
     comp = safe(lambda: fusion.NewComp(), None)
     try:
         tool = safe(lambda: comp.AddTool("TextPlus", -32768, -32768), None) if comp else None
         if tool:
             safe(lambda: tool.SetInput("StyledText", "清何字体探针123ABC"), None)
-            safe(lambda: tool.SetInput("Font", accepted), None)
+            safe(lambda: tool.SetInput("Font", name), None)
             safe(lambda: tool.SetInput("Style", style), None)
             textplus_font = str(safe(lambda: tool.GetInput("Font"), "") or "")
             textplus_style = str(safe(lambda: tool.GetInput("Style"), "") or "")
-            textplus_ok = (textplus_font == accepted)
+            textplus_ok = (textplus_font == name)
     except Exception as exc:
         textplus_error = str(exc)
     finally:
         safe(lambda: comp.Close(), None)
+    item = {
+        "accepted": name,
+        "style": style,
+        "textplus_ok": bool(textplus_ok),
+        "textplus_font": textplus_font,
+        "textplus_style": textplus_style,
+        "textplus_error": textplus_error,
+    }
+    textplus_candidates.append(item)
+    if not accepted and textplus_ok:
+        accepted = name
+
+first = next((item for item in textplus_candidates if item.get("accepted") == accepted), {})
+textplus_ok = bool(first.get("textplus_ok"))
+textplus_font = str(first.get("textplus_font") or "")
+textplus_style = str(first.get("textplus_style") or "")
+textplus_error = str(first.get("textplus_error") or "")
 
 print(json.dumps({
     "ok": True,
@@ -683,6 +699,7 @@ print(json.dumps({
     "textplus_font": textplus_font,
     "textplus_style": textplus_style,
     "textplus_error": textplus_error,
+    "textplus_candidates": textplus_candidates[:20],
     "addfont_results": addfont_results[:20],
     "needs_rule": bool((not direct_before) and accepted and accepted != source and textplus_ok),
 }, ensure_ascii=False))
@@ -884,6 +901,72 @@ print(json.dumps({
     return data
 
 
+def iter_textplus_candidates(probe: dict[str, Any]) -> list[dict[str, str]]:
+    items = probe.get("textplus_candidates")
+    candidates: list[dict[str, str]] = []
+    if isinstance(items, list):
+        for item in items:
+            if not isinstance(item, dict) or not item.get("textplus_ok"):
+                continue
+            accepted = str(item.get("accepted") or item.get("font") or "").strip()
+            if not accepted:
+                continue
+            style = str(item.get("style") or probe.get("style") or "Regular").strip() or "Regular"
+            candidate = {"accepted": accepted, "style": style}
+            if candidate not in candidates:
+                candidates.append(candidate)
+    accepted = str(probe.get("accepted") or "").strip()
+    if accepted:
+        fallback = {"accepted": accepted, "style": str(probe.get("style") or "Regular").strip() or "Regular"}
+        if fallback not in candidates:
+            candidates.insert(0, fallback)
+    return candidates
+
+
+def visual_result_is_usable(visual: dict[str, Any]) -> bool:
+    if not isinstance(visual, dict):
+        return False
+    if visual.get("skipped"):
+        return True
+    stats = visual.get("pixel_stats")
+    return bool(
+        visual.get("visible") is True
+        and isinstance(stats, dict)
+        and stats.get("tofu_suspect") is False
+        and stats.get("error_frame_suspect", False) is False
+        and int(stats.get("glyph_segments") or 0) >= 4
+    )
+
+
+def select_visual_candidate(
+    probe: dict[str, Any],
+    font_path: Path,
+    args: argparse.Namespace,
+    font_id: str,
+    *,
+    visual_runner=visual_probe,
+) -> dict[str, Any]:
+    rejected: list[dict[str, Any]] = []
+    for candidate in iter_textplus_candidates(probe):
+        accepted = candidate["accepted"]
+        style = candidate["style"]
+        visual = visual_runner(accepted, style, font_path, args, font_id)
+        if visual_result_is_usable(visual):
+            return {
+                "accepted": accepted,
+                "style": style,
+                "visual": visual,
+                "rejected_visual_candidates": rejected,
+            }
+        rejected.append({"accepted": accepted, "style": style, "visual": visual})
+    return {
+        "accepted": "",
+        "style": str(probe.get("style") or "Regular"),
+        "visual": {"ok": False, "visible": False, "error": "no-visual-candidate-rendered"},
+        "rejected_visual_candidates": rejected,
+    }
+
+
 def build_rule(font: FontListing, font_file: Path, metadata: dict[str, Any], probe: dict[str, Any]) -> dict[str, Any]:
     accepted = str(probe.get("accepted") or "")
     style = str(probe.get("style") or "Regular")
@@ -918,17 +1001,19 @@ def process_font(font: FontListing, args: argparse.Namespace) -> dict[str, Any]:
         metadata = parse_font_names(ascii_font)
         probe = resolve_probe(font.source, ascii_font, metadata) if not args.no_resolve else {"ok": True, "skipped": True}
         visual = {"ok": True, "skipped": True}
+        visual_selection: dict[str, Any] | None = None
         if probe.get("needs_rule"):
-            visual = visual_probe(
-                str(probe.get("accepted") or ""),
-                str(probe.get("style") or "Regular"),
-                ascii_font,
-                args,
-                font.font_id,
-            )
+            visual_selection = select_visual_candidate(probe, ascii_font, args, font.font_id)
+            visual = visual_selection["visual"]
+            if visual_selection.get("accepted"):
+                probe["accepted"] = str(visual_selection.get("accepted") or "")
+                probe["style"] = str(visual_selection.get("style") or probe.get("style") or "Regular")
         rule = None
-        if probe.get("needs_rule") and visual.get("visible", bool(visual.get("skipped"))):
+        if probe.get("needs_rule") and visual_result_is_usable(visual):
             rule = build_rule(font, font_file, metadata, probe)
+        rejected_visual_candidates = (
+            visual_selection.get("rejected_visual_candidates", []) if isinstance(visual_selection, dict) else []
+        )
         return {
             "ok": True,
             "font_id": font.font_id,
@@ -939,6 +1024,7 @@ def process_font(font: FontListing, args: argparse.Namespace) -> dict[str, Any]:
             "metadata": {key: metadata.get(key) for key in ("families", "full_names", "postscript_names", "styles")},
             "probe": probe,
             "visual": visual,
+            "rejected_visual_candidates": rejected_visual_candidates,
             "needs_rule": bool(rule),
             "rule": rule,
         }
@@ -961,14 +1047,7 @@ def is_visual_rule_result(item: dict[str, Any]) -> bool:
     visual = item.get("visual")
     if not isinstance(visual, dict) or visual.get("skipped"):
         return False
-    stats = visual.get("pixel_stats")
-    return bool(
-        visual.get("visible") is True
-        and isinstance(stats, dict)
-        and stats.get("tofu_suspect") is False
-        and stats.get("error_frame_suspect", False) is False
-        and int(stats.get("glyph_segments") or 0) >= 4
-    )
+    return visual_result_is_usable(visual)
 
 
 def write_rules_from_results(results_path: Path, rules_path: Path, *, require_visual: bool = False) -> int:

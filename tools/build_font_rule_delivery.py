@@ -25,7 +25,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS = ROOT / "artifacts" / "font_probe_reports" / "visual_1000.jsonl"
 DEFAULT_RULES = ROOT / "artifacts" / "font_probe_reports" / "visual_1000_rules.json"
 DEFAULT_OUT = ROOT / "docs" / "font_rule_delivery"
-DELIVERY_VERSION = 3
+DELIVERY_VERSION = 4
+
+BLOCKED_FONT_NOT_FOUND_RULES: dict[tuple[str, str], str] = {
+    (
+        "段宁毛笔古韵体",
+        "DuanNing MaoBi GuYunTI|||Regular",
+    ): "Resolve Text+ shows Font Not Found for DuanNing MaoBi GuYunTI Regular in live UI.",
+}
 
 
 def has_cjk(text: str) -> bool:
@@ -94,6 +101,22 @@ def normalize_rule(rule: dict[str, Any], record: dict[str, Any]) -> dict[str, An
             "styles": metadata.get("styles") if isinstance(metadata.get("styles"), list) else [],
         },
     }
+
+
+def blocked_rule_reason(rule: dict[str, Any]) -> str:
+    source = str(rule.get("source") or "")
+    accepted_candidate = str(rule.get("accepted_candidate") or "")
+    accepted = str(rule.get("accepted") or "")
+    style = str(rule.get("style") or "Regular")
+    candidates = [
+        (source, accepted_candidate),
+        (source, f"{accepted}|||{style}"),
+    ]
+    for key in candidates:
+        reason = BLOCKED_FONT_NOT_FOUND_RULES.get(key)
+        if reason:
+            return reason
+    return ""
 
 
 def classify_mapping(rule: dict[str, Any]) -> str:
@@ -202,8 +225,11 @@ def validate_basic_rules(basic_rules: list[dict[str, Any]]) -> dict[str, Any]:
         key = (str(rule.get("source") or ""), str(rule.get("accepted_candidate") or ""))
         keys.add(key)
         proof = rule.get("proof") if isinstance(rule.get("proof"), dict) else {}
+        block_reason = blocked_rule_reason(rule)
         if (
-            proof.get("direct_before") is True
+            block_reason
+            or "font not found" in str(proof.get("error_frame_reason") or "").lower()
+            or proof.get("direct_before") is True
             or not proof.get("textplus_ok")
             or not proof.get("visual_ok")
             or not proof.get("visible")
@@ -215,7 +241,15 @@ def validate_basic_rules(basic_rules: list[dict[str, Any]]) -> dict[str, Any]:
             or int(proof.get("glyph_segments") or 0) < 4
             or str(rule.get("source") or "") == str(rule.get("accepted") or "")
         ):
-            bad.append({"index": index, "source": rule.get("source"), "accepted": rule.get("accepted"), "proof": proof})
+            bad.append(
+                {
+                    "index": index,
+                    "source": rule.get("source"),
+                    "accepted": rule.get("accepted"),
+                    "block_reason": block_reason,
+                    "proof": proof,
+                }
+            )
     return {
         "rules": len(basic_rules),
         "unique_keys": len(keys),
@@ -284,14 +318,20 @@ root = Path(__file__).resolve().parent
 basic = json.loads((root / "basic_font_rules.json").read_text(encoding="utf-8"))
 fallback = json.loads((root / "fallback_probe_rules.json").read_text(encoding="utf-8"))
 rules = basic.get("rules", [])
+blocked = {
+    ("段宁毛笔古韵体", "DuanNing MaoBi GuYunTI|||Regular"): "Resolve Text+ shows Font Not Found for DuanNing MaoBi GuYunTI Regular in live UI.",
+}
 bad = []
 keys = set()
 for index, rule in enumerate(rules):
     key = (str(rule.get("source") or ""), str(rule.get("accepted_candidate") or ""))
     keys.add(key)
     proof = rule.get("proof") if isinstance(rule.get("proof"), dict) else {}
+    block_reason = blocked.get(key, "")
     if (
-        proof.get("direct_before") is True
+        block_reason
+        or "font not found" in str(proof.get("error_frame_reason") or "").lower()
+        or proof.get("direct_before") is True
         or not proof.get("textplus_ok")
         or not proof.get("visual_ok")
         or not proof.get("visible")
@@ -303,7 +343,7 @@ for index, rule in enumerate(rules):
         or int(proof.get("glyph_segments") or 0) < 4
         or str(rule.get("source") or "") == str(rule.get("accepted") or "")
     ):
-        bad.append({"index": index, "source": rule.get("source"), "accepted": rule.get("accepted")})
+        bad.append({"index": index, "source": rule.get("source"), "accepted": rule.get("accepted"), "block_reason": block_reason})
 result = {
     "basic_rules": len(rules),
     "unique_keys": len(keys),
@@ -365,6 +405,7 @@ def build_delivery(results_path: Path, rules_path: Path, out_dir: Path) -> dict[
         record_by_key[key] = record
 
     basic_rules: list[dict[str, Any]] = []
+    blocked_rules: list[dict[str, str]] = []
     for rule in source_rules:
         if not isinstance(rule, dict):
             continue
@@ -372,7 +413,18 @@ def build_delivery(results_path: Path, rules_path: Path, out_dir: Path) -> dict[
         record = record_by_key.get(key)
         if not record:
             continue
-        basic_rules.append(normalize_rule(rule, record))
+        normalized = normalize_rule(rule, record)
+        block_reason = blocked_rule_reason(normalized)
+        if block_reason:
+            blocked_rules.append(
+                {
+                    "source": str(normalized.get("source") or ""),
+                    "accepted_candidate": str(normalized.get("accepted_candidate") or ""),
+                    "reason": block_reason,
+                }
+            )
+            continue
+        basic_rules.append(normalized)
 
     validation = validate_basic_rules(basic_rules)
     fallback = build_fallback_rules(basic_rules)
@@ -394,6 +446,8 @@ def build_delivery(results_path: Path, rules_path: Path, out_dir: Path) -> dict[
         "source_rules": str(rules_path),
         "basic_rule_count": len(basic_rules),
         "fallback_rule_count": len(fallback["rules"]),
+        "blocked_rule_count": len(blocked_rules),
+        "blocked_rules": blocked_rules,
         "validation": validation,
     }
     write_text(out_dir / "source_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
