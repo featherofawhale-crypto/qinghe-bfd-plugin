@@ -1252,11 +1252,101 @@ print(json.dumps({
     return result
 
 
+def resolve_scripting_diagnostics(timeout: int = 30) -> dict[str, Any]:
+    probe_code = r'''
+import json
+import os
+import sys
+
+base = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
+script_api = os.environ.get(
+    "RESOLVE_SCRIPT_API",
+    os.path.join(base, "Blackmagic Design", "DaVinci Resolve", "Support", "Developer", "Scripting"),
+)
+module_path = os.path.join(script_api, "Modules")
+if os.path.isdir(module_path):
+    sys.path.insert(0, module_path)
+
+result = {
+    "python": sys.executable,
+    "python_version": sys.version.split()[0],
+    "script_api": script_api,
+    "module_path": module_path,
+    "module_path_exists": os.path.isdir(module_path),
+    "resolve_script_lib": os.environ.get("RESOLVE_SCRIPT_LIB", ""),
+}
+try:
+    import DaVinciResolveScript as dvr_script
+    result["import_ok"] = True
+    result["module_file"] = str(getattr(dvr_script, "__file__", ""))
+    try:
+        resolve = dvr_script.scriptapp("Resolve")
+        fusion = dvr_script.scriptapp("Fusion")
+        result["resolve"] = bool(resolve)
+        result["fusion"] = bool(fusion)
+        result["version"] = resolve.GetVersionString() if resolve else ""
+    except Exception as exc:
+        result["scriptapp_error"] = repr(exc)
+except Exception as exc:
+    result["import_ok"] = False
+    result["import_error"] = repr(exc)
+print(json.dumps(result, ensure_ascii=False))
+'''
+    candidates: list[dict[str, Any]] = []
+    for python_exe in candidate_resolve_pythons():
+        try:
+            completed = subprocess.run(
+                [str(python_exe), "-c", probe_code],
+                cwd=str(ROOT),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=max(5, int(timeout)),
+            )
+        except subprocess.TimeoutExpired:
+            candidates.append({"python": str(python_exe), "ok": False, "error": "timeout"})
+            continue
+        except Exception as exc:
+            candidates.append({"python": str(python_exe), "ok": False, "error": str(exc)})
+            continue
+        parsed: dict[str, Any] = {
+            "python": str(python_exe),
+            "returncode": completed.returncode,
+            "stdout": completed.stdout.strip()[-1000:],
+            "stderr": completed.stderr.strip()[-1000:],
+        }
+        for line in reversed([line.strip() for line in completed.stdout.splitlines() if line.strip()]):
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, dict):
+                parsed = value
+                parsed["returncode"] = completed.returncode
+                if completed.stderr.strip():
+                    parsed["stderr"] = completed.stderr.strip()[-1000:]
+                break
+        parsed["ok"] = bool(parsed.get("resolve") and parsed.get("fusion"))
+        candidates.append(parsed)
+    ok = any(item.get("ok") for item in candidates)
+    remediation = ""
+    if not ok:
+        remediation = (
+            "DaVinciResolveScript imports, but scriptapp returns empty. "
+            "Check Resolve Preferences > System > General > External scripting and set it to Local or Network, "
+            "then restart Resolve and rerun this command."
+        )
+    return {"ok": ok, "candidates": candidates, "remediation": remediation}
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Probe Chinese font fallback rules for DaVinci Resolve Text+.")
     parser.add_argument("--self-check", action="store_true", help="Run offline checks for this probe script and exit.")
     parser.add_argument("--validate-results", type=Path, help="Summarize a JSONL probe result file and count strict visual rules.")
     parser.add_argument("--check-resolve", action="store_true", help="Check Resolve/Fusion scripting availability and exit.")
+    parser.add_argument("--diagnose-resolve-scripting", action="store_true", help="Print detailed Resolve scripting diagnostics and exit.")
     parser.add_argument("--recheck-results", type=Path, help="Re-download and visually recheck fonts that produced rules in an existing JSONL file.")
     parser.add_argument("--limit", type=int, default=20, help="Number of font listings to inspect.")
     parser.add_argument("--start-page", type=int, default=1)
@@ -1295,6 +1385,10 @@ def main(argv: list[str]) -> int:
     if args.check_resolve:
         result = resolve_preflight(args.resolve_preflight_timeout)
         print(json.dumps(result, ensure_ascii=True, indent=2))
+        return 0 if result.get("ok") else 1
+    if args.diagnose_resolve_scripting:
+        result = resolve_scripting_diagnostics(args.resolve_preflight_timeout)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result.get("ok") else 1
     if not args.no_resolve and not args.skip_resolve_preflight:
         result = resolve_preflight(args.resolve_preflight_timeout)
