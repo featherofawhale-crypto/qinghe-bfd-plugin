@@ -68,7 +68,7 @@ STYLE_NAMES = (
     "Heavy",
     "Black",
 )
-VISUAL_SAMPLE_TEXT = "\u6e05 \u4f55 \u9ed1 \u5e27 \u68c0 \u6d4b Qinghe Black Frame 123ABC"
+VISUAL_SAMPLE_TEXT = "\u6e05\u4f55\u9ed1\u5e27\u68c0\u6d4b QH123"
 LATIN_VISUAL_SAMPLE_TEXT = VISUAL_SAMPLE_TEXT
 RESOLVE_PYTHON_ENV = "QINGHE_RESOLVE_PYTHON"
 
@@ -1191,7 +1191,7 @@ def validate_results(results_path: Path) -> dict[str, Any]:
 
 def self_check() -> dict[str, Any]:
     errors: list[str] = []
-    if VISUAL_SAMPLE_TEXT != "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC":
+    if VISUAL_SAMPLE_TEXT != "清何黑帧检测 QH123":
         errors.append("visual-sample-text-changed")
     if not any("\u4e00" <= char <= "\u9fff" for char in VISUAL_SAMPLE_TEXT):
         errors.append("visual-sample-text-missing-cjk")

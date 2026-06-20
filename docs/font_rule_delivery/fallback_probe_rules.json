@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "purpose": "Fallback probe rules for fonts not covered by exact basic mappings.",
   "summary": {
     "sample_rules": 2808,

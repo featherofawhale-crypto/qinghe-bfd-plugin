@@ -50,7 +50,7 @@ class FontProbeRuleTests(unittest.TestCase):
     def test_self_check_keeps_real_mixed_sample_text(self) -> None:
         result = probe.self_check()
         self.assertTrue(result["ok"], result)
-        self.assertEqual(result["visual_sample_text"], "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC")
+        self.assertEqual(result["visual_sample_text"], "清何黑帧检测 QH123")
 
     def test_visual_rule_requires_real_visible_non_tofu_glyphs(self) -> None:
         valid = result_record(
@@ -169,10 +169,10 @@ class FontProbeRuleTests(unittest.TestCase):
         latin_profile = probe.visual_profile_for_font("Clean Sans", {"families": ["Clean Sans"]})
 
         self.assertEqual(cjk_profile["expected_script"], "cjk")
-        self.assertEqual(cjk_profile["sample_text"], "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC")
+        self.assertEqual(cjk_profile["sample_text"], "清何黑帧检测 QH123")
         self.assertTrue(cjk_profile["require_tofu_check"])
         self.assertEqual(latin_profile["expected_script"], "latin")
-        self.assertEqual(latin_profile["sample_text"], "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC")
+        self.assertEqual(latin_profile["sample_text"], "清何黑帧检测 QH123")
         self.assertFalse(latin_profile["require_tofu_check"])
 
     def test_known_font_not_found_rule_is_blocked(self) -> None:
@@ -237,7 +237,7 @@ class FontProbeRuleTests(unittest.TestCase):
             "case",
             profile={
                 "expected_script": "cjk",
-                "sample_text": "清 何 黑 帧 检 测 Qinghe Black Frame 123ABC",
+                "sample_text": "清何黑帧检测 QH123",
                 "require_tofu_check": True,
             },
             visual_runner=fake_visual_runner,

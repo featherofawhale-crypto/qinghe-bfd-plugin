@@ -31,7 +31,7 @@
 - Resolve Text+ 接受修正候选名，并且读回匹配
 - 渲染帧不是 `Font Not Found` 等 Resolve 错误提示画面
 - 渲染帧有可见字形
-- 中文字体使用中英文混合样本：`清 何 黑 帧 检 测 Qinghe Black Frame 123ABC`
+- 中文字体使用中英文混合样本：`清何黑帧检测 QH123`
 - 中文字体要求中文部分不是方框字形
 - 英文字体允许中文方框，但英文部分必须能正常显示，用于证明字体已切换
 - 画面必须保持白底字形：`near_white_pct>=50`，`non_white_pct<=15`，`very_dark_pct<=10`
