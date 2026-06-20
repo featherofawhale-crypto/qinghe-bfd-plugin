@@ -36,7 +36,15 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-ROOT = Path(__file__).resolve().parents[1]
+def find_project_root() -> Path:
+    here = Path(__file__).resolve()
+    for parent in [here.parent, *here.parents]:
+        if (parent / "pyside_ui" / "resolve_bridge.py").exists():
+            return parent
+    return here.parents[1]
+
+
+ROOT = find_project_root()
 PYSIDE_DIR = ROOT / "pyside_ui"
 DEFAULT_OUTPUT = ROOT / "artifacts" / "font_probe_reports" / "font_probe_results.jsonl"
 DEFAULT_RULES = ROOT / "artifacts" / "font_probe_reports" / "candidate_font_probe_rules.json"
@@ -1403,6 +1411,8 @@ def main(argv: list[str]) -> int:
     for font in font_iter:
         if font.font_id in done:
             continue
+        if args.recheck_results and processed >= max(0, int(args.limit)):
+            break
         result = process_font(font, args)
         append_jsonl(args.output, result)
         processed += 1
