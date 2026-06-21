@@ -25,14 +25,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS = ROOT / "artifacts" / "font_probe_reports" / "visual_1000.jsonl"
 DEFAULT_RULES = ROOT / "artifacts" / "font_probe_reports" / "visual_1000_rules.json"
 DEFAULT_OUT = ROOT / "docs" / "font_rule_delivery"
-DELIVERY_VERSION = 14
+DELIVERY_VERSION = 15
 
-BLOCKED_FONT_NOT_FOUND_RULES: dict[tuple[str, str], str] = {
-    (
-        "段宁毛笔古韵体",
-        "DuanNing MaoBi GuYunTI|||Regular",
-    ): "Resolve Text+ shows Font Not Found for DuanNing MaoBi GuYunTI Regular in live UI.",
-}
+BLOCKED_FONT_NOT_FOUND_RULES: dict[tuple[str, str], str] = {}
 
 
 def has_cjk(text: str) -> bool:
@@ -345,9 +340,7 @@ root = Path(__file__).resolve().parent
 basic = json.loads((root / "basic_font_rules.json").read_text(encoding="utf-8"))
 fallback = json.loads((root / "fallback_probe_rules.json").read_text(encoding="utf-8"))
 rules = basic.get("rules", [])
-blocked = {
-    ("段宁毛笔古韵体", "DuanNing MaoBi GuYunTI|||Regular"): "Resolve Text+ shows Font Not Found for DuanNing MaoBi GuYunTI Regular in live UI.",
-}
+blocked = {}
 bad = []
 keys = set()
 for index, rule in enumerate(rules):

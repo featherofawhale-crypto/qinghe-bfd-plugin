@@ -6,9 +6,7 @@ root = Path(__file__).resolve().parent
 basic = json.loads((root / "basic_font_rules.json").read_text(encoding="utf-8"))
 fallback = json.loads((root / "fallback_probe_rules.json").read_text(encoding="utf-8"))
 rules = basic.get("rules", [])
-blocked = {
-    ("段宁毛笔古韵体", "DuanNing MaoBi GuYunTI|||Regular"): "Resolve Text+ shows Font Not Found for DuanNing MaoBi GuYunTI Regular in live UI.",
-}
+blocked = {}
 bad = []
 keys = set()
 for index, rule in enumerate(rules):

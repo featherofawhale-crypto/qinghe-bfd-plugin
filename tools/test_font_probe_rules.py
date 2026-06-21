@@ -176,7 +176,7 @@ class FontProbeRuleTests(unittest.TestCase):
         self.assertEqual(latin_profile["sample_text"], "清何黑帧检测 QH123")
         self.assertFalse(latin_profile["require_tofu_check"])
 
-    def test_known_font_not_found_rule_is_blocked(self) -> None:
+    def test_previously_blocked_duanning_rule_is_allowed_after_live_recheck(self) -> None:
         rule = {
             "source": "段宁毛笔古韵体",
             "accepted": "DuanNing MaoBi GuYunTI",
@@ -192,9 +192,9 @@ class FontProbeRuleTests(unittest.TestCase):
             },
         }
 
-        self.assertIn("Font Not Found", delivery.blocked_rule_reason(rule))
+        self.assertEqual(delivery.blocked_rule_reason(rule), "")
         validation = delivery.validate_basic_rules([rule])
-        self.assertEqual(validation["bad_rules"], 1)
+        self.assertEqual(validation["bad_rules"], 0)
 
     def test_visual_candidate_selection_tries_next_candidate_after_font_not_found_frame(self) -> None:
         calls: list[tuple[str, str]] = []

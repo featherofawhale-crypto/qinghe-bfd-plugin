@@ -1,13 +1,13 @@
 {
-  "version": 14,
+  "version": 15,
   "purpose": "Fallback probe rules for fonts not covered by exact basic mappings.",
   "summary": {
-    "sample_rules": 2808,
-    "source_has_cjk": 2808,
-    "accepted_ascii_only": 2808,
+    "sample_rules": 2809,
+    "source_has_cjk": 2809,
+    "accepted_ascii_only": 2809,
     "pattern_counts": {
       "postscript_name": 1282,
-      "ascii_family_name": 1526
+      "ascii_family_name": 1527
     }
   },
   "rules": [
@@ -42,7 +42,7 @@
         "first ASCII family returned by the font name table",
         "first ASCII full name returned by the font name table"
       ],
-      "evidence": "1526 verified mappings accepted an ASCII family name.",
+      "evidence": "1527 verified mappings accepted an ASCII family name.",
       "success_gate": "Fusion FontManager reports candidate available or Text+ readback changes from previous font."
     },
     {

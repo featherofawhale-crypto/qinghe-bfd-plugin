@@ -53,6 +53,8 @@ LIST_URL = "https://www.fonts.net.cn/fonts-zh-{page}.html"
 DETAIL_URL = "https://www.fonts.net.cn/font-{font_id}.html"
 DOWNLOAD_URL = "https://www.fonts.net.cn/font-download.html"
 USER_AGENT = "Mozilla/5.0 QingheFontProbe/1.0"
+DEFAULT_DOWNLOAD_RETRIES = 6
+DEFAULT_RETRY_BASE_DELAY = 1.2
 STYLE_NAMES = (
     "Regular",
     "Bold",
@@ -80,7 +82,14 @@ class FontListing:
     detail_url: str
 
 
-def read_url(url: str, *, data: dict[str, str] | None = None, timeout: int = 30, retries: int = 3) -> bytes:
+def read_url(
+    url: str,
+    *,
+    data: dict[str, str] | None = None,
+    timeout: int = 30,
+    retries: int = DEFAULT_DOWNLOAD_RETRIES,
+    retry_base_delay: float = DEFAULT_RETRY_BASE_DELAY,
+) -> bytes:
     encoded = None
     if data is not None:
         encoded = urllib.parse.urlencode(data).encode("utf-8")
@@ -101,7 +110,7 @@ def read_url(url: str, *, data: dict[str, str] | None = None, timeout: int = 30,
             last_exc = exc
             if attempt >= retries:
                 break
-            time.sleep(0.8 * attempt)
+            time.sleep(max(0.1, retry_base_delay) * attempt)
     raise RuntimeError(str(last_exc or "network-error"))
 
 
@@ -227,8 +236,10 @@ def visual_profile_for_font(source: str, metadata: dict[str, Any]) -> dict[str, 
     }
 
 
-def download_font_zip(font: FontListing, work_dir: Path) -> Path:
-    response = json.loads(decode_html(read_url(DOWNLOAD_URL, data={"id": font.font_id})))
+def download_font_zip(font: FontListing, work_dir: Path, args: argparse.Namespace) -> Path:
+    retries = max(1, int(getattr(args, "download_retries", DEFAULT_DOWNLOAD_RETRIES)))
+    retry_base_delay = max(0.1, float(getattr(args, "download_retry_base_delay", DEFAULT_RETRY_BASE_DELAY)))
+    response = json.loads(decode_html(read_url(DOWNLOAD_URL, data={"id": font.font_id}, retries=retries, retry_base_delay=retry_base_delay)))
     if not response.get("success"):
         raise RuntimeError(str(response.get("error") or "download-refused"))
     data = response.get("data") or {}
@@ -240,7 +251,7 @@ def download_font_zip(font: FontListing, work_dir: Path) -> Path:
     elif download_url.startswith("/"):
         download_url = urllib.parse.urljoin("https://www.fonts.net.cn", download_url)
     zip_path = work_dir / f"{font.font_id}.zip"
-    zip_path.write_bytes(read_url(download_url, timeout=60))
+    zip_path.write_bytes(read_url(download_url, timeout=60, retries=retries, retry_base_delay=retry_base_delay))
     return zip_path
 
 
@@ -1078,7 +1089,7 @@ def process_font(font: FontListing, args: argparse.Namespace, forced_rule: dict[
         shutil.rmtree(work_dir, ignore_errors=True)
     work_dir.mkdir(parents=True, exist_ok=True)
     try:
-        zip_path = download_font_zip(font, work_dir)
+        zip_path = download_font_zip(font, work_dir, args)
         font_files = extract_font_files(zip_path, work_dir / "extract")
         if not font_files:
             raise RuntimeError("no-font-file")
@@ -1402,7 +1413,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--visual-threshold-pct", type=float, default=0.25, help="Minimum non-white sampled pixels for a visible text pass.")
     parser.add_argument("--keep-visual-png", action="store_true", help="Keep exported still PNG/DRX visual evidence files.")
     parser.add_argument("--no-resolve", action="store_true", help="Only download and parse fonts; skip Resolve/Text+ probing.")
-    parser.add_argument("--delay", type=float, default=0.3, help="Delay between downloads.")
+    parser.add_argument("--delay", type=float, default=0.8, help="Delay between downloads.")
+    parser.add_argument("--download-retries", type=int, default=DEFAULT_DOWNLOAD_RETRIES, help="Network retry count for font metadata and zip downloads.")
+    parser.add_argument("--download-retry-base-delay", type=float, default=DEFAULT_RETRY_BASE_DELAY, help="Base seconds for linear download retry backoff.")
     return parser.parse_args(argv)
 
 

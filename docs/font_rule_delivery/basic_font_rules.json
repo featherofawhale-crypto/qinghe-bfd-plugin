@@ -1,6 +1,6 @@
 {
-  "version": 14,
-  "generated_at": "2026-06-20T19:49:45+00:00",
+  "version": 15,
+  "generated_at": "2026-06-21T09:20:23+00:00",
   "rules": [
     {
       "type": "basic_mapping",
@@ -3071,6 +3071,48 @@
         "styles": [
           "Regular",
           "≥£πÊ",
+          "常规"
+        ]
+      }
+    },
+    {
+      "type": "basic_mapping",
+      "source": "段宁毛笔古韵体",
+      "accepted": "DuanNing MaoBi GuYunTI",
+      "accepted_candidate": "DuanNing MaoBi GuYunTI|||Regular",
+      "actual_font": "DuanNing MaoBi GuYunTI",
+      "style": "Regular",
+      "registered_font_file": "DuanNingMaoBiGuYunTi-2.ttf",
+      "registered_font_name": "DuanNing MaoBi GuYunTI",
+      "candidate_attempts": 1,
+      "proof": {
+        "direct_before": false,
+        "textplus_ok": true,
+        "textplus_font": "DuanNing MaoBi GuYunTI",
+        "visual_ok": true,
+        "visible": true,
+        "glyph_segments": 6,
+        "tofu_suspect": false,
+        "error_frame_suspect": false,
+        "error_frame_reason": "",
+        "near_white_pct": 100.0,
+        "non_white_pct": 1.1991,
+        "very_dark_pct": 0.9298
+      },
+      "metadata": {
+        "families": [
+          "DuanNing MaoBi GuYunTI",
+          "段宁毛笔古韵体"
+        ],
+        "full_names": [
+          "DuanNing MaoBi GuYunTI",
+          "段宁毛笔古韵体 常规"
+        ],
+        "postscript_names": [
+          "DuanNingMaoBiGuYunTI"
+        ],
+        "styles": [
+          "Regular",
           "常规"
         ]
       }
