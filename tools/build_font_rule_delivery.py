@@ -22,10 +22,10 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_RESULTS = ROOT / "artifacts" / "font_probe_reports" / "visual_1000.jsonl"
-DEFAULT_RULES = ROOT / "artifacts" / "font_probe_reports" / "visual_1000_rules.json"
+DEFAULT_RESULTS = ROOT / "artifacts" / "font_probe_reports" / "visual_6000.jsonl"
+DEFAULT_RULES = ROOT / "artifacts" / "font_probe_reports" / "visual_6000_rules.json"
 DEFAULT_OUT = ROOT / "docs" / "font_rule_delivery"
-DELIVERY_VERSION = 18
+DELIVERY_VERSION = 19
 
 BLOCKED_FONT_NOT_FOUND_RULES: dict[tuple[str, str], str] = {}
 

@@ -16,6 +16,7 @@ import build_font_rule_delivery as delivery
 
 def result_record(*, visual: dict | None, needs_rule: bool = True) -> dict:
     return {
+        "font_id": "test-font",
         "ok": True,
         "needs_rule": needs_rule,
         "rule": {

@@ -1,8 +1,8 @@
 {
-  "version": 18,
-  "generated_at": "2026-06-21T12:28:21+00:00",
-  "source_results": "artifacts\\font_probe_reports\\visual_6000.jsonl",
-  "source_rules": "artifacts\\font_probe_reports\\visual_6000_rules.json",
+  "version": 19,
+  "generated_at": "2026-06-21T19:47:26+00:00",
+  "source_results": "C:\\Users\\24724\\Documents\\清何黑帧检测ui优化和加密\\artifacts\\font_probe_reports\\visual_6000.jsonl",
+  "source_rules": "C:\\Users\\24724\\Documents\\清何黑帧检测ui优化和加密\\artifacts\\font_probe_reports\\visual_6000_rules.json",
   "basic_rule_count": 2809,
   "fallback_rule_count": 6,
   "blocked_rule_count": 0,

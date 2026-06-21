@@ -171,7 +171,7 @@ def checkpointed_ids(path: Path) -> set[str]:
             except json.JSONDecodeError:
                 continue
             font_id = str(item.get("font_id") or "")
-            if font_id and item.get("ok") is True:
+            if font_id and (item.get("ok") is True or is_visual_rule_result(item)):
                 found.add(font_id)
     return found
 
@@ -1162,44 +1162,60 @@ def is_visual_rule_result(item: dict[str, Any]) -> bool:
 def write_rules_from_results(results_path: Path, rules_path: Path, *, require_visual: bool = False) -> int:
     rules: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    with results_path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            rule = item.get("rule")
-            if not isinstance(rule, dict):
-                continue
-            if require_visual and not is_visual_rule_result(item):
-                continue
-            key = (str(rule.get("source") or ""), str(rule.get("accepted_candidate") or ""))
-            if key in seen:
-                continue
-            seen.add(key)
-            rules.append(rule)
+    for item in preferred_records_by_font_id(results_path).values():
+        rule = item.get("rule")
+        if not isinstance(rule, dict):
+            continue
+        if require_visual and not is_visual_rule_result(item):
+            continue
+        key = (str(rule.get("source") or ""), str(rule.get("accepted_candidate") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        rules.append(rule)
     rules_path.parent.mkdir(parents=True, exist_ok=True)
     rules_path.write_text(json.dumps({"version": 1, "rules": rules}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return len(rules)
 
 
-def validate_results(results_path: Path) -> dict[str, Any]:
-    raw_total = 0
-    latest_by_font_id: dict[str, dict[str, Any]] = {}
-    json_decode_errors = 0
+def preferred_records_by_font_id(results_path: Path) -> dict[str, dict[str, Any]]:
+    records: dict[str, dict[str, Any]] = {}
     with results_path.open("r", encoding="utf-8") as handle:
         for line in handle:
             try:
                 item = json.loads(line)
             except json.JSONDecodeError:
+                continue
+            font_id = str(item.get("font_id") or "")
+            if not font_id:
+                continue
+            previous = records.get(font_id)
+            if previous is None:
+                records[font_id] = item
+                continue
+            if is_visual_rule_result(previous):
+                continue
+            if is_visual_rule_result(item) or (not previous.get("ok") and item.get("ok")):
+                records[font_id] = item
+                continue
+            if previous.get("ok") == item.get("ok"):
+                records[font_id] = item
+    return records
+
+
+def validate_results(results_path: Path) -> dict[str, Any]:
+    raw_total = 0
+    json_decode_errors = 0
+    with results_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            try:
+                json.loads(line)
+            except json.JSONDecodeError:
                 json_decode_errors += 1
                 continue
             raw_total += 1
-            font_id = str(item.get("font_id") or "")
-            if font_id:
-                latest_by_font_id[font_id] = item
 
-    records = list(latest_by_font_id.values())
+    records = list(preferred_records_by_font_id(results_path).values())
     total = len(records)
     ok = 0
     rule_records = 0
