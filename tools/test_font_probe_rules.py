@@ -168,6 +168,36 @@ class FontProbeRuleTests(unittest.TestCase):
 
         self.assertEqual(done, {"ok"})
 
+    def test_validate_results_reports_latest_record_per_font(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            results_path = Path(temp) / "results.jsonl"
+            records = [
+                {"font_id": "retry", "ok": False, "error": "network-reset"},
+                result_record(
+                    visual={
+                        "visible": True,
+                        "pixel_stats": {
+                            "tofu_suspect": False,
+                            "glyph_segments": 6,
+                            "non_white_pct": 8.5,
+                        },
+                    }
+                )
+                | {"font_id": "retry"},
+            ]
+            results_path.write_text(
+                "\n".join(json.dumps(item, ensure_ascii=False) for item in records) + "\n",
+                encoding="utf-8",
+            )
+
+            summary = probe.validate_results(results_path)
+
+        self.assertEqual(summary["raw_records"], 2)
+        self.assertEqual(summary["total_records"], 1)
+        self.assertEqual(summary["ok_records"], 1)
+        self.assertEqual(summary["visual_valid_rules"], 1)
+        self.assertEqual(summary["skipped"], {})
+
     def test_black_error_overlay_frame_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "font_not_found_like.png"

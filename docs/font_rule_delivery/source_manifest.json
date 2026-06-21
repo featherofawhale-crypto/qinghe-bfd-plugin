@@ -1,6 +1,6 @@
 {
-  "version": 16,
-  "generated_at": "2026-06-21T09:23:25+00:00",
+  "version": 17,
+  "generated_at": "2026-06-21T09:30:06+00:00",
   "source_results": "artifacts\\font_probe_reports\\visual_6000.jsonl",
   "source_rules": "artifacts\\font_probe_reports\\visual_6000_rules.json",
   "basic_rule_count": 2809,

@@ -1184,39 +1184,51 @@ def write_rules_from_results(results_path: Path, rules_path: Path, *, require_vi
 
 
 def validate_results(results_path: Path) -> dict[str, Any]:
-    total = 0
-    ok = 0
-    rule_records = 0
-    visual_valid_rules = 0
-    visual_invalid_rules = 0
-    skipped: dict[str, int] = {}
+    raw_total = 0
+    latest_by_font_id: dict[str, dict[str, Any]] = {}
+    json_decode_errors = 0
     with results_path.open("r", encoding="utf-8") as handle:
         for line in handle:
             try:
                 item = json.loads(line)
             except json.JSONDecodeError:
-                skipped["json-decode"] = skipped.get("json-decode", 0) + 1
+                json_decode_errors += 1
                 continue
-            total += 1
-            ok += 1 if item.get("ok") else 0
-            if item.get("needs_rule"):
-                rule_records += 1
-                if is_visual_rule_result(item):
-                    visual_valid_rules += 1
-                else:
-                    visual_invalid_rules += 1
-                    visual = item.get("visual") if isinstance(item.get("visual"), dict) else {}
-                    reason = "no-visual"
-                    if isinstance(visual, dict):
-                        stats = visual.get("pixel_stats") if isinstance(visual.get("pixel_stats"), dict) else {}
-                        reason = str(visual.get("error") or stats.get("tofu_reason") or "visual-not-valid")
-                    skipped[reason] = skipped.get(reason, 0) + 1
-            elif not item.get("ok"):
-                reason = str(item.get("error") or "unknown-error")
+            raw_total += 1
+            font_id = str(item.get("font_id") or "")
+            if font_id:
+                latest_by_font_id[font_id] = item
+
+    records = list(latest_by_font_id.values())
+    total = len(records)
+    ok = 0
+    rule_records = 0
+    visual_valid_rules = 0
+    visual_invalid_rules = 0
+    skipped: dict[str, int] = {}
+    if json_decode_errors:
+        skipped["json-decode"] = json_decode_errors
+    for item in records:
+        ok += 1 if item.get("ok") else 0
+        if item.get("needs_rule"):
+            rule_records += 1
+            if is_visual_rule_result(item):
+                visual_valid_rules += 1
+            else:
+                visual_invalid_rules += 1
+                visual = item.get("visual") if isinstance(item.get("visual"), dict) else {}
+                reason = "no-visual"
+                if isinstance(visual, dict):
+                    stats = visual.get("pixel_stats") if isinstance(visual.get("pixel_stats"), dict) else {}
+                    reason = str(visual.get("error") or stats.get("tofu_reason") or "visual-not-valid")
                 skipped[reason] = skipped.get(reason, 0) + 1
+        elif not item.get("ok"):
+            reason = str(item.get("error") or "unknown-error")
+            skipped[reason] = skipped.get(reason, 0) + 1
     return {
         "ok": True,
         "results": str(results_path),
+        "raw_records": raw_total,
         "total_records": total,
         "ok_records": ok,
         "rule_records": rule_records,
