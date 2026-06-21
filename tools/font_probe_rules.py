@@ -1428,6 +1428,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--delay", type=float, default=0.8, help="Delay between downloads.")
     parser.add_argument("--download-retries", type=int, default=DEFAULT_DOWNLOAD_RETRIES, help="Network retry count for font metadata and zip downloads.")
     parser.add_argument("--download-retry-base-delay", type=float, default=DEFAULT_RETRY_BASE_DELAY, help="Base seconds for linear download retry backoff.")
+    parser.add_argument("--skip-font-id", action="append", default=[], help="Temporarily skip a font id in this run without writing a result record.")
     return parser.parse_args(argv)
 
 
@@ -1460,8 +1461,12 @@ def main(argv: list[str]) -> int:
     strict_rule_count = 0
     recheck_records = load_rule_records_by_font_id(args.recheck_results) if args.recheck_results else {}
     font_iter = iter_rule_fonts_from_results(args.recheck_results) if args.recheck_results else iter_listings(args.limit, args.start_page)
+    skip_font_ids = {str(item).strip() for item in (args.skip_font_id or []) if str(item).strip()}
     for font in font_iter:
         if font.font_id in done:
+            continue
+        if font.font_id in skip_font_ids:
+            print(f"[defer] SKIP-ID {font.font_id} {font.source}", flush=True)
             continue
         if args.recheck_results and processed >= max(0, int(args.limit)):
             break
