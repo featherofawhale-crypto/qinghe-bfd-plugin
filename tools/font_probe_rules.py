@@ -171,7 +171,7 @@ def checkpointed_ids(path: Path) -> set[str]:
             except json.JSONDecodeError:
                 continue
             font_id = str(item.get("font_id") or "")
-            if font_id:
+            if font_id and item.get("ok") is True:
                 found.add(font_id)
     return found
 

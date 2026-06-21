@@ -1,6 +1,6 @@
 {
-  "version": 15,
-  "generated_at": "2026-06-21T09:20:23+00:00",
+  "version": 16,
+  "generated_at": "2026-06-21T09:23:25+00:00",
   "rules": [
     {
       "type": "basic_mapping",

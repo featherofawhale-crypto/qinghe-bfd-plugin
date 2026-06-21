@@ -151,6 +151,23 @@ class FontProbeRuleTests(unittest.TestCase):
         self.assertEqual(fonts[0].detail_url, "https://example.test/a")
         self.assertEqual(fonts[1].detail_url, "https://www.fonts.net.cn/font-3.html")
 
+    def test_resume_checkpoint_retries_failed_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            results_path = Path(temp) / "results.jsonl"
+            records = [
+                {"font_id": "ok", "ok": True},
+                {"font_id": "skip", "ok": False, "error": "network-reset"},
+                {"font_id": "legacy_missing_ok"},
+            ]
+            results_path.write_text(
+                "\n".join(json.dumps(item, ensure_ascii=False) for item in records) + "\n",
+                encoding="utf-8",
+            )
+
+            done = probe.checkpointed_ids(results_path)
+
+        self.assertEqual(done, {"ok"})
+
     def test_black_error_overlay_frame_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "font_not_found_like.png"
