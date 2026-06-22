@@ -841,12 +841,42 @@ if not project:
     raise SystemExit(0)
 original_timeline = safe(lambda: project.GetCurrentTimeline(), None)
 original_timecode = safe(lambda: original_timeline.GetCurrentTimecode(), "") if original_timeline else ""
+original_timeline_id = safe(lambda: original_timeline.GetUniqueId(), "") if original_timeline else ""
+original_timeline_name = safe(lambda: original_timeline.GetName(), "") if original_timeline else ""
+original_timeline_index = 0
+timeline_count = int(safe(lambda: project.GetTimelineCount(), 0) or 0)
+for candidate_index in range(1, timeline_count + 1):
+    candidate_timeline = safe(lambda i=candidate_index: project.GetTimelineByIndex(i), None)
+    candidate_id = safe(lambda t=candidate_timeline: t.GetUniqueId(), "") if candidate_timeline else ""
+    candidate_name = safe(lambda t=candidate_timeline: t.GetName(), "") if candidate_timeline else ""
+    if (original_timeline_id and candidate_id == original_timeline_id) or (
+        original_timeline_name and candidate_name == original_timeline_name
+    ):
+        original_timeline_index = candidate_index
+        break
 
 def restore_context():
+    restored = False
     if original_timeline:
-        safe(lambda: project.SetCurrentTimeline(original_timeline), None)
-        if original_timecode:
-            safe(lambda: original_timeline.SetCurrentTimecode(original_timecode), None)
+        restored = bool(safe(lambda: project.SetCurrentTimeline(original_timeline), False))
+    if not restored and original_timeline_index:
+        timeline_by_index = safe(lambda: project.GetTimelineByIndex(original_timeline_index), None)
+        if timeline_by_index:
+            restored = bool(safe(lambda: project.SetCurrentTimeline(timeline_by_index), False))
+    if not restored and (original_timeline_id or original_timeline_name):
+        for candidate_index in range(1, int(safe(lambda: project.GetTimelineCount(), 0) or 0) + 1):
+            candidate_timeline = safe(lambda i=candidate_index: project.GetTimelineByIndex(i), None)
+            candidate_id = safe(lambda t=candidate_timeline: t.GetUniqueId(), "") if candidate_timeline else ""
+            candidate_name = safe(lambda t=candidate_timeline: t.GetName(), "") if candidate_timeline else ""
+            if (original_timeline_id and candidate_id == original_timeline_id) or (
+                original_timeline_name and candidate_name == original_timeline_name
+            ):
+                restored = bool(safe(lambda t=candidate_timeline: project.SetCurrentTimeline(t), False))
+                break
+    active_timeline = safe(lambda: project.GetCurrentTimeline(), None)
+    if active_timeline and original_timecode:
+        safe(lambda: active_timeline.SetCurrentTimecode(original_timecode), None)
+    return restored
 
 timeline = project.GetTimelineByIndex(int(PAYLOAD["timeline_index"])) or project.GetCurrentTimeline()
 if not timeline:
