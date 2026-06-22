@@ -2,6 +2,11 @@
 
 This handoff is for the next AI/operator. Do not continue bulk testing until the safety checks below are understood.
 
+Start with these two complete material indexes:
+
+- `docs/font_rule_delivery/DELIVERY_MATERIALS.md`
+- `docs/font_rule_delivery/delivery_materials_manifest.json`
+
 ## Current Status
 
 - Project root: `C:\Users\24724\Documents\清何黑帧检测ui优化和加密`

@@ -1,0 +1,189 @@
+{
+  "delivery_version": 24,
+  "project_root": "C:\\Users\\24724\\Documents\\清何黑帧检测ui优化和加密",
+  "delivery_dir": "docs/font_rule_delivery",
+  "status": {
+    "complete": false,
+    "reason": "Delivery JSON contains 2809 basic rules and 6 fallback rules, but only 2092 rules are currently rechecked with strict Resolve Text+ visual evidence.",
+    "must_not_claim": [
+      "Do not claim all 2809 rules are visually rechecked.",
+      "Do not claim the goal is complete until the remaining rules are verified or the user explicitly accepts reduced scope."
+    ]
+  },
+  "committed_delivery_files": [
+    {
+      "path": "docs/font_rule_delivery/basic_font_rules.json",
+      "type": "rules",
+      "description": "Main per-font mapping rules.",
+      "count": 2809
+    },
+    {
+      "path": "docs/font_rule_delivery/fallback_probe_rules.json",
+      "type": "rules",
+      "description": "General fallback candidate-generation rules.",
+      "count": 6
+    },
+    {
+      "path": "docs/font_rule_delivery/source_manifest.json",
+      "type": "manifest",
+      "description": "Generation metadata and source paths."
+    },
+    {
+      "path": "docs/font_rule_delivery/font_probe_rules.py",
+      "type": "test_script",
+      "description": "Delivery copy of the Resolve/Text+ visual probe script."
+    },
+    {
+      "path": "docs/font_rule_delivery/validate_font_rule_delivery.py",
+      "type": "test_script",
+      "description": "Offline rule package validator."
+    },
+    {
+      "path": "docs/font_rule_delivery/run_strict_font_probe.ps1",
+      "type": "runner_script",
+      "description": "PowerShell strict probe runner template."
+    },
+    {
+      "path": "docs/font_rule_delivery/README.md",
+      "type": "documentation",
+      "description": "User-facing summary."
+    },
+    {
+      "path": "docs/font_rule_delivery/AI_HANDOFF.md",
+      "type": "documentation",
+      "description": "AI/operator handoff notes."
+    },
+    {
+      "path": "docs/font_rule_delivery/DELIVERY_MATERIALS.md",
+      "type": "documentation",
+      "description": "Complete material index."
+    },
+    {
+      "path": "docs/font_rule_delivery/delivery_materials_manifest.json",
+      "type": "manifest",
+      "description": "Machine-readable material index."
+    }
+  ],
+  "source_scripts": [
+    {
+      "path": "tools/font_probe_rules.py",
+      "description": "Source probe script; edit this first."
+    },
+    {
+      "path": "tools/build_font_rule_delivery.py",
+      "description": "Builds the delivery package. Current DELIVERY_VERSION is 24."
+    },
+    {
+      "path": "tools/test_font_probe_rules.py",
+      "description": "Unit tests for visual rule and validation logic."
+    },
+    {
+      "path": "tools/font_probe_rules_spec.md",
+      "description": "Older technical spec; useful context but not the current authority."
+    },
+    {
+      "path": "tools/run_font_probe_1000.ps1",
+      "description": "Older runner reference."
+    },
+    {
+      "path": "tools/test_resolve_api_bridge.ps1",
+      "description": "Resolve scripting bridge test script."
+    }
+  ],
+  "local_evidence_artifacts": [
+    {
+      "path": "artifacts/font_probe_reports/visual_6000.jsonl",
+      "committed": false,
+      "description": "Original source results used to build delivery rules."
+    },
+    {
+      "path": "artifacts/font_probe_reports/visual_6000_rules.json",
+      "committed": false,
+      "description": "Original source rules used by the delivery builder."
+    },
+    {
+      "path": "artifacts/font_probe_reports/visual_6000_recheck_v14.jsonl",
+      "committed": false,
+      "description": "Current strict Resolve Text+ visual recheck JSONL.",
+      "validated_counts": {
+        "raw_records": 2308,
+        "total_records": 2264,
+        "ok_records": 2243,
+        "rule_records": 2092,
+        "visual_valid_rules": 2092,
+        "visual_invalid_rules": 0
+      }
+    },
+    {
+      "path": "artifacts/font_probe_reports/visual_6000_recheck_v14_rules.json",
+      "committed": false,
+      "description": "Strict visual rules generated from the current recheck JSONL."
+    },
+    {
+      "path": "artifacts/font_probe_reports/visual_probe_smoke_v22.jsonl",
+      "committed": false,
+      "description": "One-rule smoke test after removing intrusive render path."
+    },
+    {
+      "path": "artifacts/font_probe_reports/visual_probe_restore_v23.jsonl",
+      "committed": false,
+      "description": "One-rule smoke test proving timeline restore and MediaOut safety."
+    },
+    {
+      "path": "artifacts/font_probe_reports/visual",
+      "committed": false,
+      "description": "Exported PNG visual evidence frames."
+    }
+  ],
+  "resolve_environment": {
+    "user_timeline": "06234",
+    "probe_timeline": "QH_FontProbe_Temp",
+    "probe_args": {
+      "timeline_index": 7,
+      "track_index": 1,
+      "item_index": 5,
+      "timecode": "01:00:19:07"
+    },
+    "required_probe_comp_state": {
+      "mediaout_input": "QHProbeMerge",
+      "has_saver": false
+    }
+  },
+  "safety_requirements": [
+    "No comp.Render() in probe scripts.",
+    "No QHProbeSaver left in the Fusion comp.",
+    "Do not delete generic Saver tools.",
+    "Restore the original timeline after every probe.",
+    "Stop if MediaOut1 becomes disconnected.",
+    "Stop if Resolve shows Render completed, No frame available, or Font Not Found."
+  ],
+  "validation_commands": {
+    "delivery_package": "python docs\\font_rule_delivery\\validate_font_rule_delivery.py",
+    "current_recheck": "python tools\\font_probe_rules.py --validate-results artifacts\\font_probe_reports\\visual_6000_recheck_v14.jsonl",
+    "no_intrusive_render_search": "rg -n \"comp\\.Render\\(|QHProbeSaver|reg == \\\"Saver\\\"|ExportCurrentFrameAsStill|restore_context\" tools\\font_probe_rules.py docs\\font_rule_delivery\\font_probe_rules.py",
+    "process_check": "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | Where-Object { $_.CommandLine -like '*font_probe_rules.py*' }"
+  },
+  "known_skip_font_ids": [
+    "40722165767",
+    "31856238106",
+    "43254106857",
+    "31844737039"
+  ],
+  "last_verified_outputs": {
+    "delivery_package": {
+      "basic_rules": 2809,
+      "unique_keys": 2809,
+      "fallback_rules": 6,
+      "bad_rules": 0,
+      "bad_samples": []
+    },
+    "current_recheck": {
+      "raw_records": 2308,
+      "total_records": 2264,
+      "ok_records": 2243,
+      "rule_records": 2092,
+      "visual_valid_rules": 2092,
+      "visual_invalid_rules": 0
+    }
+  }
+}
