@@ -372,10 +372,10 @@ def candidate_resolve_pythons() -> list[Path]:
     home = Path.home()
     candidates.extend(
         [
-            home / "AppData" / "Local" / "Programs" / "Python" / "Python314" / "python.exe",
+            Path(sys.executable),
             home / "AppData" / "Local" / "davinci-resolve-mcp" / "venv" / "Scripts" / "python.exe",
             home / "AppData" / "Roaming" / "uv" / "tools" / "resolve-mcp" / "Scripts" / "python.exe",
-            Path(sys.executable),
+            home / "AppData" / "Local" / "Programs" / "Python" / "Python314" / "python.exe",
         ]
     )
     seen: set[Path] = set()
@@ -858,11 +858,14 @@ if not comp:
     print(json.dumps({"ok": False, "error": "fusion-comp-not-found"}, ensure_ascii=False))
     raise SystemExit(0)
 
+mediaout = None
 for _, old_tool in list((comp.GetToolList(False) or {}).items()):
     attrs = safe(lambda tool=old_tool: tool.GetAttrs(), {}) or {}
     name = str(attrs.get("TOOLS_Name") or "")
     reg = str(attrs.get("TOOLS_RegID") or "")
-    if name.startswith("QHProbe") or reg == "Saver":
+    if reg == "MediaOut" or name.startswith("MediaOut"):
+        mediaout = old_tool
+    if name.startswith("QHProbe"):
         safe(lambda tool=old_tool: tool.Delete(), None)
         safe(lambda n=name: comp.DeleteTool(n), None)
         safe(lambda tool=old_tool: comp.DeleteTool(tool), None)
@@ -871,7 +874,9 @@ bg = safe(lambda: comp.AddTool("Background", -4, 0), None)
 tool = safe(lambda: comp.AddTool("TextPlus", -3, 0), None)
 transform = safe(lambda: comp.AddTool("Transform", -2, 0), None)
 merge = safe(lambda: comp.AddTool("Merge", -1, 0), None)
-if not bg or not tool or not transform or not merge:
+if not mediaout:
+    mediaout = safe(lambda: comp.AddTool("MediaOut", 1, 0), None)
+if not bg or not tool or not transform or not merge or not mediaout:
     print(json.dumps({"ok": False, "error": "probe-tools-create-failed"}, ensure_ascii=False))
     raise SystemExit(0)
 
@@ -905,50 +910,35 @@ safe(lambda: transform.SetInput("Size", 0.58), None)
 safe(lambda: transform.ConnectInput("Input", tool.Output), None)
 safe(lambda: merge.ConnectInput("Background", bg.Output), None)
 safe(lambda: merge.ConnectInput("Foreground", transform.Output), None)
+safe(lambda: mediaout.ConnectInput("Input", merge.Output), None)
 safe(lambda: comp.SetAttrs({"COMPB_Modified": True}), None)
 
 folder = str(PAYLOAD["render_dir"])
 prefix = str(PAYLOAD["prefix"])
 os.makedirs(folder, exist_ok=True)
 path = os.path.join(folder, prefix + ".png")
-before_files = set(os.listdir(folder))
 for name in os.listdir(folder):
     if name.startswith(prefix) and name.lower().endswith(".png"):
         safe(lambda n=name: os.remove(os.path.join(folder, n)), None)
 
-saver = comp.AddTool("Saver", 2, 2)
-safe(lambda: saver.SetAttrs({"TOOLS_Name": "QHProbeSaver"}), None)
-safe(lambda: saver.SetInput("Clip", path), None)
-safe(lambda: saver.ConnectInput("Input", merge.Output), None)
 safe(lambda: comp.SetAttrs({"COMPN_RenderStart": 0, "COMPN_RenderEnd": 0, "COMPN_GlobalStart": 0, "COMPN_GlobalEnd": 119}), None)
-render_started = time.time()
-export_ok = bool(safe(lambda: comp.Render(), False))
+safe(lambda: timeline.SetCurrentTimecode(timecode), None)
+export_ok = bool(safe(lambda: project.ExportCurrentFrameAsStill(path), False))
 time.sleep(0.2)
 actual_path = ""
 if os.path.exists(path):
     actual_path = path
 else:
     names_after = os.listdir(folder)
-    new_matches = [
-        os.path.join(folder, name)
-        for name in names_after
-        if name not in before_files and name.lower().endswith(".png")
-    ]
     prefix_matches = [
         os.path.join(folder, name)
         for name in names_after
         if name.startswith(prefix) and name.lower().endswith(".png")
     ]
-    recent_matches = [
-        os.path.join(folder, name)
-        for name in names_after
-        if name.lower().endswith(".png") and os.path.getmtime(os.path.join(folder, name)) >= render_started - 1.0
-    ]
-    matches = new_matches or prefix_matches or recent_matches
+    matches = prefix_matches
     matches.sort(key=lambda item: os.path.getmtime(item), reverse=True)
     if matches:
         actual_path = matches[0]
-safe(lambda: comp.DeleteTool(saver), None)
 readback_font = str(safe(lambda: tool.GetInput("Font"), "") or "")
 readback_style = str(safe(lambda: tool.GetInput("Style"), "") or "")
 print(json.dumps({
