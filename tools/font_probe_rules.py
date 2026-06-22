@@ -839,6 +839,15 @@ project = resolve.GetProjectManager().GetCurrentProject()
 if not project:
     print(json.dumps({"ok": False, "error": "no-project"}, ensure_ascii=False))
     raise SystemExit(0)
+original_timeline = safe(lambda: project.GetCurrentTimeline(), None)
+original_timecode = safe(lambda: original_timeline.GetCurrentTimecode(), "") if original_timeline else ""
+
+def restore_context():
+    if original_timeline:
+        safe(lambda: project.SetCurrentTimeline(original_timeline), None)
+        if original_timecode:
+            safe(lambda: original_timeline.SetCurrentTimecode(original_timecode), None)
+
 timeline = project.GetTimelineByIndex(int(PAYLOAD["timeline_index"])) or project.GetCurrentTimeline()
 if not timeline:
     print(json.dumps({"ok": False, "error": "timeline-not-found"}, ensure_ascii=False))
@@ -850,11 +859,13 @@ if timecode:
 clips = timeline.GetItemListInTrack("video", int(PAYLOAD["track_index"])) or []
 item_index = int(PAYLOAD["item_index"])
 if item_index < 0 or item_index >= len(clips):
+    restore_context()
     print(json.dumps({"ok": False, "error": "timeline-item-not-found", "clip_count": len(clips)}, ensure_ascii=False))
     raise SystemExit(0)
 clip = clips[item_index]
 comp = safe(lambda: clip.GetFusionCompByIndex(1), None)
 if not comp:
+    restore_context()
     print(json.dumps({"ok": False, "error": "fusion-comp-not-found"}, ensure_ascii=False))
     raise SystemExit(0)
 
@@ -877,6 +888,7 @@ merge = safe(lambda: comp.AddTool("Merge", -1, 0), None)
 if not mediaout:
     mediaout = safe(lambda: comp.AddTool("MediaOut", 1, 0), None)
 if not bg or not tool or not transform or not merge or not mediaout:
+    restore_context()
     print(json.dumps({"ok": False, "error": "probe-tools-create-failed"}, ensure_ascii=False))
     raise SystemExit(0)
 
@@ -941,6 +953,7 @@ else:
         actual_path = matches[0]
 readback_font = str(safe(lambda: tool.GetInput("Font"), "") or "")
 readback_style = str(safe(lambda: tool.GetInput("Style"), "") or "")
+restore_context()
 print(json.dumps({
     "ok": bool(export_ok and actual_path and os.path.exists(actual_path)),
     "export_ok": export_ok,
