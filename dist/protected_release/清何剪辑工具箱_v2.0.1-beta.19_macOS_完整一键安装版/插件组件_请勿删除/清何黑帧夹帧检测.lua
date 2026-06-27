@@ -3666,6 +3666,7 @@ function Main()
                                 end
                             end
 		                        else
+		                            local exposure_frames, exposure_start = visible_run_after(after_end, top_after_end, stuck_frames)
 		                            local source_short_frames = nil
 	                            if is_nested_clip(upper) and not is_fusion_nested_clip(upper) then
 	                                source_short_frames = source_short_run_after_boundary(after_end, top_after_end, stuck_frames)
@@ -3678,8 +3679,16 @@ function Main()
 	                                    reason .. "，下层源内" .. tostring(source_short_frames) .. "帧后切走",
 	                                    source_short_frames
 	                                )
+	                            elseif exposure_frames and exposure_frames > 0 and exposure_frames <= stuck_frames then
+	                                add_overlay_boundary_record(exposure_start, top_after_end, upper, reason, exposure_frames)
 	                            else
-	                                add_overlay_boundary_record(after_end, top_after_end, upper, reason, 1)
+	                                dlog(string.format(
+	                                    "跳过复合/Fusion结束边界: frame=%d lower_visible_run=%s upper=%s lower=%s",
+	                                    after_end,
+	                                    tostring(exposure_frames),
+	                                    tostring(upper.name or "?"),
+	                                    tostring(top_after_end and top_after_end.name or "?")
+	                                ))
 	                            end
 	                        end
 	                    end
@@ -4961,6 +4970,123 @@ function Main()
     end
 
     do
+        local function duplicate_should_yield(r)
+            local cls = tostring(r and r.classification or "")
+            local name = tostring(r and r.marker_name or "")
+            return cls == "duplicate"
+                or cls == "content_dup"
+                or name:find("%[BFD%-DUP%]") ~= nil
+                or name:find("%[BFD%-FP%]") ~= nil
+        end
+        local function conflict_priority(r)
+            if r and (r.nested_short_scene or (r.segment and r.segment.nested_short_scene)) then return 100 end
+            local name = r and tostring(r.marker_name or "") or ""
+            if name:find("%[BFD%-OVL%]") then return 90 end
+            if name:find("%[BFD%-MIX%].-真实画面短镜头夹帧") then return 85 end
+            if name:find("%[BFD%-ERR%]") then return 75 end
+            if r and r.classification == "error" then return 70 end
+            if name:find("%[BFD%-SUS%]") then return 65 end
+            if r and (r.is_mixed_cut or (r.segment and r.segment.is_mixed_cut)) then return 65 end
+            if name:find("%[BFD%-MIX%]") then return 65 end
+            if r and r.classification == "opacity" then return 60 end
+            if name:find("%[BFD%-BDR%]") or (r and r.classification == "black_border") then return 55 end
+            if r and r.classification == "gap" then return 50 end
+            if duplicate_should_yield(r) then return 30 end
+            return 10
+        end
+
+        local blocking_frames = {}
+        for _, r in ipairs(selected_records) do
+            if not duplicate_should_yield(r) and conflict_priority(r) > 30 then
+                local f = tonumber(r.timeline_start_frame or 0)
+                if f then blocking_frames[math.floor(f + 0.5)] = true end
+            end
+        end
+
+        local function choose_open_duplicate_span(record)
+            local start_frame = tonumber(record.timeline_start_frame or 0) or 0
+            local end_frame = tonumber(record.timeline_end_frame or (start_frame + (record.duration_frames or 1))) or (start_frame + 1)
+            start_frame = math.floor(start_frame + 0.5)
+            end_frame = math.floor(end_frame + 0.5)
+            if end_frame <= start_frame then
+                end_frame = start_frame + math.max(1, tonumber(record.duration_frames or 1) or 1)
+            end
+
+            local conflicts = {}
+            for frame, _ in pairs(blocking_frames) do
+                -- Resolve 的区间标记在 UI 上会盖到尾帧附近，所以尾帧也避让。
+                if frame >= start_frame and frame <= end_frame then
+                    table.insert(conflicts, frame)
+                end
+            end
+            if #conflicts == 0 then return record, false end
+            table.sort(conflicts)
+
+            local best = nil
+            local cursor = start_frame
+            local function consider(s, e)
+                local len = e - s
+                if len > 0 and (not best or len > best.len) then
+                    best = { start_frame = s, end_frame = e, len = len }
+                end
+            end
+            for _, blocked in ipairs(conflicts) do
+                consider(cursor, blocked - 1)
+                cursor = blocked + 1
+            end
+            consider(cursor, end_frame)
+            if not best then
+                return nil, true
+            end
+
+            record.timeline_start_frame = best.start_frame
+            record.timeline_end_frame = best.end_frame
+            record.duration_frames = math.max(1, best.end_frame - best.start_frame)
+            record.source_duration_sec = record.duration_frames / timeline_fps
+            record.duration_sec = record.source_duration_sec
+            record.timeline_start_tc = Analyzer.frame_to_timecode(record.timeline_start_frame, timeline_fps)
+            record.timeline_end_tc = Analyzer.frame_to_timecode(record.timeline_end_frame, timeline_fps)
+            record.note = tostring(record.note or "") .. string.format(
+                "\n重复/复用区间已避让高优先级标记，实际标记区间调整为: %d-%d帧 (%d帧)，避免盖住黑帧、夹帧、黑边、透明度或空隙提示。",
+                record.timeline_start_frame,
+                record.timeline_end_frame,
+                record.duration_frames
+            )
+            return record, true
+        end
+
+        local yielded_records = {}
+        local adjusted_duplicate_regions = 0
+        local skipped_duplicate_regions = 0
+        for _, r in ipairs(selected_records) do
+            if duplicate_should_yield(r) then
+                local adjusted, changed = choose_open_duplicate_span(r)
+                if adjusted then
+                    table.insert(yielded_records, adjusted)
+                    if changed then adjusted_duplicate_regions = adjusted_duplicate_regions + 1 end
+                else
+                    skipped_duplicate_regions = skipped_duplicate_regions + 1
+                end
+            else
+                table.insert(yielded_records, r)
+            end
+        end
+        if adjusted_duplicate_regions > 0 or skipped_duplicate_regions > 0 then
+            print(string.format(
+                "[BFD] 重复/复用标记避让: 调整 %d 条, 跳过 %d 条",
+                adjusted_duplicate_regions,
+                skipped_duplicate_regions
+            ))
+            dlog(string.format(
+                "阶段9: 重复/复用标记避让 adjusted=%d skipped=%d",
+                adjusted_duplicate_regions,
+                skipped_duplicate_regions
+            ))
+            selected_records = yielded_records
+        end
+    end
+
+    do
         table.sort(selected_records, function(a, b)
             return (a.timeline_start_frame or 0) < (b.timeline_start_frame or 0)
         end)
@@ -5003,10 +5129,13 @@ function Main()
             local name = r and tostring(r.marker_name or "") or ""
             if name:find("%[BFD%-OVL%]") then return 90 end
             if name:find("%[BFD%-MIX%].-真实画面短镜头夹帧") then return 85 end
+            if name:find("%[BFD%-ERR%]") then return 75 end
             if r and r.classification == "error" then return 70 end
+            if name:find("%[BFD%-SUS%]") then return 65 end
             if r and (r.is_mixed_cut or (r.segment and r.segment.is_mixed_cut)) then return 65 end
             if name:find("%[BFD%-MIX%]") then return 65 end
             if r and r.classification == "opacity" then return 60 end
+            if name:find("%[BFD%-BDR%]") or (r and r.classification == "black_border") then return 55 end
             if r and r.classification == "gap" then return 50 end
             if r and r.classification == "duplicate" then return 30 end
             if r and r.classification == "content_dup" then return 30 end
