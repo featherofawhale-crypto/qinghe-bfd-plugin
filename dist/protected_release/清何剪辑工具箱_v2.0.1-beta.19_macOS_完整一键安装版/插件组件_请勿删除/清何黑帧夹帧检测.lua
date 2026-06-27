@@ -3319,7 +3319,7 @@ function Main()
             return nil
         end
         local source_scene_near_cache = {}
-        local function source_scene_cut_near_boundary(edge_frame, clip, max_frames)
+        local function source_scene_cut_near_boundary(edge_frame, clip, max_frames, direction)
             if not clip or clip.media_type == "nested" or clip.media_type == "adjustment_layer" then return nil end
             if clip.is_enabled == false or (clip.opacity or 100) <= 0 then return nil end
             if not clip.file_path or clip.file_path == "" then return nil end
@@ -3347,6 +3347,7 @@ function Main()
                 tostring(math.floor(start_frame + 0.5)),
                 tostring(window_frames),
                 string.format("%.3f", threshold),
+                tostring(direction or ""),
             }, "|")
             if source_scene_near_cache[key] ~= nil then
                 local cached = source_scene_near_cache[key]
@@ -3371,7 +3372,7 @@ function Main()
                 ffmpeg:_quote_path(clip.file_path),
                 filter
             )
-            local best_distance, best_score = nil, nil
+            local best_distance, best_score, best_tl_frame = nil, nil, nil
             local handle = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
             if handle then
                 local last_distance = nil
@@ -3382,9 +3383,19 @@ function Main()
                         local rel = tonumber(t)
                         if rel then
                             local cut_frame = start_frame + math.floor(rel * source_fps + 0.5)
+                            local cut_tl_frame = clip_start + (cut_frame - (tonumber(clip.left_offset or 0) or 0))
                             local distance = math.abs(cut_frame - source_frame)
-                            if distance <= tolerance_frames and (not best_distance or distance < best_distance) then
+                            local visible_cut = cut_tl_frame >= clip_start
+                                and cut_tl_frame < clip_end
+                                and top_opaque_clip_at(cut_tl_frame) == clip
+                            if direction == "before" and cut_tl_frame > edge_frame then
+                                visible_cut = false
+                            elseif direction == "after" and cut_tl_frame < edge_frame then
+                                visible_cut = false
+                            end
+                            if visible_cut and distance <= tolerance_frames and (not best_distance or distance < best_distance) then
                                 best_distance = distance
+                                best_tl_frame = cut_tl_frame
                                 last_distance = distance
                             else
                                 last_distance = nil
@@ -3411,7 +3422,7 @@ function Main()
                     tonumber(best_score or 0) or 0,
                     source_fps
                 ))
-                source_scene_near_cache[key] = { distance = best_distance, score = best_score or 0 }
+                source_scene_near_cache[key] = { distance = best_distance, score = best_score or 0, timeline_frame = best_tl_frame }
                 return best_distance, best_score or 0
             end
             source_scene_near_cache[key] = false
@@ -3493,7 +3504,7 @@ function Main()
                             if exposure_frames > 0 and exposure_frames <= stuck_frames then
                                 add_overlay_boundary_record(exposure_start, top_before, upper, reason, exposure_frames)
                             else
-                                local distance, score = source_scene_cut_near_boundary(before, top_before, stuck_frames)
+                                local distance, score = source_scene_cut_near_boundary(before, top_before, stuck_frames, "before")
                                 if distance then
                                     add_overlay_boundary_record(
                                         before,
@@ -3543,7 +3554,7 @@ function Main()
                             if exposure_frames > 0 and exposure_frames <= stuck_frames then
                                 add_overlay_boundary_record(exposure_start, top_after_end, upper, reason, exposure_frames)
                             else
-                                local distance, score = source_scene_cut_near_boundary(after_end, top_after_end, stuck_frames)
+                                local distance, score = source_scene_cut_near_boundary(after_end, top_after_end, stuck_frames, "after")
                                 if distance then
                                     add_overlay_boundary_record(
                                         after_end,
