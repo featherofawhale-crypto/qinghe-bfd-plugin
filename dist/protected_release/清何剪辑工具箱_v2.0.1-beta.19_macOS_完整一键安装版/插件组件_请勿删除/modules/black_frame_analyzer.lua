@@ -494,6 +494,41 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
         end
     end
 
+    if #results.suspects > 1 then
+        table.sort(results.suspects, function(a, b)
+            return (a.timeline_start_frame or 0) < (b.timeline_start_frame or 0)
+        end)
+        local merged_suspects = {}
+        for _, record in ipairs(results.suspects) do
+            local is_black = tostring(record.marker_name or ""):find("可疑黑帧", 1, true) ~= nil
+            local prev = merged_suspects[#merged_suspects]
+            if is_black and prev then
+                local same_source = tostring(prev.source_file or "") == tostring(record.source_file or "")
+                local prev_end = tonumber(prev.timeline_end_frame or prev.timeline_start_frame or 0) or 0
+                local cur_start = tonumber(record.timeline_start_frame or 0) or 0
+                local overlaps_or_touches = cur_start <= prev_end + 1
+                if same_source and overlaps_or_touches then
+                    local cur_end = tonumber(record.timeline_end_frame or cur_start) or cur_start
+                    if cur_end > prev_end then
+                        prev.timeline_end_frame = cur_end
+                        prev.timeline_end_tc = Analyzer.frame_to_timecode(cur_end, timeline_fps)
+                    end
+                    if not tostring(prev.note or ""):find("连续黑场重复检测已合并", 1, true) then
+                        prev.note = tostring(prev.note or "")
+                            .. "\n连续黑场重复检测已合并，重叠/相邻黑场不再单独打点。"
+                    end
+                    goto continue_suspect_merge
+                end
+            end
+            table.insert(merged_suspects, record)
+            ::continue_suspect_merge::
+        end
+        if #merged_suspects ~= #results.suspects then
+            results.suspects = merged_suspects
+            results.summary.suspect_count = #merged_suspects
+        end
+    end
+
     -- ============================================================
     -- 扫描时间线空白区域（按区间时长分级标记）
     -- ============================================================
