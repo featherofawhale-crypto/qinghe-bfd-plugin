@@ -3208,7 +3208,8 @@ function Main()
                 if jump > max_jump then
                     return nil
                 end
-                if jump > math.max(tonumber(params.stuck_frames or 0) or 0, 3) then
+                local min_jump = tonumber(params.mixed_cut_overlay_min_source_jump or 48) or 48
+                if jump >= min_jump then
                     return default_reason .. "，源帧跳跃" .. tostring(math.floor(jump + 0.5)) .. "帧"
                 end
                 return nil
