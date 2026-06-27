@@ -705,8 +705,7 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         params.detect_mixed_cut == true
         or params.enable_timeline_mixed_cut == true
     )
-    local implicit_internal_flash = (not explicit_mixed_cut)
-        and params and params.marker_types and params.marker_types.error == true
+    local implicit_internal_flash = false
     local mixed_cut_enabled = explicit_mixed_cut or implicit_internal_flash
     if not mixed_cut_enabled then
         return records
@@ -1853,8 +1852,8 @@ function Main()
         table.insert(ffmpeg_results, {
             clip = clip,
             segments = {{
-                start = opts.clip_start_sec or ((clip.left_offset or 0) / timeline_fps),
-                end_ = (opts.clip_start_sec or ((clip.left_offset or 0) / timeline_fps)) + (1 / timeline_fps),
+                start = opts.clip_start_sec or ((clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps)),
+                end_ = (opts.clip_start_sec or ((clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps))) + (1 / timeline_fps),
                 duration = 1 / timeline_fps,
                 timeline_frame = timeline_frame,
                 force_classification = "black_border",
@@ -3029,7 +3028,7 @@ function Main()
                     timeline_start_tc = Analyzer.frame_to_timecode(sf, timeline_fps),
                     timeline_end_tc = Analyzer.frame_to_timecode(ef, timeline_fps),
                     source_file = clip.file_path,
-                    source_start_sec = (clip.left_offset or 0) / timeline_fps,
+                    source_start_sec = (clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps),
                     source_duration_sec = dur_sec,
                     duration_frames = tl_dur,
                     note = string.format(
@@ -3120,7 +3119,7 @@ function Main()
                                 timeline_start_tc = Analyzer.frame_to_timecode(iv.start, timeline_fps),
                                 timeline_end_tc = Analyzer.frame_to_timecode(iv.end_, timeline_fps),
                                 source_file = clip.file_path,
-                                source_start_sec = (clip.left_offset or 0) / timeline_fps,
+                                source_start_sec = (clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps),
                                 source_duration_sec = dur_sec,
                                 duration_frames = vis_dur,
                                 note = string.format(
@@ -3139,7 +3138,7 @@ function Main()
                                 timeline_start_tc = Analyzer.frame_to_timecode(iv.start, timeline_fps),
                                 timeline_end_tc = Analyzer.frame_to_timecode(iv.end_, timeline_fps),
                                 source_file = clip.file_path,
-                                source_start_sec = (clip.left_offset or 0) / timeline_fps,
+                                source_start_sec = (clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps),
                                 source_duration_sec = dur_sec,
                                 duration_frames = vis_dur,
                                 note = string.format(
@@ -3203,9 +3202,7 @@ function Main()
                 return "复合/Fusion外部覆盖边界，普通镜头短暂露出"
             end
             if same_file_pair(exposed_clip, cover_clip) then
-                if source_jump and source_jump > math.max(stuck_frames, 3) then
-                    return default_reason .. "，源帧跳跃" .. tostring(source_jump) .. "帧"
-                end
+                -- 同源上层覆盖边界只说明源窗口不连续，不能单独作为夹帧结论。
                 return nil
             end
             if is_regular_visible_video(exposed_clip) and is_regular_visible_video(cover_clip) then
@@ -3340,7 +3337,7 @@ function Main()
                 timeline_start_tc = Analyzer.frame_to_timecode(frame, timeline_fps),
                 timeline_end_tc = Analyzer.frame_to_timecode(frame + duration_frames, timeline_fps),
                 source_file = lower_clip and lower_clip.file_path or nil,
-                source_start_sec = lower_clip and ((lower_clip.left_offset or 0) + (frame - (lower_clip.timeline_start_frame or 0))) / timeline_fps or 0,
+                source_start_sec = lower_clip and ((lower_clip.left_offset or 0) + (frame - (lower_clip.timeline_start_frame or 0))) / source_fps_for_clip(ffmpeg, lower_clip, timeline_fps) or 0,
                 source_duration_sec = duration_frames / timeline_fps,
                 duration_frames = duration_frames,
                 note = string.format(

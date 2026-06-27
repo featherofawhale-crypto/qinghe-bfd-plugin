@@ -131,6 +131,7 @@ function Bridge.load_pending_params(timeline_list)
         render_nested_segments = raw.render_nested_segments == true,
         html_report = raw.html_report == true,
         progress_file = raw.progress_file or "",
+        job_id = raw.job_id or "",
         clip_snapshot_file = raw.clip_snapshot_file or "",
         clear_existing = raw.clear_existing == true,
         clear_old = raw.clear_existing == true,
