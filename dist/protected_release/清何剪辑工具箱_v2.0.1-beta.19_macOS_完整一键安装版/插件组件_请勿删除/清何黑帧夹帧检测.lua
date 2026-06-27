@@ -2209,6 +2209,8 @@ function Main()
                         error("渲染超时(" .. wait_max .. "秒)")
                     end
                     pcall(function() r_project:DeleteRenderJob(job_id) end)
+                    restore_render_state(render_state)
+                    render_state = nil
                     if params.keep_complex_cache == true then
                         write_complex_render_meta(temp_path, expected_meta)
                         params.complex_render_keep_path = true
