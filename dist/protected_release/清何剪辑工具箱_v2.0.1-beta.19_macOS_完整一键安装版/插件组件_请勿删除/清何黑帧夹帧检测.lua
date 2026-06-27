@@ -689,6 +689,7 @@ local function add_mixed_cut_record(records, seen, clip, key_suffix, source_star
             timeline_frame = tl_start,
             is_mixed_cut = true,
             edge_visible = reason == "edge",
+            final_visible_fragment = reason == "visible_fragment",
             single_scene_candidate = reason == "single_scene",
             scene_score = scene_score or 0,
         }},
@@ -737,6 +738,52 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         if t > max_track then max_track = t end
         if not clips_by_track[t] then clips_by_track[t] = {} end
         table.insert(clips_by_track[t], c)
+    end
+    local function top_covering_clip_at(frame, target_clip)
+        if not target_clip then return nil end
+        local target_track = tonumber(target_clip.track_index or 1) or 1
+        local best, best_track = nil, target_track
+        for track = target_track + 1, max_track do
+            local track_clips = clips_by_track[track]
+            if track_clips then
+                for _, other in ipairs(track_clips) do
+                    local os = tonumber(other.timeline_start_frame or 0) or 0
+                    local od = tonumber(other.source_duration_frames or 0) or 0
+                    if od > 0
+                        and frame >= os and frame < os + od
+                        and other.is_enabled ~= false
+                        and (other.opacity or 100) > 0
+                        and Analyzer.is_fully_opaque(other, overlay_config, boundary_threshold)
+                        and track >= best_track
+                    then
+                        best = other
+                        best_track = track
+                    end
+                end
+            end
+        end
+        return best
+    end
+    local function same_source_boundary_is_continuous(clip, boundary_frame, side)
+        local cover = nil
+        if side == "start" then
+            cover = top_covering_clip_at(boundary_frame - 1, clip)
+        else
+            cover = top_covering_clip_at(boundary_frame, clip)
+        end
+        if not cover then return false end
+        if tostring(cover.file_path or "") == "" or tostring(cover.file_path or "") ~= tostring(clip.file_path or "") then
+            return false
+        end
+        local min_jump = tonumber(params.mixed_cut_overlay_min_source_jump or 48) or 48
+        local clip_start = tonumber(clip.timeline_start_frame or 0) or 0
+        local clip_left = tonumber(clip.left_offset or 0) or 0
+        local cover_start = tonumber(cover.timeline_start_frame or 0) or 0
+        local cover_left = tonumber(cover.left_offset or 0) or 0
+        local clip_source_at_boundary = clip_left + (boundary_frame - clip_start)
+        local cover_source_at_boundary = cover_left + (boundary_frame - cover_start)
+        local jump = math.abs(clip_source_at_boundary - cover_source_at_boundary)
+        return jump < min_jump
     end
     local filter_script_path = nil
     local cache_dir = nil
@@ -872,9 +919,41 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
             local rel_start = scene_times[i]
             local rel_end = scene_times[i + 1]
             local span_frames = math.max(1, math.floor((rel_end - rel_start) * source_fps + 0.5))
+            local rel_start_frame = math.floor(rel_start * source_fps + 0.5)
+            local rel_end_frame = math.floor(rel_end * source_fps + 0.5)
+            local tl_start = (clip.timeline_start_frame or 0) + rel_start_frame
+            local tl_end = math.max(tl_start + 1, (clip.timeline_start_frame or 0) + rel_end_frame)
+            if (rel_start > 0 or rel_end < scan_duration) and tl_end > tl_start then
+                for _, iv in ipairs(visible_intervals) do
+                    local iv_start = tonumber(iv.start or 0) or 0
+                    local iv_end = tonumber(iv.end_ or iv["end"] or iv_start) or iv_start
+                    local overlap_start = math.max(tl_start, iv_start)
+                    local overlap_end = math.min(tl_end, iv_end)
+                    local exposed_frames = overlap_end - overlap_start
+                    if exposed_frames > 0 and exposed_frames <= stuck_frames then
+                        local touches_start = overlap_start == iv_start and top_covering_clip_at(iv_start - 1, clip) ~= nil
+                        local touches_end = overlap_end == iv_end and top_covering_clip_at(iv_end, clip) ~= nil
+                        local skip_same_source = (touches_start and same_source_boundary_is_continuous(clip, iv_start, "start"))
+                            or (touches_end and same_source_boundary_is_continuous(clip, iv_end, "end"))
+                        local scene_score = math.max(
+                            tonumber(scene_scores[rel_start_frame] or 0) or 0,
+                            tonumber(scene_scores[rel_end_frame] or 0) or 0
+                        )
+                        local min_visible_fragment_score = tonumber(params.mixed_cut_visible_fragment_scene_score
+                            or params.mixed_cut_internal_flash_score
+                            or 0.16) or 0.16
+                        if (touches_start or touches_end) and not skip_same_source
+                            and scene_score >= min_visible_fragment_score
+                        then
+                            local source_start = (left_offset + (overlap_start - (clip.timeline_start_frame or 0))) / source_fps
+                            local source_end = (left_offset + (overlap_end - (clip.timeline_start_frame or 0))) / source_fps
+                            add_mixed_cut_record(records, seen, clip, "visible_fragment",
+                                source_start, source_end, overlap_start, timeline_fps, scene_score, "visible_fragment")
+                        end
+                    end
+                end
+            end
             if span_frames > 0 and span_frames <= stuck_frames then
-                local rel_start_frame = math.floor(rel_start * source_fps + 0.5)
-                local rel_end_frame = math.floor(rel_end * source_fps + 0.5)
                 if implicit_internal_flash then
                     local start_score = scene_scores[rel_start_frame] or 0
                     local end_score = scene_scores[rel_end_frame] or 0
@@ -885,8 +964,6 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                         goto continue_span
                     end
                 end
-                local tl_start = (clip.timeline_start_frame or 0) + math.floor(rel_start * source_fps + 0.5)
-                local tl_end = (clip.timeline_start_frame or 0) + math.floor(rel_end * source_fps + 0.5)
                 local span_visible = false
                 for _, iv in ipairs(visible_intervals) do
                     local iv_start = iv.start or 0
@@ -3318,132 +3395,6 @@ function Main()
             end
             return nil
         end
-        local source_scene_near_cache = {}
-        local function source_scene_cut_near_boundary(edge_frame, clip, max_frames, direction)
-            if not clip or clip.media_type == "nested" or clip.media_type == "adjustment_layer" then return nil end
-            if clip.is_enabled == false or (clip.opacity or 100) <= 0 then return nil end
-            if not clip.file_path or clip.file_path == "" then return nil end
-
-            local clip_start = tonumber(clip.timeline_start_frame or 0) or 0
-            local clip_dur = tonumber(clip.source_duration_frames or 0) or 0
-            local clip_end = clip_start + clip_dur
-            if edge_frame < clip_start or edge_frame >= clip_end then return nil end
-
-            local ffmpeg = get_boundary_scene_ffmpeg()
-            if not ffmpeg or not ffmpeg.ffmpeg_path then return nil end
-
-            local source_fps = source_fps_for_clip(ffmpeg, clip, timeline_fps)
-            local source_frame = (tonumber(clip.left_offset or 0) or 0) + (edge_frame - clip_start)
-            if source_frame < 0 or source_fps <= 0 then return nil end
-
-            local tolerance_frames = math.max((tonumber(max_frames) or 1) + 3, 12)
-            local start_frame = math.max(0, source_frame - tolerance_frames)
-            local window_frames = tolerance_frames * 2 + 1
-            local threshold = tonumber(params.mixed_cut_overlay_scene_threshold
-                or params.mixed_cut_scene_threshold
-                or 0.04) or 0.04
-            local key = table.concat({
-                tostring(clip.file_path),
-                tostring(math.floor(start_frame + 0.5)),
-                tostring(window_frames),
-                string.format("%.3f", threshold),
-                tostring(direction or ""),
-            }, "|")
-            if source_scene_near_cache[key] ~= nil then
-                local cached = source_scene_near_cache[key]
-                if cached then
-                    return cached.distance, cached.score, cached.kind
-                end
-                return nil
-            end
-
-            local prefix = ""
-            if ffmpeg._bundled_lib_dir then
-                prefix = 'DYLD_LIBRARY_PATH="' .. ffmpeg._bundled_lib_dir .. '" '
-            end
-            local filter = string.format("select='gt(scene\\,%.3f)',metadata=print", threshold)
-            local cmd = string.format(
-                '%s%s -timelimit %d -ss %.6f -t %.6f -i %s -vf "%s" -an -f null - 2>&1',
-                prefix,
-                ffmpeg:_quote_path(ffmpeg.ffmpeg_path),
-                tonumber(params.nested_boundary_probe_timeout or 8) or 8,
-                start_frame / source_fps,
-                window_frames / source_fps,
-                ffmpeg:_quote_path(clip.file_path),
-                filter
-            )
-            local best_distance, best_score, best_tl_frame, best_kind = nil, nil, nil, nil
-            local handle = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
-            if handle then
-                local last_distance = nil
-                local start_time = os.time()
-                for line in handle:lines() do
-                    local t = line:match("pts_time:([%d%.%-]+)")
-                    if t then
-                        local rel = tonumber(t)
-                        if rel then
-                            local cut_frame = start_frame + math.floor(rel * source_fps + 0.5)
-                            local cut_tl_frame = clip_start + (cut_frame - (tonumber(clip.left_offset or 0) or 0))
-                            local distance = math.abs(cut_frame - source_frame)
-                            local edge_visible = top_opaque_clip_at(edge_frame) == clip
-                            local cut_visible = cut_tl_frame >= clip_start
-                                and cut_tl_frame < clip_end
-                                and top_opaque_clip_at(cut_tl_frame) == clip
-                            local hidden_boundary_cut = edge_visible
-                                and cut_tl_frame >= clip_start
-                                and cut_tl_frame < clip_end
-                                and top_opaque_clip_at(cut_tl_frame) ~= clip
-                                and (
-                                    (direction == "before" and cut_tl_frame > edge_frame)
-                                    or (direction == "after" and cut_tl_frame < edge_frame)
-                                )
-                            if direction == "before" and cut_tl_frame > edge_frame and not hidden_boundary_cut then
-                                cut_visible = false
-                            elseif direction == "after" and cut_tl_frame < edge_frame and not hidden_boundary_cut then
-                                cut_visible = false
-                            end
-                            local valid_cut = cut_visible or hidden_boundary_cut
-                            if valid_cut and distance <= tolerance_frames and (not best_distance or distance < best_distance) then
-                                best_distance = distance
-                                best_tl_frame = cut_tl_frame
-                                best_kind = hidden_boundary_cut and "hidden_boundary_cut" or "visible_cut"
-                                last_distance = distance
-                            else
-                                last_distance = nil
-                            end
-                        end
-                    end
-                    local score = line:match("lavfi%.scene_score=([%d%.%-]+)") or line:match("scene_score[:=]([%d%.%-]+)")
-                    if score and last_distance and last_distance == best_distance then
-                        best_score = tonumber(score) or best_score
-                    end
-                    if os.time() - start_time > (tonumber(params.nested_boundary_probe_timeout or 8) or 8) * 3 then
-                        break
-                    end
-                end
-                pcall(function() handle:close() end)
-            end
-
-            if best_distance then
-                dlog(string.format(
-                    "覆盖边界源内切点确认: edge=%d source_frame=%d distance=%d score=%.3f fps=%.3f",
-                    edge_frame,
-                    math.floor(source_frame + 0.5),
-                    best_distance,
-                    tonumber(best_score or 0) or 0,
-                    source_fps
-                ))
-                source_scene_near_cache[key] = {
-                    distance = best_distance,
-                    score = best_score or 0,
-                    timeline_frame = best_tl_frame,
-                    kind = best_kind or "visible_cut",
-                }
-                return best_distance, best_score or 0, best_kind or "visible_cut"
-            end
-            source_scene_near_cache[key] = false
-            return nil
-        end
         local function add_overlay_boundary_record(frame, lower_clip, upper_clip, reason, duration_frames)
             if frame == nil or frame < 0 or boundary_seen[frame] then return end
             if has_io_range and (frame < io_in or frame >= io_out) then return end
@@ -3519,20 +3470,6 @@ function Main()
                             local exposure_frames, exposure_start = visible_run_before(edge, top_before, stuck_frames)
                             if exposure_frames > 0 and exposure_frames <= stuck_frames then
                                 add_overlay_boundary_record(exposure_start, top_before, upper, reason, exposure_frames)
-                            else
-                                local distance, score, cut_kind = source_scene_cut_near_boundary(before, top_before, stuck_frames, "before")
-                                if distance then
-                                    local extra_reason = (cut_kind == "hidden_boundary_cut")
-                                        and ("，下层源内切点被上层遮挡，边界前只露出±" .. tostring(distance) .. "帧")
-                                        or ("，下层露出帧附近源内切点±" .. tostring(distance) .. "帧")
-                                    add_overlay_boundary_record(
-                                        before,
-                                        top_before,
-                                        upper,
-                                        reason .. extra_reason,
-                                        1
-                                    )
-                                end
                             end
                         else
                             local mark_frame = before
@@ -3572,20 +3509,6 @@ function Main()
                             local exposure_frames, exposure_start = visible_run_after(after_end, top_after_end, stuck_frames)
                             if exposure_frames > 0 and exposure_frames <= stuck_frames then
                                 add_overlay_boundary_record(exposure_start, top_after_end, upper, reason, exposure_frames)
-                            else
-                                local distance, score, cut_kind = source_scene_cut_near_boundary(after_end, top_after_end, stuck_frames, "after")
-                                if distance then
-                                    local extra_reason = (cut_kind == "hidden_boundary_cut")
-                                        and ("，下层源内切点被上层遮挡，边界后只露出±" .. tostring(distance) .. "帧")
-                                        or ("，下层露出帧附近源内切点±" .. tostring(distance) .. "帧")
-                                    add_overlay_boundary_record(
-                                        after_end,
-                                        top_after_end,
-                                        upper,
-                                        reason .. extra_reason,
-                                        1
-                                    )
-                                end
                             end
 	                        else
 	                            local source_short_frames = nil
