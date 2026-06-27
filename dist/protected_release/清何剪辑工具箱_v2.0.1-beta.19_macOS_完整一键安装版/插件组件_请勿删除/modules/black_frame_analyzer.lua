@@ -494,6 +494,49 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
         end
     end
 
+    local function merge_adjacent_black_records(list)
+        if #list <= 1 then return list end
+        table.sort(list, function(a, b)
+            return (a.timeline_start_frame or 0) < (b.timeline_start_frame or 0)
+        end)
+        local merged = {}
+        for _, record in ipairs(list) do
+            local note = tostring(record.note or "")
+            local is_black_record = note:find("黑帧:", 1, true) ~= nil
+                and not (record.segment and record.segment.is_mixed_cut)
+            local prev = merged[#merged]
+            local prev_note = prev and tostring(prev.note or "") or ""
+            local prev_is_black = prev_note:find("黑帧:", 1, true) ~= nil
+                and not (prev and prev.segment and prev.segment.is_mixed_cut)
+            if is_black_record and prev and prev_is_black
+                and tostring(prev.source_file or "") == tostring(record.source_file or "")
+                and (tonumber(record.timeline_start_frame or 0) or 0) <= (tonumber(prev.timeline_end_frame or 0) or 0) + 1
+            then
+                local cur_end = tonumber(record.timeline_end_frame or record.timeline_start_frame or 0) or 0
+                local prev_end = tonumber(prev.timeline_end_frame or prev.timeline_start_frame or 0) or 0
+                if cur_end > prev_end then
+                    prev.timeline_end_frame = cur_end
+                    prev.timeline_end_tc = Analyzer.frame_to_timecode(cur_end, timeline_fps)
+                end
+                local prev_start = tonumber(prev.timeline_start_frame or 0) or 0
+                prev.duration_frames = math.max(1, (tonumber(prev.timeline_end_frame or prev_start) or prev_start) - prev_start)
+                prev.source_duration_sec = math.max(tonumber(prev.source_duration_sec or 0) or 0, prev.duration_frames / timeline_fps)
+                if not tostring(prev.note or ""):find("连续黑场重复检测已合并", 1, true) then
+                    prev.note = tostring(prev.note or "")
+                        .. "\n连续黑场重复检测已合并，重叠/相邻黑场不再单独打点。"
+                end
+            else
+                table.insert(merged, record)
+            end
+        end
+        return merged
+    end
+
+    results.errors = merge_adjacent_black_records(results.errors)
+    results.suspects = merge_adjacent_black_records(results.suspects)
+    results.summary.error_count = #results.errors
+    results.summary.suspect_count = #results.suspects
+
     -- ============================================================
     -- 扫描时间线空白区域（按区间时长分级标记）
     -- ============================================================

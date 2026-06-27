@@ -3241,6 +3241,78 @@ function Main()
             end
             return count, edge_frame
         end
+        local function is_fusion_nested_clip(clip)
+            if not is_nested_clip(clip) then return false end
+            local text = tostring(clip.nested_type or clip.name or ""):lower()
+            return text:find("fusion", 1, true) ~= nil
+                or text:find("合成", 1, true) ~= nil
+                or text:find("composition", 1, true) ~= nil
+        end
+        local boundary_scene_ffmpeg = nil
+        local boundary_scene_ffmpeg_checked = false
+        local function get_boundary_scene_ffmpeg()
+            if boundary_scene_ffmpeg_checked then return boundary_scene_ffmpeg end
+            boundary_scene_ffmpeg_checked = true
+            local ok, runner = pcall(function() return FFmpegRunner:new() end)
+            if ok and runner and runner:find_ffmpeg() then
+                boundary_scene_ffmpeg = runner
+                config._cached_ffmpeg_path = runner.ffmpeg_path
+            end
+            return boundary_scene_ffmpeg
+        end
+        local function source_short_run_after_boundary(edge_frame, clip, max_frames)
+            if not clip or clip.media_type == "nested" or clip.media_type == "adjustment_layer" then return nil end
+            if clip.is_enabled == false or (clip.opacity or 100) <= 0 then return nil end
+            if not clip.file_path or clip.file_path == "" then return nil end
+            local clip_start = tonumber(clip.timeline_start_frame or 0) or 0
+            local clip_dur = tonumber(clip.source_duration_frames or 0) or 0
+            local clip_end = clip_start + clip_dur
+            if edge_frame < clip_start or edge_frame >= clip_end then return nil end
+
+            local ffmpeg = get_boundary_scene_ffmpeg()
+            if not ffmpeg or not ffmpeg.ffmpeg_path or not ffmpeg.first_scene_cut_after then return nil end
+
+            local source_fps = source_fps_for_clip(ffmpeg, clip, timeline_fps)
+            local left_offset = tonumber(clip.left_offset or 0) or 0
+            local source_frame = left_offset + (edge_frame - clip_start)
+            if source_frame < 0 then return nil end
+
+            local probe_frames = math.max((tonumber(max_frames) or 1) + 2, 4)
+            local denominators = { source_fps }
+            if math.abs((timeline_fps or source_fps) - source_fps) > 0.01 then
+                table.insert(denominators, timeline_fps)
+            end
+            for _, denom in ipairs(denominators) do
+                denom = tonumber(denom) or source_fps
+                if denom > 0 then
+                    local cut, err = ffmpeg:first_scene_cut_after(
+                        clip.file_path,
+                        source_frame / denom,
+                        {
+                            window_sec = probe_frames / denom,
+                            scene_threshold = params.nested_boundary_scene_threshold
+                                or params.mixed_cut_internal_flash_score
+                                or 0.16,
+                            timeout = params.nested_boundary_probe_timeout or 8,
+                        }
+                    )
+                    if err then
+                        dlog("复合/Fusion边界源内短镜头确认: " .. tostring(err))
+                    end
+                    if cut and cut.relative_sec then
+                        local frames = math.max(1, math.floor(cut.relative_sec * denom + 0.5))
+                        if frames > 0 and frames <= (tonumber(max_frames) or frames) then
+                            dlog(string.format(
+                                "复合/Fusion边界源内短镜头确认: edge=%d rel=%.4f frames=%d denom=%.3f source_fps=%.3f",
+                                edge_frame, cut.relative_sec, frames, denom, source_fps
+                            ))
+                            return frames, cut.score
+                        end
+                    end
+                end
+            end
+            return nil
+        end
         local function add_overlay_boundary_record(frame, lower_clip, upper_clip, reason, duration_frames)
             if frame == nil or frame < 0 or boundary_seen[frame] then return end
             if has_io_range and (frame < io_in or frame >= io_out) then return end
@@ -3356,12 +3428,26 @@ function Main()
                             if exposure_frames > 0 and exposure_frames <= stuck_frames then
                                 add_overlay_boundary_record(exposure_start, top_after_end, upper, reason, exposure_frames)
                             end
-                        else
-                            add_overlay_boundary_record(after_end, top_after_end, upper, reason, 1)
-                        end
-                    end
-                end
-            end
+	                        else
+	                            local source_short_frames = nil
+	                            if is_nested_clip(upper) and not is_fusion_nested_clip(upper) then
+	                                source_short_frames = source_short_run_after_boundary(after_end, top_after_end, stuck_frames)
+	                            end
+	                            if source_short_frames then
+	                                add_overlay_boundary_record(
+	                                    after_end,
+	                                    top_after_end,
+	                                    upper,
+	                                    reason .. "，下层源内" .. tostring(source_short_frames) .. "帧后切走",
+	                                    source_short_frames
+	                                )
+	                            else
+	                                add_overlay_boundary_record(after_end, top_after_end, upper, reason, 1)
+	                            end
+	                        end
+	                    end
+	                end
+	            end
             ::continue_overlay_boundary::
         end
 
