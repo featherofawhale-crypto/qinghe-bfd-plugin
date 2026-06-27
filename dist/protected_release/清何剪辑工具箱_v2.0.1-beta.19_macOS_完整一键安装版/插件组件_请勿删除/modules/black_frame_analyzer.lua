@@ -494,41 +494,6 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
         end
     end
 
-    if #results.suspects > 1 then
-        table.sort(results.suspects, function(a, b)
-            return (a.timeline_start_frame or 0) < (b.timeline_start_frame or 0)
-        end)
-        local merged_suspects = {}
-        for _, record in ipairs(results.suspects) do
-            local is_black = tostring(record.marker_name or ""):find("可疑黑帧", 1, true) ~= nil
-            local prev = merged_suspects[#merged_suspects]
-            if is_black and prev then
-                local same_source = tostring(prev.source_file or "") == tostring(record.source_file or "")
-                local prev_end = tonumber(prev.timeline_end_frame or prev.timeline_start_frame or 0) or 0
-                local cur_start = tonumber(record.timeline_start_frame or 0) or 0
-                local overlaps_or_touches = cur_start <= prev_end + 1
-                if same_source and overlaps_or_touches then
-                    local cur_end = tonumber(record.timeline_end_frame or cur_start) or cur_start
-                    if cur_end > prev_end then
-                        prev.timeline_end_frame = cur_end
-                        prev.timeline_end_tc = Analyzer.frame_to_timecode(cur_end, timeline_fps)
-                    end
-                    if not tostring(prev.note or ""):find("连续黑场重复检测已合并", 1, true) then
-                        prev.note = tostring(prev.note or "")
-                            .. "\n连续黑场重复检测已合并，重叠/相邻黑场不再单独打点。"
-                    end
-                    goto continue_suspect_merge
-                end
-            end
-            table.insert(merged_suspects, record)
-            ::continue_suspect_merge::
-        end
-        if #merged_suspects ~= #results.suspects then
-            results.suspects = merged_suspects
-            results.summary.suspect_count = #merged_suspects
-        end
-    end
-
     -- ============================================================
     -- 扫描时间线空白区域（按区间时长分级标记）
     -- ============================================================
@@ -568,18 +533,13 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
             end
             if already_covered then goto continue_gap end
 
-            -- 区分：极短空隙(会形成黑帧错误) / 小空白(空位提示) / 大空白(信息)
+            -- 区分：小空白(可疑) vs 大空白(信息)
             local is_small_gap = (dur_sec <= max_mark_sec)
-            local gap_frames = gr.end_frame - gr.start_frame
-            local stuck_frames = params.stuck_frames or config.CLASSIFICATION.STUCK_FRAMES
-            local is_error_gap = is_small_gap and gap_frames > 0 and gap_frames <= stuck_frames
 
             local gap_record = {
-                classification = is_error_gap and "error" or (is_small_gap and "gap" or "gap_large"),
-                marker_color = is_error_gap and config.MARKER_COLORS.ERROR
-                    or (is_small_gap and config.MARKER_COLORS.GAP or config.MARKER_COLORS.INFO),
-                marker_name = is_error_gap and "[BFD-ERR] 空隙黑帧"
-                    or (is_small_gap and "[BFD-GAP] 时间线空位" or "[BFD-GAP] 时间线空白区域"),
+                classification = is_small_gap and "gap" or "gap_large",
+                marker_color = is_small_gap and config.MARKER_COLORS.GAP or config.MARKER_COLORS.INFO,
+                marker_name = is_small_gap and "[BFD-GAP] 时间线空位" or "[BFD-GAP] 时间线空白区域",
 
                 timeline_start_frame = gr.start_frame,
                 timeline_end_frame = gr.end_frame,
@@ -589,22 +549,16 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
                 source_file = nil,
                 source_start_sec = 0,
                 source_duration_sec = dur_sec,
-                duration_frames = gap_frames,
+                duration_frames = gr.end_frame - gr.start_frame,
 
-                note = is_error_gap
-                    and string.format("极短时间线空隙\n片段间隙: %.1f帧 (%.1fs)\n最终画面会露出黑帧，按夹帧/黑帧错误处理",
-                        gap_frames, dur_sec)
-                    or (is_small_gap
+                note = is_small_gap
                     and string.format("时间线空位\n片段间隙: %.1f帧 (%.1fs)\n可能是剪辑留下的空白",
-                        gap_frames, dur_sec)
+                        gr.end_frame - gr.start_frame, dur_sec)
                     or string.format("时间线空白区域\n片段间隙: %.1f帧 (%.1fs)\n较大空白，非夹帧问题",
-                        gap_frames, dur_sec)),
+                        gr.end_frame - gr.start_frame, dur_sec),
             }
 
-            if is_error_gap then
-                table.insert(results.errors, gap_record)
-                results.summary.error_count = results.summary.error_count + 1
-            elseif is_small_gap then
+            if is_small_gap then
                 table.insert(results.gaps, gap_record)
                 results.summary.gap_count = results.summary.gap_count + 1
             else
@@ -723,11 +677,9 @@ function Analyzer.is_fully_opaque(clip, overlay_config, threshold)
     overlay_config = overlay_config or config.OVERLAY_STUCK_DETECTION
     threshold = threshold or overlay_config.FULLY_OPAQUE_THRESHOLD or 95
     if clip.is_enabled == false then return false end
-    if clip.media_type == "adjustment_layer" then return false end
-    -- 带通道图片/视频默认不视为完全遮挡（内容有透明区域）。
-    -- 用户可勾选"PNG/PSD视为不透明遮挡层"覆盖静态图片；带Alpha视频仍交给复杂模式看最终画面。
+    -- 带通道图片(PNG/PSD等)默认不视为完全遮挡（内容有透明区域）
+    -- 用户可勾选"PNG/PSD视为不透明遮挡层"覆盖此行为
     if clip.media_type == "alpha_image" and not overlay_config.png_as_opaque then return false end
-    if clip.media_type == "alpha_video" then return false end
     if (clip.opacity or 100) < threshold then return false end
     if not overlay_config.NON_NORMAL_AS_OPAQUE and (clip.composite_mode or 0) ~= 0 then return false end
     return true
@@ -740,7 +692,6 @@ function Analyzer.is_partially_opaque(clip, overlay_config)
     local partial_threshold = overlay_config.PARTIALLY_OPAQUE_THRESHOLD or 50
     if Analyzer.is_fully_opaque(clip, overlay_config, full_threshold) then return false end
     if clip.is_enabled == false then return false end
-    if clip.media_type == "adjustment_layer" then return false end
     if (clip.opacity or 100) < partial_threshold then return false end
     if not overlay_config.NON_NORMAL_AS_OPAQUE and (clip.composite_mode or 0) ~= 0 then return false end
     return true
