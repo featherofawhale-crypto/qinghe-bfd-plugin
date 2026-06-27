@@ -3352,7 +3352,7 @@ function Main()
             if source_scene_near_cache[key] ~= nil then
                 local cached = source_scene_near_cache[key]
                 if cached then
-                    return cached.distance, cached.score
+                    return cached.distance, cached.score, cached.kind
                 end
                 return nil
             end
@@ -3372,7 +3372,7 @@ function Main()
                 ffmpeg:_quote_path(clip.file_path),
                 filter
             )
-            local best_distance, best_score, best_tl_frame = nil, nil, nil
+            local best_distance, best_score, best_tl_frame, best_kind = nil, nil, nil, nil
             local handle = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
             if handle then
                 local last_distance = nil
@@ -3385,17 +3385,28 @@ function Main()
                             local cut_frame = start_frame + math.floor(rel * source_fps + 0.5)
                             local cut_tl_frame = clip_start + (cut_frame - (tonumber(clip.left_offset or 0) or 0))
                             local distance = math.abs(cut_frame - source_frame)
-                            local visible_cut = cut_tl_frame >= clip_start
+                            local edge_visible = top_opaque_clip_at(edge_frame) == clip
+                            local cut_visible = cut_tl_frame >= clip_start
                                 and cut_tl_frame < clip_end
                                 and top_opaque_clip_at(cut_tl_frame) == clip
-                            if direction == "before" and cut_tl_frame > edge_frame then
-                                visible_cut = false
-                            elseif direction == "after" and cut_tl_frame < edge_frame then
-                                visible_cut = false
+                            local hidden_boundary_cut = edge_visible
+                                and cut_tl_frame >= clip_start
+                                and cut_tl_frame < clip_end
+                                and top_opaque_clip_at(cut_tl_frame) ~= clip
+                                and (
+                                    (direction == "before" and cut_tl_frame > edge_frame)
+                                    or (direction == "after" and cut_tl_frame < edge_frame)
+                                )
+                            if direction == "before" and cut_tl_frame > edge_frame and not hidden_boundary_cut then
+                                cut_visible = false
+                            elseif direction == "after" and cut_tl_frame < edge_frame and not hidden_boundary_cut then
+                                cut_visible = false
                             end
-                            if visible_cut and distance <= tolerance_frames and (not best_distance or distance < best_distance) then
+                            local valid_cut = cut_visible or hidden_boundary_cut
+                            if valid_cut and distance <= tolerance_frames and (not best_distance or distance < best_distance) then
                                 best_distance = distance
                                 best_tl_frame = cut_tl_frame
+                                best_kind = hidden_boundary_cut and "hidden_boundary_cut" or "visible_cut"
                                 last_distance = distance
                             else
                                 last_distance = nil
@@ -3422,8 +3433,13 @@ function Main()
                     tonumber(best_score or 0) or 0,
                     source_fps
                 ))
-                source_scene_near_cache[key] = { distance = best_distance, score = best_score or 0, timeline_frame = best_tl_frame }
-                return best_distance, best_score or 0
+                source_scene_near_cache[key] = {
+                    distance = best_distance,
+                    score = best_score or 0,
+                    timeline_frame = best_tl_frame,
+                    kind = best_kind or "visible_cut",
+                }
+                return best_distance, best_score or 0, best_kind or "visible_cut"
             end
             source_scene_near_cache[key] = false
             return nil
@@ -3504,13 +3520,16 @@ function Main()
                             if exposure_frames > 0 and exposure_frames <= stuck_frames then
                                 add_overlay_boundary_record(exposure_start, top_before, upper, reason, exposure_frames)
                             else
-                                local distance, score = source_scene_cut_near_boundary(before, top_before, stuck_frames, "before")
+                                local distance, score, cut_kind = source_scene_cut_near_boundary(before, top_before, stuck_frames, "before")
                                 if distance then
+                                    local extra_reason = (cut_kind == "hidden_boundary_cut")
+                                        and ("，下层源内切点被上层遮挡，边界前只露出±" .. tostring(distance) .. "帧")
+                                        or ("，下层露出帧附近源内切点±" .. tostring(distance) .. "帧")
                                     add_overlay_boundary_record(
                                         before,
                                         top_before,
                                         upper,
-                                        reason .. "，下层露出帧附近源内切点±" .. tostring(distance) .. "帧",
+                                        reason .. extra_reason,
                                         1
                                     )
                                 end
@@ -3554,13 +3573,16 @@ function Main()
                             if exposure_frames > 0 and exposure_frames <= stuck_frames then
                                 add_overlay_boundary_record(exposure_start, top_after_end, upper, reason, exposure_frames)
                             else
-                                local distance, score = source_scene_cut_near_boundary(after_end, top_after_end, stuck_frames, "after")
+                                local distance, score, cut_kind = source_scene_cut_near_boundary(after_end, top_after_end, stuck_frames, "after")
                                 if distance then
+                                    local extra_reason = (cut_kind == "hidden_boundary_cut")
+                                        and ("，下层源内切点被上层遮挡，边界后只露出±" .. tostring(distance) .. "帧")
+                                        or ("，下层露出帧附近源内切点±" .. tostring(distance) .. "帧")
                                     add_overlay_boundary_record(
                                         after_end,
                                         top_after_end,
                                         upper,
-                                        reason .. "，下层露出帧附近源内切点±" .. tostring(distance) .. "帧",
+                                        reason .. extra_reason,
                                         1
                                     )
                                 end
