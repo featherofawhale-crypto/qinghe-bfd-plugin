@@ -4179,10 +4179,11 @@ function Main()
                     local lo = clip.left_offset or 0
                     local dur = clip.source_duration_frames or 0
                     local source_end_frame = lo + dur
+                    local clip_source_fps = source_fps_for_clip(ffmpeg, clip, timeline_fps)
 
                     for _, seg in ipairs(segments) do
-                        local seg_start_f = math.floor(seg.start * timeline_fps)
-                        local seg_end_f = math.floor(seg.end_ * timeline_fps)
+                        local seg_start_f = math.floor(seg.start * clip_source_fps)
+                        local seg_end_f = math.floor(seg.end_ * clip_source_fps)
 
                         -- 黑帧/夹帧必须在最终画面可见；同源逐文件分析也要按时间线可见区间二次裁剪。
                         if dur == 0 or (seg_end_f > lo and seg_start_f < source_end_frame) then
@@ -4200,9 +4201,13 @@ function Main()
                                     local clipped_source_start = lo + (overlap_start - clip_start_frame)
                                     local clipped_source_end = lo + (overlap_end - clip_start_frame)
                                     table.insert(clip_segments, {
-                                        start = clipped_source_start / timeline_fps,
-                                        end_ = clipped_source_end / timeline_fps,
-                                        duration = (clipped_source_end - clipped_source_start) / timeline_fps,
+                                        start = clipped_source_start / clip_source_fps,
+                                        end_ = clipped_source_end / clip_source_fps,
+                                        duration = (overlap_end - overlap_start) / timeline_fps,
+                                        duration_frames = math.max(1, overlap_end - overlap_start),
+                                        source_fps = clip_source_fps,
+                                        timeline_frame = overlap_start,
+                                        timeline_end_frame = overlap_end,
                                     })
                                 end
                             end

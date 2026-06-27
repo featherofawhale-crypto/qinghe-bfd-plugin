@@ -347,11 +347,12 @@ function Analyzer.generate_note(segment, clip_info, timeline_fps, params, durati
     end
 
     if timeline_fps then
+        local source_fps = segment.source_fps or timeline_fps
         local src_tc_start = Analyzer.frame_to_timecode(
-            math.floor(segment.start * timeline_fps), timeline_fps
+            math.floor(segment.start * source_fps), source_fps
         )
         local src_tc_end = Analyzer.frame_to_timecode(
-            math.floor(segment.end_ * timeline_fps), timeline_fps
+            math.floor(segment.end_ * source_fps), source_fps
         )
         table.insert(parts, string.format("片段内: %s - %s", src_tc_start, src_tc_end))
     end
@@ -425,7 +426,8 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
             )
             if segment.timeline_frame then
                 frames.start_frame = segment.timeline_frame
-                frames.end_frame = segment.timeline_frame + math.max(1, math.floor(segment.duration * timeline_fps + 0.5))
+                frames.end_frame = segment.timeline_end_frame
+                    or (segment.timeline_frame + math.max(1, math.floor(segment.duration * timeline_fps + 0.5)))
             end
             if results.summary.total_segments <= 3 then
                 dlog(string.format(
@@ -446,7 +448,7 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
             end
 
             -- 计算精确帧数
-            local duration_frames = math.floor(segment.duration * timeline_fps)
+            local duration_frames = segment.duration_frames or math.floor(segment.duration * timeline_fps)
 
             local record = {
                 classification = classification,
