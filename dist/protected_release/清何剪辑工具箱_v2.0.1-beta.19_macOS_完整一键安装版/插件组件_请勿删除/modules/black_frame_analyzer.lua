@@ -720,6 +720,8 @@ function Analyzer.is_fully_opaque(clip, overlay_config, threshold)
     overlay_config = overlay_config or config.OVERLAY_STUCK_DETECTION
     threshold = threshold or overlay_config.FULLY_OPAQUE_THRESHOLD or 95
     if clip.is_enabled == false then return false end
+    -- 调整图层改变下层画面的几何/颜色，但不是实际遮挡内容；可见性计算不能把它当不透明上层。
+    if clip.media_type == "adjustment_layer" then return false end
     -- 带通道图片(PNG/PSD等)默认不视为完全遮挡（内容有透明区域）
     -- 用户可勾选"PNG/PSD视为不透明遮挡层"覆盖此行为
     if clip.media_type == "alpha_image" and not overlay_config.png_as_opaque then return false end

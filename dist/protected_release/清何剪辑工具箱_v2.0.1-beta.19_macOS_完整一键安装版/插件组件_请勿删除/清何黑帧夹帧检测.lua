@@ -838,12 +838,6 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                     if raw_rel and raw_rel >= 0 and raw_rel < scan_duration then
                         table.insert(candidates, raw_rel)
                     end
-                    if raw_rel and start_sec > 0 and raw_rel >= start_sec then
-                        local shifted = raw_rel - start_sec
-                        if shifted >= 0 and shifted < scan_duration then
-                            table.insert(candidates, shifted)
-                        end
-                    end
                     for _, rel in ipairs(candidates) do
                         append_unique_number(scene_times, rel, source_fps)
                         last_scene_frame = math.floor(rel * source_fps + 0.5)
@@ -860,7 +854,8 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
 
         table.sort(scene_times)
         local real_scene_count = math.max(0, #scene_times - 2)
-        if implicit_internal_flash and real_scene_count < (tonumber(params.mixed_cut_implicit_min_scene_count or 5) or 5) then
+        -- 普通模式源内短闪只要求短段两端都是强切点；测试片段可能只有这一组切点。
+        if implicit_internal_flash and real_scene_count < (tonumber(params.mixed_cut_implicit_min_scene_count or 2) or 2) then
             goto continue_clip
         end
         if #scene_times > 2 then
@@ -904,7 +899,8 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                 if span_visible then
                     local source_start = start_sec + rel_start
                     local source_end = start_sec + rel_end
-                    add_mixed_cut_record(records, seen, clip, "span", source_start, source_end, tl_start, timeline_fps,
+                    local mark_frame = implicit_internal_flash and math.max(clip.timeline_start_frame or 0, tl_start - 1) or tl_start
+                    add_mixed_cut_record(records, seen, clip, "span", source_start, source_end, mark_frame, timeline_fps,
                         scene_scores[math.floor(rel_start * source_fps + 0.5)] or
                         scene_scores[math.floor(rel_end * source_fps + 0.5)] or 0, "span")
                 end
@@ -1855,8 +1851,8 @@ function Main()
         table.insert(ffmpeg_results, {
             clip = clip,
             segments = {{
-                start = opts.clip_start_sec or ((clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps)),
-                end_ = (opts.clip_start_sec or ((clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps))) + (1 / timeline_fps),
+                start = opts.clip_start_sec or ((clip.left_offset or 0) / timeline_fps),
+                end_ = (opts.clip_start_sec or ((clip.left_offset or 0) / timeline_fps)) + (1 / timeline_fps),
                 duration = 1 / timeline_fps,
                 timeline_frame = timeline_frame,
                 force_classification = "black_border",
@@ -3031,7 +3027,7 @@ function Main()
                     timeline_start_tc = Analyzer.frame_to_timecode(sf, timeline_fps),
                     timeline_end_tc = Analyzer.frame_to_timecode(ef, timeline_fps),
                     source_file = clip.file_path,
-                    source_start_sec = (clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps),
+                    source_start_sec = (clip.left_offset or 0) / timeline_fps,
                     source_duration_sec = dur_sec,
                     duration_frames = tl_dur,
                     note = string.format(
@@ -3122,7 +3118,7 @@ function Main()
                                 timeline_start_tc = Analyzer.frame_to_timecode(iv.start, timeline_fps),
                                 timeline_end_tc = Analyzer.frame_to_timecode(iv.end_, timeline_fps),
                                 source_file = clip.file_path,
-                                source_start_sec = (clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps),
+                                source_start_sec = (clip.left_offset or 0) / timeline_fps,
                                 source_duration_sec = dur_sec,
                                 duration_frames = vis_dur,
                                 note = string.format(
@@ -3141,7 +3137,7 @@ function Main()
                                 timeline_start_tc = Analyzer.frame_to_timecode(iv.start, timeline_fps),
                                 timeline_end_tc = Analyzer.frame_to_timecode(iv.end_, timeline_fps),
                                 source_file = clip.file_path,
-                                source_start_sec = (clip.left_offset or 0) / source_fps_for_clip(ffmpeg, clip, timeline_fps),
+                                source_start_sec = (clip.left_offset or 0) / timeline_fps,
                                 source_duration_sec = dur_sec,
                                 duration_frames = vis_dur,
                                 note = string.format(
@@ -3343,7 +3339,7 @@ function Main()
                 timeline_start_tc = Analyzer.frame_to_timecode(frame, timeline_fps),
                 timeline_end_tc = Analyzer.frame_to_timecode(frame + duration_frames, timeline_fps),
                 source_file = lower_clip and lower_clip.file_path or nil,
-                source_start_sec = lower_clip and ((lower_clip.left_offset or 0) + (frame - (lower_clip.timeline_start_frame or 0))) / source_fps_for_clip(ffmpeg, lower_clip, timeline_fps) or 0,
+                source_start_sec = lower_clip and ((lower_clip.left_offset or 0) + (frame - (lower_clip.timeline_start_frame or 0))) / timeline_fps or 0,
                 source_duration_sec = duration_frames / timeline_fps,
                 duration_frames = duration_frames,
                 note = string.format(
@@ -3693,24 +3689,23 @@ function Main()
                                 })
                             end
                         elseif source_start >= 0 and source_dur > 0 and top_clip.file_path and top_clip.file_path ~= "" then
-                            local segment_source_fps = source_fps_for_clip(ffmpeg, top_clip, timeline_fps)
                             local prev = segments[#segments]
                             if prev and prev.clip == top_clip
                                 and (prev.adjustment_signature or "") == adjustment_sig
                                 and math.abs((prev.timeline_start_frame + prev.duration_frames) - s) < 0.001
                                 and math.abs((prev.source_start_frame + prev.duration_frames) - source_start) < 0.001 then
                                 prev.duration_frames = prev.duration_frames + source_dur
-                                prev.duration_sec = prev.duration_frames / segment_source_fps
+                                prev.duration_sec = prev.duration_frames / timeline_fps
                                 prev.uncertain_upper = prev.uncertain_upper or skipped_uncertain_here
                             else
                                 table.insert(segments, {
                                     file_path = top_clip.file_path,
-                                    start_sec = source_start / segment_source_fps,
-                                    duration_sec = source_dur / segment_source_fps,
+                                    start_sec = source_start / timeline_fps,
+                                    duration_sec = source_dur / timeline_fps,
                                     clip = top_clip,
                                     timeline_start_frame = s,
                                     source_start_frame = source_start,
-                                    source_fps = segment_source_fps,
+                                    source_fps = timeline_fps,
                                     duration_frames = source_dur,
                                     uncertain_upper = skipped_uncertain_here,
                                     adjustment_effects = adjustment_effects,
