@@ -3189,6 +3189,11 @@ function Main()
                         end
                         local is_soft_occluded = (soft_vis_dur <= 0 or soft_vis_dur > stuck_frames)
 
+                        local clip_source_fps = tonumber(clip.source_fps or 0) or 0
+                        if clip_source_fps <= 0 then clip_source_fps = timeline_fps end
+                        local source_start_frame = (tonumber(clip.left_offset or 0) or 0)
+                            + (iv.start - (tonumber(clip.timeline_start_frame or 0) or 0))
+                        local source_dur_sec = vis_dur / clip_source_fps
                         local dur_sec = vis_dur / timeline_fps
                         if is_soft_occluded then
                             table.insert(overlay_stuck_records, {
@@ -3200,8 +3205,8 @@ function Main()
                                 timeline_start_tc = Analyzer.frame_to_timecode(iv.start, timeline_fps),
                                 timeline_end_tc = Analyzer.frame_to_timecode(iv.end_, timeline_fps),
                                 source_file = clip.file_path,
-                                source_start_sec = (clip.left_offset or 0) / timeline_fps,
-                                source_duration_sec = dur_sec,
+                                source_start_sec = source_start_frame / clip_source_fps,
+                                source_duration_sec = source_dur_sec,
                                 duration_frames = vis_dur,
                                 visual_window_start_frame = iv.start,
                                 visual_window_end_frame = iv.end_,
@@ -3221,8 +3226,8 @@ function Main()
                                 timeline_start_tc = Analyzer.frame_to_timecode(iv.start, timeline_fps),
                                 timeline_end_tc = Analyzer.frame_to_timecode(iv.end_, timeline_fps),
                                 source_file = clip.file_path,
-                                source_start_sec = (clip.left_offset or 0) / timeline_fps,
-                                source_duration_sec = dur_sec,
+                                source_start_sec = source_start_frame / clip_source_fps,
+                                source_duration_sec = source_dur_sec,
                                 duration_frames = vis_dur,
                                 visual_window_start_frame = iv.start,
                                 visual_window_end_frame = iv.end_,
@@ -3547,6 +3552,12 @@ function Main()
             local boundary_explain = is_nested_boundary
                 and "判定: 这是顶层片段之间的外部覆盖边界，普通模式未进入复合/Fusion内部；上层边界让下层短暂露出，疑似漏帧/夹帧。"
                 or "判定: 上层较长片段边界让下层最后/最前一帧仍在最终画面露出，疑似漏帧/夹帧。"
+            local lower_source_fps = lower_clip and tonumber(lower_clip.source_fps or 0) or 0
+            if lower_source_fps <= 0 then lower_source_fps = timeline_fps end
+            local lower_source_start_frame = lower_clip
+                and ((tonumber(lower_clip.left_offset or 0) or 0)
+                    + (frame - (tonumber(lower_clip.timeline_start_frame or 0) or 0)))
+                or 0
             table.insert(overlay_stuck_records, {
                 classification = "error",
                 marker_color = config.MARKER_COLORS.ERROR,
@@ -3556,8 +3567,8 @@ function Main()
                 timeline_start_tc = Analyzer.frame_to_timecode(frame, timeline_fps),
                 timeline_end_tc = Analyzer.frame_to_timecode(frame + duration_frames, timeline_fps),
                 source_file = lower_clip and lower_clip.file_path or nil,
-                source_start_sec = lower_clip and ((lower_clip.left_offset or 0) + (frame - (lower_clip.timeline_start_frame or 0))) / timeline_fps or 0,
-                source_duration_sec = duration_frames / timeline_fps,
+                source_start_sec = lower_clip and (lower_source_start_frame / lower_source_fps) or 0,
+                source_duration_sec = duration_frames / lower_source_fps,
                 duration_frames = duration_frames,
                 visual_window_start_frame = frame,
                 visual_window_end_frame = frame + duration_frames,
@@ -5012,6 +5023,38 @@ function Main()
             if not f then return nil end
             return math.floor(f + 0.5)
         end
+        local function same_nonempty_source(a, b)
+            local sa = tostring(a and a.source_file or "")
+            local sb = tostring(b and b.source_file or "")
+            return sa ~= "" and sb ~= "" and sa == sb
+        end
+        local function source_time_range(r)
+            local s = tonumber(r and r.source_start_sec)
+            if not s then return nil end
+            local dur = tonumber(r and r.source_duration_sec)
+                or tonumber(r and r.duration_sec)
+                or ((tonumber(r and r.duration_frames) or 0) / timeline_fps)
+            if not dur or dur <= 0 then return nil end
+            return s, s + dur
+        end
+        local function source_ranges_overlap(a, b)
+            local as, ae = source_time_range(a)
+            local bs, be = source_time_range(b)
+            if not as or not ae or not bs or not be then return false end
+            local tol = math.max(2 / timeline_fps, 0.001)
+            return ae + tol > bs and be + tol > as
+        end
+        local function choose_visible_window_anchor(records, window_start)
+            local anchor = nil
+            for _, candidate in ipairs(records) do
+                local f = record_start_frame(candidate)
+                if f == window_start then return candidate end
+                if not anchor or (f and f < (record_start_frame(anchor) or f + 1)) then
+                    anchor = candidate
+                end
+            end
+            return anchor
+        end
 
         local specific_records = {}
         for _, r in ipairs(selected_records) do
@@ -5022,6 +5065,7 @@ function Main()
 
         local merged_records = {}
         local merged_overlay_evidence = 0
+        local skipped_ambiguous_overlay = 0
         for _, r in ipairs(selected_records) do
             if is_external_overlay_short_record(r) then
                 local ws, we = short_visual_window(r)
@@ -5029,22 +5073,38 @@ function Main()
                 if ws and we then
                     for _, specific in ipairs(specific_records) do
                         local f = record_start_frame(specific)
-                        if f and f >= ws and f < we then
+                        if f and f >= ws and f < we
+                            and same_nonempty_source(r, specific)
+                            and source_ranges_overlap(r, specific)
+                        then
                             table.insert(contained_specifics, specific)
                         end
                     end
                 end
-                if #contained_specifics > 0 then
+                if #contained_specifics == 1 then
                     merged_overlay_evidence = merged_overlay_evidence + 1
                     local last_frame = math.max(ws, we - 1)
-                    for _, specific in ipairs(contained_specifics) do
-                        specific.note = tostring(specific.note or "") .. string.format(
-                            "\n合并证据: 所在最终可见短段 %s-%s (%d帧) 也命中外部覆盖/叠加短段证据；已折叠泛化外部证据，混剪源内标记本身不互相合并。",
+                    local anchor = choose_visible_window_anchor(contained_specifics, ws)
+                    if anchor then
+                        local original_frame = record_start_frame(anchor) or ws
+                        anchor.timeline_start_frame = ws
+                        anchor.timeline_end_frame = we
+                        anchor.timeline_start_tc = Analyzer.frame_to_timecode(ws, timeline_fps)
+                        anchor.timeline_end_tc = Analyzer.frame_to_timecode(we, timeline_fps)
+                        anchor.duration_frames = math.max(1, we - ws)
+                        anchor.source_duration_sec = anchor.duration_frames / timeline_fps
+                        anchor.duration_sec = anchor.source_duration_sec
+                        anchor.note = tostring(anchor.note or "") .. string.format(
+                            "\n合并证据: 同一最终可见短窗口且底层源时间重叠 %s-%s (%d帧) 也命中外部覆盖/叠加短段证据；标记已放到该短段第一帧，原源内证据帧为 %s。若同一短段内还有其他混剪源内证据，外部证据不会被折叠，避免不同镜头问题被合并。",
                             Analyzer.frame_to_timecode(ws, timeline_fps),
                             Analyzer.frame_to_timecode(last_frame, timeline_fps),
-                            we - ws
+                            we - ws,
+                            Analyzer.frame_to_timecode(original_frame, timeline_fps)
                         )
                     end
+                elseif #contained_specifics > 1 then
+                    skipped_ambiguous_overlay = skipped_ambiguous_overlay + 1
+                    table.insert(merged_records, r)
                 else
                     table.insert(merged_records, r)
                 end
@@ -5054,7 +5114,9 @@ function Main()
         end
         if merged_overlay_evidence > 0 then
             print(string.format("[BFD] 最终可见短段证据合并: 合并 %d 条外部覆盖/叠加重复证据", merged_overlay_evidence))
-            dlog("阶段9: 最终可见短段证据合并 merged_overlay_evidence=" .. tostring(merged_overlay_evidence))
+            dlog("阶段9: 最终可见短段证据合并 merged_overlay_evidence="
+                .. tostring(merged_overlay_evidence)
+                .. " skipped_ambiguous=" .. tostring(skipped_ambiguous_overlay))
             selected_records = merged_records
         end
     end
