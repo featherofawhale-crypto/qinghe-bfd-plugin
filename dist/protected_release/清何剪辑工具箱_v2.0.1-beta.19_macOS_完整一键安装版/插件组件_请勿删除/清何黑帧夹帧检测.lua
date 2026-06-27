@@ -705,7 +705,10 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         params.detect_mixed_cut == true
         or params.enable_timeline_mixed_cut == true
     )
-    local implicit_internal_flash = false
+    local implicit_internal_flash = (not explicit_mixed_cut)
+        and params
+        and params.marker_types
+        and params.marker_types.error == true
     local mixed_cut_enabled = explicit_mixed_cut or implicit_internal_flash
     if not mixed_cut_enabled then
         return records
@@ -1900,7 +1903,7 @@ function Main()
         end
 
         for _, effect in ipairs(adjustment_effects or {}) do
-            if transform_has_border_risk(effect.transform or {}) then
+            if adjustment_transform_active(effect.transform or {}) then
                 return true
             end
         end
@@ -3202,7 +3205,10 @@ function Main()
                 return "复合/Fusion外部覆盖边界，普通镜头短暂露出"
             end
             if same_file_pair(exposed_clip, cover_clip) then
-                -- 同源上层覆盖边界只说明源窗口不连续，不能单独作为夹帧结论。
+                local jump = tonumber(source_jump or 0) or 0
+                if jump > math.max(tonumber(params.stuck_frames or 0) or 0, 3) then
+                    return default_reason .. "，源帧跳跃" .. tostring(math.floor(jump + 0.5)) .. "帧"
+                end
                 return nil
             end
             if is_regular_visible_video(exposed_clip) and is_regular_visible_video(cover_clip) then
