@@ -663,15 +663,15 @@ local function append_unique_number(list, value, fps)
 end
 
 local function source_fps_for_clip(ffmpeg, clip, timeline_fps)
-    if clip and tonumber(clip.source_fps) and tonumber(clip.source_fps) > 0 then
-        return tonumber(clip.source_fps)
-    end
     if ffmpeg and clip and clip.file_path and clip.file_path ~= "" then
         local ok, info = pcall(function() return ffmpeg:get_video_info(clip.file_path) end)
         if ok and info and tonumber(info.fps) and tonumber(info.fps) > 0 then
             clip.source_fps = tonumber(info.fps)
             return clip.source_fps
         end
+    end
+    if clip and tonumber(clip.source_fps) and tonumber(clip.source_fps) > 0 then
+        return tonumber(clip.source_fps)
     end
     return timeline_fps
 end
@@ -3204,6 +3204,10 @@ function Main()
             end
             if same_file_pair(exposed_clip, cover_clip) then
                 local jump = tonumber(source_jump or 0) or 0
+                local max_jump = tonumber(params.mixed_cut_overlay_max_source_jump or 600) or 600
+                if jump > max_jump then
+                    return nil
+                end
                 if jump > math.max(tonumber(params.stuck_frames or 0) or 0, 3) then
                     return default_reason .. "，源帧跳跃" .. tostring(math.floor(jump + 0.5)) .. "帧"
                 end
@@ -3313,6 +3317,105 @@ function Main()
             end
             return nil
         end
+        local source_scene_near_cache = {}
+        local function source_scene_cut_near_boundary(edge_frame, clip, max_frames)
+            if not clip or clip.media_type == "nested" or clip.media_type == "adjustment_layer" then return nil end
+            if clip.is_enabled == false or (clip.opacity or 100) <= 0 then return nil end
+            if not clip.file_path or clip.file_path == "" then return nil end
+
+            local clip_start = tonumber(clip.timeline_start_frame or 0) or 0
+            local clip_dur = tonumber(clip.source_duration_frames or 0) or 0
+            local clip_end = clip_start + clip_dur
+            if edge_frame < clip_start or edge_frame >= clip_end then return nil end
+
+            local ffmpeg = get_boundary_scene_ffmpeg()
+            if not ffmpeg or not ffmpeg.ffmpeg_path then return nil end
+
+            local source_fps = source_fps_for_clip(ffmpeg, clip, timeline_fps)
+            local source_frame = (tonumber(clip.left_offset or 0) or 0) + (edge_frame - clip_start)
+            if source_frame < 0 or source_fps <= 0 then return nil end
+
+            local tolerance_frames = math.max((tonumber(max_frames) or 1) + 3, 12)
+            local start_frame = math.max(0, source_frame - tolerance_frames)
+            local window_frames = tolerance_frames * 2 + 1
+            local threshold = tonumber(params.mixed_cut_overlay_scene_threshold
+                or params.mixed_cut_scene_threshold
+                or 0.04) or 0.04
+            local key = table.concat({
+                tostring(clip.file_path),
+                tostring(math.floor(start_frame + 0.5)),
+                tostring(window_frames),
+                string.format("%.3f", threshold),
+            }, "|")
+            if source_scene_near_cache[key] ~= nil then
+                local cached = source_scene_near_cache[key]
+                if cached then
+                    return cached.distance, cached.score
+                end
+                return nil
+            end
+
+            local prefix = ""
+            if ffmpeg._bundled_lib_dir then
+                prefix = 'DYLD_LIBRARY_PATH="' .. ffmpeg._bundled_lib_dir .. '" '
+            end
+            local filter = string.format("select='gt(scene\\,%.3f)',metadata=print", threshold)
+            local cmd = string.format(
+                '%s%s -timelimit %d -ss %.6f -t %.6f -i %s -vf "%s" -an -f null - 2>&1',
+                prefix,
+                ffmpeg:_quote_path(ffmpeg.ffmpeg_path),
+                tonumber(params.nested_boundary_probe_timeout or 8) or 8,
+                start_frame / source_fps,
+                window_frames / source_fps,
+                ffmpeg:_quote_path(clip.file_path),
+                filter
+            )
+            local best_distance, best_score = nil, nil
+            local handle = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
+            if handle then
+                local last_distance = nil
+                local start_time = os.time()
+                for line in handle:lines() do
+                    local t = line:match("pts_time:([%d%.%-]+)")
+                    if t then
+                        local rel = tonumber(t)
+                        if rel then
+                            local cut_frame = start_frame + math.floor(rel * source_fps + 0.5)
+                            local distance = math.abs(cut_frame - source_frame)
+                            if distance <= tolerance_frames and (not best_distance or distance < best_distance) then
+                                best_distance = distance
+                                last_distance = distance
+                            else
+                                last_distance = nil
+                            end
+                        end
+                    end
+                    local score = line:match("lavfi%.scene_score=([%d%.%-]+)") or line:match("scene_score[:=]([%d%.%-]+)")
+                    if score and last_distance and last_distance == best_distance then
+                        best_score = tonumber(score) or best_score
+                    end
+                    if os.time() - start_time > (tonumber(params.nested_boundary_probe_timeout or 8) or 8) * 3 then
+                        break
+                    end
+                end
+                pcall(function() handle:close() end)
+            end
+
+            if best_distance then
+                dlog(string.format(
+                    "覆盖边界源内切点确认: edge=%d source_frame=%d distance=%d score=%.3f fps=%.3f",
+                    edge_frame,
+                    math.floor(source_frame + 0.5),
+                    best_distance,
+                    tonumber(best_score or 0) or 0,
+                    source_fps
+                ))
+                source_scene_near_cache[key] = { distance = best_distance, score = best_score or 0 }
+                return best_distance, best_score or 0
+            end
+            source_scene_near_cache[key] = false
+            return nil
+        end
         local function add_overlay_boundary_record(frame, lower_clip, upper_clip, reason, duration_frames)
             if frame == nil or frame < 0 or boundary_seen[frame] then return end
             if has_io_range and (frame < io_in or frame >= io_out) then return end
@@ -3388,6 +3491,17 @@ function Main()
                             local exposure_frames, exposure_start = visible_run_before(edge, top_before, stuck_frames)
                             if exposure_frames > 0 and exposure_frames <= stuck_frames then
                                 add_overlay_boundary_record(exposure_start, top_before, upper, reason, exposure_frames)
+                            else
+                                local distance, score = source_scene_cut_near_boundary(before, top_before, stuck_frames)
+                                if distance then
+                                    add_overlay_boundary_record(
+                                        before,
+                                        top_before,
+                                        upper,
+                                        reason .. "，下层露出帧附近源内切点±" .. tostring(distance) .. "帧",
+                                        1
+                                    )
+                                end
                             end
                         else
                             local mark_frame = before
@@ -3427,6 +3541,17 @@ function Main()
                             local exposure_frames, exposure_start = visible_run_after(after_end, top_after_end, stuck_frames)
                             if exposure_frames > 0 and exposure_frames <= stuck_frames then
                                 add_overlay_boundary_record(exposure_start, top_after_end, upper, reason, exposure_frames)
+                            else
+                                local distance, score = source_scene_cut_near_boundary(after_end, top_after_end, stuck_frames)
+                                if distance then
+                                    add_overlay_boundary_record(
+                                        after_end,
+                                        top_after_end,
+                                        upper,
+                                        reason .. "，下层露出帧附近源内切点±" .. tostring(distance) .. "帧",
+                                        1
+                                    )
+                                end
                             end
 	                        else
 	                            local source_short_frames = nil
@@ -4143,6 +4268,54 @@ function Main()
         dlog("阶段6(逐文件): FFmpeg分析, " .. #ffmpeg_unique_files .. " 个唯一源文件")
         print(string.format("[BFD] 开始分析 %d 个唯一源文件（已过滤低透明度素材）...", #ffmpeg_unique_files))
         local file_count = 0
+        local source_black_confirm_cache = {}
+        local function source_frame_is_black(file_path, source_frame, source_fps)
+            if not ffmpeg or not ffmpeg.ffmpeg_path or not file_path or file_path == "" then return true end
+            source_fps = tonumber(source_fps or 0) or 0
+            if source_fps <= 0 then return true end
+            local frame_index = math.max(0, math.floor(tonumber(source_frame or 0) or 0))
+            local key = table.concat({ tostring(file_path), tostring(frame_index), string.format("%.3f", source_fps) }, "|")
+            if source_black_confirm_cache[key] ~= nil then
+                return source_black_confirm_cache[key]
+            end
+
+            local amount = math.max(1, math.min(100, math.floor(((tonumber(params.pic_th or 0.95) or 0.95) * 100) + 0.5)))
+            local threshold = tonumber(params.black_confirm_threshold or 32) or 32
+            local filter = string.format("blackframe=amount=%d:threshold=%d", amount, threshold)
+            local prefix = ""
+            if ffmpeg._bundled_lib_dir then
+                prefix = 'DYLD_LIBRARY_PATH="' .. ffmpeg._bundled_lib_dir .. '" '
+            end
+            local cmd = string.format(
+                '%s%s -timelimit %d -i %s -ss %.6f -frames:v 1 -vf "%s" -an -f null - 2>&1',
+                prefix,
+                ffmpeg:_quote_path(ffmpeg.ffmpeg_path),
+                tonumber(params.black_confirm_timeout or 6) or 6,
+                ffmpeg:_quote_path(file_path),
+                frame_index / source_fps,
+                filter
+            )
+            local confirmed = false
+            local handle = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
+            if handle then
+                local start_time = os.time()
+                for line in handle:lines() do
+                    local pblack = line:match("pblack:%s*([%d%.]+)") or line:match("pblack:([%d%.]+)")
+                    if pblack and (tonumber(pblack) or 0) >= amount then
+                        confirmed = true
+                        break
+                    end
+                    if os.time() - start_time > (tonumber(params.black_confirm_timeout or 6) or 6) * 3 then
+                        break
+                    end
+                end
+                pcall(function() handle:close() end)
+            else
+                confirmed = true
+            end
+            source_black_confirm_cache[key] = confirmed
+            return confirmed
+        end
 
         for file_path, file_clips in pairs(ffmpeg_file_dedup) do
             file_count = file_count + 1
@@ -4209,15 +4382,24 @@ function Main()
                                 if overlap_end > overlap_start then
                                     local clipped_source_start = lo + (overlap_start - clip_start_frame)
                                     local clipped_source_end = lo + (overlap_end - clip_start_frame)
-                                    table.insert(clip_segments, {
-                                        start = clipped_source_start / clip_source_fps,
-                                        end_ = clipped_source_end / clip_source_fps,
-                                        duration = (overlap_end - overlap_start) / timeline_fps,
-                                        duration_frames = math.max(1, overlap_end - overlap_start),
-                                        source_fps = clip_source_fps,
-                                        timeline_frame = overlap_start,
-                                        timeline_end_frame = overlap_end,
-                                    })
+                                    if source_frame_is_black(clip.file_path, clipped_source_start, clip_source_fps) then
+                                        table.insert(clip_segments, {
+                                            start = clipped_source_start / clip_source_fps,
+                                            end_ = clipped_source_end / clip_source_fps,
+                                            duration = (overlap_end - overlap_start) / timeline_fps,
+                                            duration_frames = math.max(1, overlap_end - overlap_start),
+                                            source_fps = clip_source_fps,
+                                            timeline_frame = overlap_start,
+                                            timeline_end_frame = overlap_end,
+                                        })
+                                    else
+                                        dlog(string.format(
+                                            "逐文件黑帧回填跳过: %s tl=%d source_frame=%d 非黑帧确认",
+                                            tostring(clip.name or clip.file_path),
+                                            overlap_start,
+                                            math.floor(clipped_source_start + 0.5)
+                                        ))
+                                    end
                                 end
                             end
                         end
