@@ -327,12 +327,14 @@ function Analyzer.generate_note(segment, clip_info, timeline_fps, params, durati
         if segment.scene_score then
             table.insert(parts, string.format("scene score: %.3f", segment.scene_score))
         end
-        if segment.edge_visible then
+        if segment.final_visible_fragment then
+            table.insert(parts, "位置: 源内镜头段与最终可见区间相交后只露出极短帧数")
+        elseif segment.edge_visible then
             table.insert(parts, "位置: 源内切点靠近时间线实际可见窗口边界")
         elseif segment.single_scene_candidate then
             table.insert(parts, "位置: 源内高强度场景切点，未依赖时间线切刀")
         end
-        table.insert(parts, "判定: 时间线上可见镜头内部存在极短源内切点，疑似混剪漏帧/夹帧")
+        table.insert(parts, "判定: 以最终时间线实际露出的画面帧数为准；源内切点只用于拆分混剪成片镜头段。")
         return table.concat(parts, "\n")
     end
 
@@ -347,11 +349,12 @@ function Analyzer.generate_note(segment, clip_info, timeline_fps, params, durati
     end
 
     if timeline_fps then
+        local source_fps = segment.source_fps or timeline_fps
         local src_tc_start = Analyzer.frame_to_timecode(
-            math.floor(segment.start * timeline_fps), timeline_fps
+            math.floor(segment.start * source_fps), source_fps
         )
         local src_tc_end = Analyzer.frame_to_timecode(
-            math.floor(segment.end_ * timeline_fps), timeline_fps
+            math.floor(segment.end_ * source_fps), source_fps
         )
         table.insert(parts, string.format("片段内: %s - %s", src_tc_start, src_tc_end))
     end
@@ -425,7 +428,8 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
             )
             if segment.timeline_frame then
                 frames.start_frame = segment.timeline_frame
-                frames.end_frame = segment.timeline_frame + math.max(1, math.floor(segment.duration * timeline_fps + 0.5))
+                frames.end_frame = segment.timeline_end_frame
+                    or (segment.timeline_frame + math.max(1, math.floor(segment.duration * timeline_fps + 0.5)))
             end
             if results.summary.total_segments <= 3 then
                 dlog(string.format(
@@ -446,7 +450,7 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
             end
 
             -- 计算精确帧数
-            local duration_frames = math.floor(segment.duration * timeline_fps)
+            local duration_frames = segment.duration_frames or math.floor(segment.duration * timeline_fps)
 
             local record = {
                 classification = classification,
@@ -464,6 +468,8 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
                 source_start_sec = segment.start,
                 source_duration_sec = segment.duration,
                 duration_frames = duration_frames,
+                visual_window_start_frame = segment.visual_window_start_frame,
+                visual_window_end_frame = segment.visual_window_end_frame,
 
                 note = segment.force_note or Analyzer.generate_note(segment, {
                     source_file = clip.file_path,
@@ -494,40 +500,66 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
         end
     end
 
-    if #results.suspects > 1 then
-        table.sort(results.suspects, function(a, b)
+    local function merge_adjacent_black_records(list)
+        if #list <= 1 then return list end
+        table.sort(list, function(a, b)
             return (a.timeline_start_frame or 0) < (b.timeline_start_frame or 0)
         end)
-        local merged_suspects = {}
-        for _, record in ipairs(results.suspects) do
-            local is_black = tostring(record.marker_name or ""):find("可疑黑帧", 1, true) ~= nil
-            local prev = merged_suspects[#merged_suspects]
-            if is_black and prev then
-                local same_source = tostring(prev.source_file or "") == tostring(record.source_file or "")
+        local merged = {}
+        for _, record in ipairs(list) do
+            local note = tostring(record.note or "")
+            local is_black_record = note:find("黑帧:", 1, true) ~= nil
+                and not (record.segment and record.segment.is_mixed_cut)
+            local prev = merged[#merged]
+            local prev_note = prev and tostring(prev.note or "") or ""
+            local prev_is_black = prev_note:find("黑帧:", 1, true) ~= nil
+                and not (prev and prev.segment and prev.segment.is_mixed_cut)
+            local record_is_concat = record.segment and record.segment.concat_black == true
+            local prev_is_concat = prev and prev.segment and prev.segment.concat_black == true
+            if is_black_record and prev and prev_is_black
+                and tostring(prev.source_file or "") == tostring(record.source_file or "")
+                and (tonumber(record.timeline_start_frame or 0) or 0) <= (tonumber(prev.timeline_end_frame or 0) or 0) + 1
+            then
+                local cur_end = tonumber(record.timeline_end_frame or record.timeline_start_frame or 0) or 0
                 local prev_end = tonumber(prev.timeline_end_frame or prev.timeline_start_frame or 0) or 0
-                local cur_start = tonumber(record.timeline_start_frame or 0) or 0
-                local overlaps_or_touches = cur_start <= prev_end + 1
-                if same_source and overlaps_or_touches then
-                    local cur_end = tonumber(record.timeline_end_frame or cur_start) or cur_start
+                if prev_is_concat and record_is_concat
+                    and (tonumber(record.duration_frames or 0) or 0) > (tonumber(prev.duration_frames or 0) or 0)
+                then
+                    local merged_end = math.max(prev_end, cur_end)
+                    merged[#merged] = record
+                    prev = record
+                    prev.timeline_end_frame = merged_end
+                    prev.timeline_end_tc = Analyzer.frame_to_timecode(merged_end, timeline_fps)
+                elseif prev_is_concat and not record_is_concat then
+                    local merged_end = math.max(prev_end, cur_end)
+                    merged[#merged] = record
+                    prev = record
+                    prev.timeline_end_frame = merged_end
+                    prev.timeline_end_tc = Analyzer.frame_to_timecode(merged_end, timeline_fps)
+                else
                     if cur_end > prev_end then
                         prev.timeline_end_frame = cur_end
                         prev.timeline_end_tc = Analyzer.frame_to_timecode(cur_end, timeline_fps)
                     end
-                    if not tostring(prev.note or ""):find("连续黑场重复检测已合并", 1, true) then
-                        prev.note = tostring(prev.note or "")
-                            .. "\n连续黑场重复检测已合并，重叠/相邻黑场不再单独打点。"
-                    end
-                    goto continue_suspect_merge
                 end
+                local prev_start = tonumber(prev.timeline_start_frame or 0) or 0
+                prev.duration_frames = math.max(1, (tonumber(prev.timeline_end_frame or prev_start) or prev_start) - prev_start)
+                prev.source_duration_sec = math.max(tonumber(prev.source_duration_sec or 0) or 0, prev.duration_frames / timeline_fps)
+                if not tostring(prev.note or ""):find("连续黑场重复检测已合并", 1, true) then
+                    prev.note = tostring(prev.note or "")
+                        .. "\n连续黑场重复检测已合并，重叠/相邻黑场不再单独打点。"
+                end
+            else
+                table.insert(merged, record)
             end
-            table.insert(merged_suspects, record)
-            ::continue_suspect_merge::
         end
-        if #merged_suspects ~= #results.suspects then
-            results.suspects = merged_suspects
-            results.summary.suspect_count = #merged_suspects
-        end
+        return merged
     end
+
+    results.errors = merge_adjacent_black_records(results.errors)
+    results.suspects = merge_adjacent_black_records(results.suspects)
+    results.summary.error_count = #results.errors
+    results.summary.suspect_count = #results.suspects
 
     -- ============================================================
     -- 扫描时间线空白区域（按区间时长分级标记）
@@ -568,18 +600,13 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
             end
             if already_covered then goto continue_gap end
 
-            -- 区分：极短空隙(会形成黑帧错误) / 小空白(空位提示) / 大空白(信息)
+            -- 区分：小空白(可疑) vs 大空白(信息)
             local is_small_gap = (dur_sec <= max_mark_sec)
-            local gap_frames = gr.end_frame - gr.start_frame
-            local stuck_frames = params.stuck_frames or config.CLASSIFICATION.STUCK_FRAMES
-            local is_error_gap = is_small_gap and gap_frames > 0 and gap_frames <= stuck_frames
 
             local gap_record = {
-                classification = is_error_gap and "error" or (is_small_gap and "gap" or "gap_large"),
-                marker_color = is_error_gap and config.MARKER_COLORS.ERROR
-                    or (is_small_gap and config.MARKER_COLORS.GAP or config.MARKER_COLORS.INFO),
-                marker_name = is_error_gap and "[BFD-ERR] 空隙黑帧"
-                    or (is_small_gap and "[BFD-GAP] 时间线空位" or "[BFD-GAP] 时间线空白区域"),
+                classification = is_small_gap and "gap" or "gap_large",
+                marker_color = is_small_gap and config.MARKER_COLORS.GAP or config.MARKER_COLORS.INFO,
+                marker_name = is_small_gap and "[BFD-GAP] 时间线空位" or "[BFD-GAP] 时间线空白区域",
 
                 timeline_start_frame = gr.start_frame,
                 timeline_end_frame = gr.end_frame,
@@ -589,22 +616,16 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
                 source_file = nil,
                 source_start_sec = 0,
                 source_duration_sec = dur_sec,
-                duration_frames = gap_frames,
+                duration_frames = gr.end_frame - gr.start_frame,
 
-                note = is_error_gap
-                    and string.format("极短时间线空隙\n片段间隙: %.1f帧 (%.1fs)\n最终画面会露出黑帧，按夹帧/黑帧错误处理",
-                        gap_frames, dur_sec)
-                    or (is_small_gap
+                note = is_small_gap
                     and string.format("时间线空位\n片段间隙: %.1f帧 (%.1fs)\n可能是剪辑留下的空白",
-                        gap_frames, dur_sec)
+                        gr.end_frame - gr.start_frame, dur_sec)
                     or string.format("时间线空白区域\n片段间隙: %.1f帧 (%.1fs)\n较大空白，非夹帧问题",
-                        gap_frames, dur_sec)),
+                        gr.end_frame - gr.start_frame, dur_sec),
             }
 
-            if is_error_gap then
-                table.insert(results.errors, gap_record)
-                results.summary.error_count = results.summary.error_count + 1
-            elseif is_small_gap then
+            if is_small_gap then
                 table.insert(results.gaps, gap_record)
                 results.summary.gap_count = results.summary.gap_count + 1
             else
@@ -723,11 +744,11 @@ function Analyzer.is_fully_opaque(clip, overlay_config, threshold)
     overlay_config = overlay_config or config.OVERLAY_STUCK_DETECTION
     threshold = threshold or overlay_config.FULLY_OPAQUE_THRESHOLD or 95
     if clip.is_enabled == false then return false end
+    -- 调整图层改变下层画面的几何/颜色，但不是实际遮挡内容；可见性计算不能把它当不透明上层。
     if clip.media_type == "adjustment_layer" then return false end
-    -- 带通道图片/视频默认不视为完全遮挡（内容有透明区域）。
-    -- 用户可勾选"PNG/PSD视为不透明遮挡层"覆盖静态图片；带Alpha视频仍交给复杂模式看最终画面。
+    -- 带通道图片(PNG/PSD等)默认不视为完全遮挡（内容有透明区域）
+    -- 用户可勾选"PNG/PSD视为不透明遮挡层"覆盖此行为
     if clip.media_type == "alpha_image" and not overlay_config.png_as_opaque then return false end
-    if clip.media_type == "alpha_video" then return false end
     if (clip.opacity or 100) < threshold then return false end
     if not overlay_config.NON_NORMAL_AS_OPAQUE and (clip.composite_mode or 0) ~= 0 then return false end
     return true
@@ -740,7 +761,6 @@ function Analyzer.is_partially_opaque(clip, overlay_config)
     local partial_threshold = overlay_config.PARTIALLY_OPAQUE_THRESHOLD or 50
     if Analyzer.is_fully_opaque(clip, overlay_config, full_threshold) then return false end
     if clip.is_enabled == false then return false end
-    if clip.media_type == "adjustment_layer" then return false end
     if (clip.opacity or 100) < partial_threshold then return false end
     if not overlay_config.NON_NORMAL_AS_OPAQUE and (clip.composite_mode or 0) ~= 0 then return false end
     return true

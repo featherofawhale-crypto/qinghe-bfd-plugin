@@ -78,7 +78,7 @@ from resolve_bridge import (
 )
 
 
-APP_VERSION = "2.0.1-beta.19"
+APP_VERSION = "2.0.1-beta.20"
 APP_NAME = "清何剪辑工具箱"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 ANALYTICS_ENDPOINT_URL = "https://qinghe-bfd-analytics.featherofawhale.workers.dev/collect"
@@ -1345,20 +1345,26 @@ class SubmitWorker(QThread):
         messages: list[str] = []
         for index, params in enumerate(self.jobs, 1):
             timeline_name = str(params.get("timeline_name", f"时间线 {index}"))
+            timeline_index = int(params.get("timeline_index", 1) or 1)
             base = int(((index - 1) / max(1, total)) * 90)
             span = max(8, int(90 / max(1, total)))
             self.progress.emit(base + 8, f"准备 {timeline_name}")
             time.sleep(0.12)
-            params_path = self.bridge.submit_params(params)
-            job_id = str(params_path.stem).replace("params_", "", 1)
             self.progress.emit(base + 25, f"打开时间线：{timeline_name}")
             if self.bridge.is_connected():
-                ok, message = self.bridge.activate_timeline(int(params.get("timeline_index", 1)))
+                ok, message = self.bridge.activate_timeline(timeline_index)
                 if not ok:
                     self.done.emit(False, f"{timeline_name} 打开失败：{message}")
                     return
             else:
                 self.bridge.open_resolve_page()
+            if params.get("batch_read_io"):
+                io_ok, io_message = self.refresh_job_io(params, timeline_name, timeline_index, base, span)
+                if not io_ok:
+                    self.done.emit(False, io_message)
+                    return
+            params_path = self.bridge.submit_params(params)
+            job_id = str(params_path.stem).replace("params_", "", 1)
             self.progress.emit(base + 48, f"检测 {timeline_name}")
             ok, message = self.bridge.run_lua_entry_with_fuscript(params_path)
             if not ok:
@@ -1381,6 +1387,37 @@ class SubmitWorker(QThread):
             messages.append(f"{timeline_name}: {message or '已完成'}")
         self.progress.emit(100, "检测已提交")
         self.done.emit(True, "\n".join(messages) if messages else "检测已提交。")
+
+    def refresh_job_io(
+        self,
+        params: dict,
+        timeline_name: str,
+        timeline_index: int,
+        base: int,
+        span: int,
+    ) -> tuple[bool, str]:
+        self.progress.emit(min(99, base + max(1, int(span * 0.32))), f"读取IO：{timeline_name}")
+        result = self.bridge.current_timeline_marks(timeline_index)
+        if not result.get("ok"):
+            params["manual_io_in"] = ""
+            params["manual_io_out"] = ""
+            message = str(result.get("message", "未读取到入出点。") or "未读取到入出点。")
+            if params.get("complex_mode"):
+                return False, f"{timeline_name} 读取IO失败：{message}"
+            params["io_source"] = "none"
+            return True, message
+        params["manual_io_in"] = str(result.get("in_tc", "") or "")
+        params["manual_io_out"] = str(result.get("out_tc", "") or "")
+        params["io_source"] = str(result.get("source", "timeline_marks") or "timeline_marks")
+        try:
+            params["timeline_fps"] = float(result.get("fps") or params.get("timeline_fps") or 25.0)
+        except Exception:
+            pass
+        if not params["manual_io_in"] or not params["manual_io_out"]:
+            if params.get("complex_mode"):
+                return False, f"{timeline_name} 读取IO失败：Resolve 未返回完整入出点。"
+            params["io_source"] = "none"
+        return True, "已读取IO"
 
     def wait_for_job_completion(
         self,
@@ -3950,6 +3987,7 @@ class MainWindow(QMainWindow):
             "content_sample_interval": self.content_sample_interval.value(),
             "manual_io_in": self.io_in.text().strip(),
             "manual_io_out": self.io_out.text().strip(),
+            "batch_read_io": False,
             "complex_cache_dir": self.complex_cache_dir.text().strip() or str(default_complex_cache_dir()),
             "keep_complex_cache": self.chk_keep_complex_cache.isChecked(),
             "imported_complex_render_path": imported_render,
@@ -3990,20 +4028,10 @@ class MainWindow(QMainWindow):
         for selected in self.selected_batch_timelines():
             job = self.collect_params(selected)
             if use_per_timeline_io:
-                result = self.bridge.current_timeline_marks(int(selected.get("index", 1)))
-                if result.get("ok"):
-                    job["manual_io_in"] = str(result.get("in_tc", "") or "")
-                    job["manual_io_out"] = str(result.get("out_tc", "") or "")
-                    job["io_source"] = str(result.get("source", "timeline_marks") or "timeline_marks")
-                    self._log(
-                        f"批量IO：{selected.get('name', '时间线')} -> "
-                        f"{job['manual_io_in']} - {job['manual_io_out']} ({job['io_source']})"
-                    )
-                else:
-                    self._log(
-                        f"批量IO：{selected.get('name', '时间线')} 读取失败，回退手动范围："
-                        f"{result.get('message', '未读取到入出点。')}"
-                    )
+                job["batch_read_io"] = True
+                job["manual_io_in"] = ""
+                job["manual_io_out"] = ""
+                job["io_source"] = "pending_after_activate"
             jobs.append(job)
         return jobs
 
@@ -4211,7 +4239,12 @@ class MainWindow(QMainWindow):
                 return
             if self.prompt_complex_mode_for_risky_timelines(jobs):
                 return
-            if any(job["complex_mode"] and (not job["manual_io_in"] or not job["manual_io_out"]) for job in jobs):
+            if any(
+                job["complex_mode"]
+                and not job.get("batch_read_io")
+                and (not job["manual_io_in"] or not job["manual_io_out"])
+                for job in jobs
+            ):
                 QMessageBox.warning(self, "复杂模式需要入出点", "复杂模式会先渲染检测范围，请填写手动入点和出点。")
                 return
 
@@ -4282,7 +4315,9 @@ class MainWindow(QMainWindow):
             self._log("用户取消画面黑边最终画面检测。")
             return True
         if any(
-            job.get("black_border_forces_complex") and (not job.get("manual_io_in") or not job.get("manual_io_out"))
+            job.get("black_border_forces_complex")
+            and not job.get("batch_read_io")
+            and (not job.get("manual_io_in") or not job.get("manual_io_out"))
             for job in jobs
         ):
             self.fill_in_out_from_current_timeline_marks()
@@ -4290,6 +4325,8 @@ class MainWindow(QMainWindow):
             if job.get("black_border_forces_complex"):
                 job["complex_mode"] = True
                 job["render_nested_segments"] = False
+                if job.get("batch_read_io"):
+                    continue
                 if not job.get("manual_io_in"):
                     job["manual_io_in"] = self.io_in.text().strip()
                 if not job.get("manual_io_out"):
@@ -4350,13 +4387,14 @@ class MainWindow(QMainWindow):
             )
             if answer == QMessageBox.Yes or answer is True:
                 if risk_kind == "complex":
-                    self.fill_in_out_from_current_timeline_marks()
                     job["complex_mode"] = True
                     job["render_nested_segments"] = False
                     job["detect_content_dup"] = self.chk_content_dup.isChecked()
                     job["detect_corrupt"] = self.chk_corrupt.isChecked()
-                    job["manual_io_in"] = self.io_in.text().strip()
-                    job["manual_io_out"] = self.io_out.text().strip()
+                    if not job.get("batch_read_io"):
+                        self.fill_in_out_from_current_timeline_marks()
+                        job["manual_io_in"] = self.io_in.text().strip()
+                        job["manual_io_out"] = self.io_out.text().strip()
                     self._log("本次检测临时启用复杂模式；高级选项里的复杂模式不会被永久勾选。")
                 else:
                     job["render_nested_segments"] = True

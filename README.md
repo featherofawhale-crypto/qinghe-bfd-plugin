@@ -18,7 +18,7 @@ https://featherofawhale-crypto.github.io/qinghe-bfd-plugin/
 
 请到右侧或下方的 GitHub Release 下载：
 
-- `qinghe-toolbox-v2.0.1-beta.19-macos.dmg`
+- `qinghe-toolbox-v2.0.1-beta.20-macos.dmg`
 
 Release 地址：
 
@@ -28,7 +28,7 @@ https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest
 
 ## 一键安装方法
 
-1. 下载并双击打开 `qinghe-toolbox-v2.0.1-beta.19-macos.dmg`。
+1. 下载并双击打开 `qinghe-toolbox-v2.0.1-beta.20-macos.dmg`。
 2. 在打开的窗口里，右键点击 `① 一键安装.command`。
 3. 选择“打开”，按提示完成安装。
 4. 重启 DaVinci Resolve。

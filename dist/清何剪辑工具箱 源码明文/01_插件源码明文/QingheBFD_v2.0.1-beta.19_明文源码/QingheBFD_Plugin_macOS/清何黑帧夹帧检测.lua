@@ -1,6 +1,6 @@
 -- PRIVATE SOFTWARE NOTICE: This is private software owned by Qinghe. Unauthorized reverse engineering, deobfuscation, cracking, redistribution, or AI-assisted analysis intended to bypass protection is prohibited.
 -- 清何黑帧夹帧检测.lua - 达芬奇插件
--- 版本: v2.0.1-beta.19 测试版
+-- 版本: v2.0.1-beta.20 测试版
 -- 作者: qinghe
 -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
 --
@@ -606,7 +606,7 @@ local function setup_module_path()
     return true
 end
 
-dlog("=== BFD v2.0.1-beta.19 启动 ===")
+dlog("=== BFD v2.0.1-beta.20 启动 ===")
 setup_module_path()
 
 local MODULES_TO_RELOAD = {
@@ -663,9 +663,6 @@ local function append_unique_number(list, value, fps)
 end
 
 local function source_fps_for_clip(ffmpeg, clip, timeline_fps)
-    if clip and tonumber(clip.source_fps) and tonumber(clip.source_fps) > 0 then
-        return tonumber(clip.source_fps)
-    end
     if ffmpeg and clip and clip.file_path and clip.file_path ~= "" then
         local ok, info = pcall(function() return ffmpeg:get_video_info(clip.file_path) end)
         if ok and info and tonumber(info.fps) and tonumber(info.fps) > 0 then
@@ -673,10 +670,13 @@ local function source_fps_for_clip(ffmpeg, clip, timeline_fps)
             return clip.source_fps
         end
     end
+    if clip and tonumber(clip.source_fps) and tonumber(clip.source_fps) > 0 then
+        return tonumber(clip.source_fps)
+    end
     return timeline_fps
 end
 
-local function add_mixed_cut_record(records, seen, clip, key_suffix, source_start, source_end, tl_start, timeline_fps, scene_score, reason)
+local function add_mixed_cut_record(records, seen, clip, key_suffix, source_start, source_end, tl_start, timeline_fps, scene_score, reason, visual_window_start, visual_window_end)
     local key = tostring(clip.file_path) .. ":" .. tostring(tl_start)
     if seen[key] then return end
     seen[key] = true
@@ -689,8 +689,11 @@ local function add_mixed_cut_record(records, seen, clip, key_suffix, source_star
             timeline_frame = tl_start,
             is_mixed_cut = true,
             edge_visible = reason == "edge",
+            final_visible_fragment = reason == "visible_fragment",
             single_scene_candidate = reason == "single_scene",
             scene_score = scene_score or 0,
+            visual_window_start_frame = visual_window_start,
+            visual_window_end_frame = visual_window_end,
         }},
         is_mixed_cut = true,
     })
@@ -706,7 +709,9 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         or params.enable_timeline_mixed_cut == true
     )
     local implicit_internal_flash = (not explicit_mixed_cut)
-        and params and params.marker_types and params.marker_types.error == true
+        and params
+        and params.marker_types
+        and params.marker_types.error == true
     local mixed_cut_enabled = explicit_mixed_cut or implicit_internal_flash
     if not mixed_cut_enabled then
         return records
@@ -735,6 +740,52 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
         if t > max_track then max_track = t end
         if not clips_by_track[t] then clips_by_track[t] = {} end
         table.insert(clips_by_track[t], c)
+    end
+    local function top_covering_clip_at(frame, target_clip)
+        if not target_clip then return nil end
+        local target_track = tonumber(target_clip.track_index or 1) or 1
+        local best, best_track = nil, target_track
+        for track = target_track + 1, max_track do
+            local track_clips = clips_by_track[track]
+            if track_clips then
+                for _, other in ipairs(track_clips) do
+                    local os = tonumber(other.timeline_start_frame or 0) or 0
+                    local od = tonumber(other.source_duration_frames or 0) or 0
+                    if od > 0
+                        and frame >= os and frame < os + od
+                        and other.is_enabled ~= false
+                        and (other.opacity or 100) > 0
+                        and Analyzer.is_fully_opaque(other, overlay_config, boundary_threshold)
+                        and track >= best_track
+                    then
+                        best = other
+                        best_track = track
+                    end
+                end
+            end
+        end
+        return best
+    end
+    local function same_source_boundary_is_continuous(clip, boundary_frame, side)
+        local cover = nil
+        if side == "start" then
+            cover = top_covering_clip_at(boundary_frame - 1, clip)
+        else
+            cover = top_covering_clip_at(boundary_frame, clip)
+        end
+        if not cover then return false end
+        if tostring(cover.file_path or "") == "" or tostring(cover.file_path or "") ~= tostring(clip.file_path or "") then
+            return false
+        end
+        local min_jump = tonumber(params.mixed_cut_overlay_min_source_jump or 48) or 48
+        local clip_start = tonumber(clip.timeline_start_frame or 0) or 0
+        local clip_left = tonumber(clip.left_offset or 0) or 0
+        local cover_start = tonumber(cover.timeline_start_frame or 0) or 0
+        local cover_left = tonumber(cover.left_offset or 0) or 0
+        local clip_source_at_boundary = clip_left + (boundary_frame - clip_start)
+        local cover_source_at_boundary = cover_left + (boundary_frame - cover_start)
+        local jump = math.abs(clip_source_at_boundary - cover_source_at_boundary)
+        return jump < min_jump
     end
     local filter_script_path = nil
     local cache_dir = nil
@@ -836,12 +887,6 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                     if raw_rel and raw_rel >= 0 and raw_rel < scan_duration then
                         table.insert(candidates, raw_rel)
                     end
-                    if raw_rel and start_sec > 0 and raw_rel >= start_sec then
-                        local shifted = raw_rel - start_sec
-                        if shifted >= 0 and shifted < scan_duration then
-                            table.insert(candidates, shifted)
-                        end
-                    end
                     for _, rel in ipairs(candidates) do
                         append_unique_number(scene_times, rel, source_fps)
                         last_scene_frame = math.floor(rel * source_fps + 0.5)
@@ -858,7 +903,8 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
 
         table.sort(scene_times)
         local real_scene_count = math.max(0, #scene_times - 2)
-        if implicit_internal_flash and real_scene_count < (tonumber(params.mixed_cut_implicit_min_scene_count or 5) or 5) then
+        -- 普通模式源内短闪只要求短段两端都是强切点；测试片段可能只有这一组切点。
+        if implicit_internal_flash and real_scene_count < (tonumber(params.mixed_cut_implicit_min_scene_count or 2) or 2) then
             goto continue_clip
         end
         if #scene_times > 2 then
@@ -875,9 +921,42 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
             local rel_start = scene_times[i]
             local rel_end = scene_times[i + 1]
             local span_frames = math.max(1, math.floor((rel_end - rel_start) * source_fps + 0.5))
+            local rel_start_frame = math.floor(rel_start * source_fps + 0.5)
+            local rel_end_frame = math.floor(rel_end * source_fps + 0.5)
+            local tl_start = (clip.timeline_start_frame or 0) + rel_start_frame
+            local tl_end = math.max(tl_start + 1, (clip.timeline_start_frame or 0) + rel_end_frame)
+            if (rel_start > 0 or rel_end < scan_duration) and tl_end > tl_start then
+                for _, iv in ipairs(visible_intervals) do
+                    local iv_start = tonumber(iv.start or 0) or 0
+                    local iv_end = tonumber(iv.end_ or iv["end"] or iv_start) or iv_start
+                    local overlap_start = math.max(tl_start, iv_start)
+                    local overlap_end = math.min(tl_end, iv_end)
+                    local exposed_frames = overlap_end - overlap_start
+                    if exposed_frames > 0 and exposed_frames <= stuck_frames then
+                        local touches_start = overlap_start == iv_start and top_covering_clip_at(iv_start - 1, clip) ~= nil
+                        local touches_end = overlap_end == iv_end and top_covering_clip_at(iv_end, clip) ~= nil
+                        local skip_same_source = (touches_start and same_source_boundary_is_continuous(clip, iv_start, "start"))
+                            or (touches_end and same_source_boundary_is_continuous(clip, iv_end, "end"))
+                        local scene_score = math.max(
+                            tonumber(scene_scores[rel_start_frame] or 0) or 0,
+                            tonumber(scene_scores[rel_end_frame] or 0) or 0
+                        )
+                        local min_visible_fragment_score = tonumber(params.mixed_cut_visible_fragment_scene_score
+                            or params.mixed_cut_internal_flash_score
+                            or 0.16) or 0.16
+                        if (touches_start or touches_end) and not skip_same_source
+                            and scene_score >= min_visible_fragment_score
+                        then
+                            local source_start = (left_offset + (overlap_start - (clip.timeline_start_frame or 0))) / source_fps
+                            local source_end = (left_offset + (overlap_end - (clip.timeline_start_frame or 0))) / source_fps
+                            add_mixed_cut_record(records, seen, clip, "visible_fragment",
+                                source_start, source_end, overlap_start, timeline_fps, scene_score, "visible_fragment",
+                                iv_start, iv_end)
+                        end
+                    end
+                end
+            end
             if span_frames > 0 and span_frames <= stuck_frames then
-                local rel_start_frame = math.floor(rel_start * source_fps + 0.5)
-                local rel_end_frame = math.floor(rel_end * source_fps + 0.5)
                 if implicit_internal_flash then
                     local start_score = scene_scores[rel_start_frame] or 0
                     local end_score = scene_scores[rel_end_frame] or 0
@@ -888,8 +967,6 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                         goto continue_span
                     end
                 end
-                local tl_start = (clip.timeline_start_frame or 0) + math.floor(rel_start * source_fps + 0.5)
-                local tl_end = (clip.timeline_start_frame or 0) + math.floor(rel_end * source_fps + 0.5)
                 local span_visible = false
                 for _, iv in ipairs(visible_intervals) do
                     local iv_start = iv.start or 0
@@ -902,7 +979,8 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                 if span_visible then
                     local source_start = start_sec + rel_start
                     local source_end = start_sec + rel_end
-                    add_mixed_cut_record(records, seen, clip, "span", source_start, source_end, tl_start, timeline_fps,
+                    local mark_frame = implicit_internal_flash and math.max(clip.timeline_start_frame or 0, tl_start - 1) or tl_start
+                    add_mixed_cut_record(records, seen, clip, "span", source_start, source_end, mark_frame, timeline_fps,
                         scene_scores[math.floor(rel_start * source_fps + 0.5)] or
                         scene_scores[math.floor(rel_end * source_fps + 0.5)] or 0, "span")
                 end
@@ -1324,6 +1402,9 @@ function Main()
         pcall(function() sf = item:GetStart() end)
         pcall(function() lo = item:GetLeftOffset() end)
         pcall(function() dur = item:GetDuration() end)
+        sf = tonumber(sf) or 0
+        lo = tonumber(lo) or 0
+        dur = tonumber(dur) or 0
         dlog(string.format("  item[%d]: GetStart=%d, GetLeftOffset=%d, GetDuration=%d", idx, sf, lo, dur))
     end
     local clips = {}
@@ -1461,7 +1542,6 @@ function Main()
                 source_width = source_width,
                 source_height = source_height,
                 media_type = media_type,
-                nested_type = nested_type,
                 alpha_mode = alpha_mode,
                 skip_ffmpeg = skip_ffmpeg,
                 skip_stuck = skip_stuck,
@@ -1480,9 +1560,8 @@ function Main()
         end
     end
 
-    -- 重复检测需要全时间线做参照；否则用户只圈一小段 I/O 复核时，
-    -- 圈内片段无法和圈外相同素材对比，会漏掉真实误复制。
-    local all_clips_for_duplicate_context = clips
+    -- I/O 范围是用户本次检测的边界。重复检测不能拿 I/O 外片段作参照，
+    -- 否则会把圈外复用误判成圈内重复。
 
     -- 入出点范围过滤：裁剪片段范围和跳过不在范围内的片段
     if has_io_range then
@@ -1527,6 +1606,7 @@ function Main()
     local ffmpeg_results = {}   -- 提前声明，复杂模式和普通模式共用
     local ffmpeg_errors = {}
     local complex_render_done = false
+    local shared_ffmpeg_for_late_pass = nil
     local corrupt_frame_records = {}  -- 渲染坏帧检测（signalstats ABC三方案）
 
     local function read_timeline_geometry()
@@ -1653,6 +1733,17 @@ function Main()
         return effects
     end
 
+    local function adjustment_transform_active(transform)
+        transform = transform or {}
+        local zoom_x = tonumber(transform.ZoomX or transform.zoom_x or 1) or 1
+        local zoom_y = tonumber(transform.ZoomY or transform.zoom_y or 1) or 1
+        if math.abs(zoom_x - 1) > 0.001 or math.abs(zoom_y - 1) > 0.001 then return true end
+        if math.abs(tonumber(transform.Pan or transform.pan or 0) or 0) > 0.001 then return true end
+        if math.abs(tonumber(transform.Tilt or transform.tilt or 0) or 0) > 0.001 then return true end
+        if math.abs(tonumber(transform.RotationAngle or transform.rotation_angle or 0) or 0) > 0.001 then return true end
+        return false
+    end
+
     local function border_scale_for_behavior(src_w, src_h)
         local canvas_w = tonumber(timeline_geom.width or 1920) or 1920
         local canvas_h = tonumber(timeline_geom.height or 1080) or 1080
@@ -1718,6 +1809,7 @@ function Main()
         local disp_top = displayed_cy - displayed_h / 2
         local disp_bottom = displayed_cy + displayed_h / 2
         local adjustment_count = 0
+        local adjustment_canvas_base_applied = false
 
         for _, effect in ipairs(opts.adjustment_effects or {}) do
             local adjust = effect.transform or {}
@@ -1726,6 +1818,26 @@ function Main()
             local adj_pan = tonumber(adjust.Pan or adjust.pan or 0) or 0
             local adj_tilt = tonumber(adjust.Tilt or adjust.tilt or 0) or 0
             local adj_rotation = tonumber(adjust.RotationAngle or adjust.rotation_angle or 0) or 0
+            -- Resolve 的调整图层变换作用在已经合成好的时间线画面上。
+            -- 下层素材即使放大到画布外，进入调整图层前也已经被画布裁切；
+            -- 因此 adjustment Zoom 0.99 应该缩小整张画面并露边，不能被下层素材放大抵消。
+            if adjustment_transform_active(adjust) and not adjustment_canvas_base_applied then
+                disp_left, disp_right = 0, canvas_w
+                disp_top, disp_bottom = 0, canvas_h
+                adjustment_canvas_base_applied = true
+            else
+                local clipped_left = math.max(0, disp_left)
+                local clipped_right = math.min(canvas_w, disp_right)
+                local clipped_top = math.max(0, disp_top)
+                local clipped_bottom = math.min(canvas_h, disp_bottom)
+                if clipped_right <= clipped_left or clipped_bottom <= clipped_top then
+                    disp_left, disp_right = 0, 0
+                    disp_top, disp_bottom = 0, 0
+                else
+                    disp_left, disp_right = clipped_left, clipped_right
+                    disp_top, disp_bottom = clipped_top, clipped_bottom
+                end
+            end
             local cx = (disp_left + disp_right) / 2
             local cy = (disp_top + disp_bottom) / 2
             local w = math.abs(disp_right - disp_left) * math.abs(adj_zoom_x)
@@ -1836,6 +1948,55 @@ function Main()
             is_black_border = true,
         })
         return 1
+    end
+
+    local function has_nonzero_transform_value(value, epsilon)
+        return math.abs(tonumber(value or 0) or 0) > (epsilon or 0.001)
+    end
+
+    local function transform_has_border_risk(transform)
+        transform = transform or {}
+        local zoom_x = tonumber(transform.ZoomX or transform.zoom_x or 1) or 1
+        local zoom_y = tonumber(transform.ZoomY or transform.zoom_y or 1) or 1
+        if zoom_x < 0.999 or zoom_y < 0.999 then return true end
+        if has_nonzero_transform_value(transform.Pan or transform.pan) then return true end
+        if has_nonzero_transform_value(transform.Tilt or transform.tilt) then return true end
+        if has_nonzero_transform_value(transform.RotationAngle or transform.rotation_angle) then return true end
+        return false
+    end
+
+    local function clip_has_basic_border_risk(clip, adjustment_effects)
+        if not clip then return false end
+        if transform_has_border_risk(clip.transform or {}) then return true end
+
+        local crop = clip.crop or {}
+        if has_nonzero_transform_value(crop.CropLeft or crop.crop_left)
+            or has_nonzero_transform_value(crop.CropRight or crop.crop_right)
+            or has_nonzero_transform_value(crop.CropTop or crop.crop_top)
+            or has_nonzero_transform_value(crop.CropBottom or crop.crop_bottom)
+        then
+            return true
+        end
+
+        for _, effect in ipairs(adjustment_effects or {}) do
+            if adjustment_transform_active(effect.transform or {}) then
+                return true
+            end
+        end
+
+        local src_w = tonumber(clip.source_width or 0) or 0
+        local src_h = tonumber(clip.source_height or 0) or 0
+        local canvas_w = tonumber(timeline_geom.width or 1920) or 1920
+        local canvas_h = tonumber(timeline_geom.height or 1080) or 1080
+        if src_w > 0 and src_h > 0 and canvas_w > 0 and canvas_h > 0 then
+            local src_aspect = src_w / src_h
+            local canvas_aspect = canvas_w / canvas_h
+            if math.abs(src_aspect - canvas_aspect) > 0.01 then
+                return true
+            end
+        end
+
+        return false
     end
 
     local function expected_black_border_active_rect(bounds)
@@ -2128,6 +2289,8 @@ function Main()
                         error("渲染超时(" .. wait_max .. "秒)")
                     end
                     pcall(function() r_project:DeleteRenderJob(job_id) end)
+                    restore_render_state(render_state)
+                    render_state = nil
                     if params.keep_complex_cache == true then
                         write_complex_render_meta(temp_path, expected_meta)
                         params.complex_render_keep_path = true
@@ -2146,6 +2309,8 @@ function Main()
 	                if not ffmpeg:find_ffmpeg() then
 	                    error("未找到FFmpeg")
 	                end
+                    shared_ffmpeg_for_late_pass = ffmpeg
+                    config._cached_ffmpeg_path = ffmpeg.ffmpeg_path
 
 	                if black_border_enabled() then
 	                    local border_count = append_rendered_black_border_results(ffmpeg, temp_path, io_in, nil, {
@@ -2229,9 +2394,126 @@ function Main()
                     dlog("复杂模式：FFmpeg分析警告: " .. tostring(analyze_err))
                 end
 
-                -- 场景检测抓夹帧（极短画面闪现，非黑帧，blackdetect抓不到）
+	                -- 场景检测抓夹帧（极短画面闪现，非黑帧，blackdetect抓不到）
                 -- 用select+showinfo替代scdet（更通用，所有FFmpeg版本支持）
                 dlog("复杂模式：开始场景检测抓夹帧...")
+                local function hex_hamming_distance(h1, h2)
+                    if type(h1) ~= "string" or type(h2) ~= "string" or #h1 ~= #h2 then return 9999 end
+                    local dist = 0
+                    for i = 1, #h1 do
+                        local a = tonumber(h1:sub(i, i), 16)
+                        local b = tonumber(h2:sub(i, i), 16)
+                        if not a or not b then return 9999 end
+                        local x = math.abs(a - b)
+                        for bit = 0, 3 do
+                            local aa = math.floor(a / (2 ^ bit)) % 2
+                            local bb = math.floor(b / (2 ^ bit)) % 2
+                            if aa ~= bb then dist = dist + 1 end
+                        end
+                    end
+                    return dist
+                end
+
+                local function bits_to_hex(bits)
+                    local parts = {}
+                    for i = 1, #bits, 4 do
+                        local n = (bits[i] or 0) * 8 + (bits[i + 1] or 0) * 4
+                            + (bits[i + 2] or 0) * 2 + (bits[i + 3] or 0)
+                        table.insert(parts, string.format("%x", n))
+                    end
+                    return table.concat(parts)
+                end
+
+                local function frame_hash_from_rgb(data, thumb_size)
+                    thumb_size = thumb_size or 16
+                    local pixel_count = thumb_size * thumb_size
+                    if type(data) ~= "string" or #data < pixel_count * 3 then return nil end
+                    local values = {}
+                    local min_g, max_g, sum = 255, 0, 0
+                    local gi = 1
+                    for i = 1, pixel_count * 3, 3 do
+                        local g = math.floor(((data:byte(i) or 0) + (data:byte(i + 1) or 0) + (data:byte(i + 2) or 0)) / 3)
+                        values[gi] = g
+                        if g < min_g then min_g = g end
+                        if g > max_g then max_g = g end
+                        sum = sum + g
+                        gi = gi + 1
+                    end
+                    local range = max_g - min_g
+                    local avg = 0
+                    for i = 1, pixel_count do
+                        local v = values[i] or 0
+                        if range > 8 then
+                            v = math.floor(((v - min_g) * 255) / range)
+                        end
+                        values[i] = v
+                        avg = avg + v
+                    end
+                    avg = avg / pixel_count
+                    local bits = {}
+                    for i = 1, pixel_count do
+                        bits[i] = ((values[i] or 0) >= avg) and 1 or 0
+                    end
+                    return {
+                        gray_hash = bits_to_hex(bits),
+                        avg = sum / pixel_count,
+                        range = range,
+                    }
+                end
+
+                local function extract_render_frame_hashes(frame_numbers)
+                    local unique = {}
+                    for _, f in ipairs(frame_numbers or {}) do
+                        f = tonumber(f)
+                        if f and f >= 0 then unique[math.floor(f + 0.5)] = true end
+                    end
+                    local frames = {}
+                    for f, _ in pairs(unique) do table.insert(frames, f) end
+                    table.sort(frames)
+                    local hashes = {}
+                    local thumb_size = 16
+                    local frame_size = thumb_size * thumb_size * 3
+                    local chunk_size = 80
+                    for pos = 1, #frames, chunk_size do
+                        local chunk = {}
+                        local expr = {}
+                        for i = pos, math.min(#frames, pos + chunk_size - 1) do
+                            table.insert(chunk, frames[i])
+                            table.insert(expr, string.format("eq(n\\,%d)", frames[i]))
+                        end
+                        local filter = string.format("select='%s',scale=%d:%d", table.concat(expr, "+"), thumb_size, thumb_size)
+                        local cmd = ffmpeg:_build_cmd(string.format(
+                            '-i %s -vf "%s" -vsync 0 -an -f rawvideo -pix_fmt rgb24 - 2>/dev/null',
+                            ffmpeg:_quote_path(temp_path), filter
+                        ))
+                        local pipe = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
+                        if pipe then
+                            for idx, frame_no in ipairs(chunk) do
+                                local data = pipe:read(frame_size)
+                                if not data or #data < frame_size then break end
+                                hashes[frame_no] = frame_hash_from_rgb(data, thumb_size)
+                            end
+                            pipe:close()
+                        end
+                    end
+                    return hashes
+                end
+
+                local function best_hash_distance(frame_hashes, frames_a, frames_b)
+                    local best = 9999
+                    for _, fa in ipairs(frames_a or {}) do
+                        local ha = frame_hashes[fa]
+                        for _, fb in ipairs(frames_b or {}) do
+                            local hb = frame_hashes[fb]
+                            if ha and hb and ha.gray_hash and hb.gray_hash then
+                                local d = hex_hamming_distance(ha.gray_hash, hb.gray_hash)
+                                if d < best then best = d end
+                            end
+                        end
+                    end
+                    return best
+                end
+
                 local scene_change_frames_full = {}  -- 所有场景切换帧号(用于快切过滤)
                 local scene_times = {}
                 local scene_seen = {}
@@ -2281,7 +2563,20 @@ function Main()
                     local stuck_f = params.stuck_frames or config.CLASSIFICATION.STUCK_FRAMES
                     local min_gap = stuck_f / timeline_fps
                     local flash_count = 0
-                    local skipped_dense = 0
+                    local skipped_dark_flash = 0
+                    local skipped_no_hash = 0
+                    local skipped_not_returning = 0
+                    local flash_candidates = {}
+                    local frames_to_hash = {}
+                    local render_max_frame = math.max(0, math.floor((io_out or 0) - (io_in or 0)))
+                    local function add_frame(list, frame)
+                        frame = tonumber(frame)
+                        if frame and frame >= 0 and frame <= render_max_frame then
+                            frame = math.floor(frame + 0.5)
+                            table.insert(list, frame)
+                            table.insert(frames_to_hash, frame)
+                        end
+                    end
                     for i = 1, #scene_times - 1 do
                         local gap = scene_times[i+1] - scene_times[i]
                         if gap > 0 and gap <= min_gap then
@@ -2301,40 +2596,107 @@ function Main()
                                     dense_count = dense_count + 1
                                 end
                             end
-                            local high_confidence_flash = scene_score >= 0.16
-                            local very_short_flash = ((end_frame - start_frame) <= stuck_f)
-                            if dense_count > 4 and not (high_confidence_flash and very_short_flash) then
-                                skipped_dense = skipped_dense + 1
+                            if pblack >= 55 then
+                                skipped_dark_flash = skipped_dark_flash + 1
                             else
-                                table.insert(ffmpeg_results, {
-                                    clip = dummy_clip,
-                                    segments = {{
-                                        start = scene_times[i],
-                                        end_ = scene_times[i+1],
-                                        duration = gap,
+                                local pre_frames, mid_frames, post_frames = {}, {}, {}
+                                for back = 3, 1, -1 do add_frame(pre_frames, start_frame - back) end
+                                local mid_start = math.max(0, start_frame)
+                                local mid_end = math.max(mid_start, end_frame - 1)
+                                add_frame(mid_frames, math.floor((mid_start + mid_end) / 2 + 0.5))
+                                if end_frame - start_frame > 1 then
+                                    add_frame(mid_frames, start_frame)
+                                    add_frame(mid_frames, end_frame - 1)
+                                end
+                                for forward = 1, 3 do add_frame(post_frames, end_frame + forward) end
+                                if #pre_frames > 0 and #mid_frames > 0 and #post_frames > 0 then
+                                    table.insert(flash_candidates, {
+                                        scene_start_sec = scene_times[i],
+                                        scene_end_sec = scene_times[i + 1],
+                                        start_frame = start_frame,
+                                        end_frame = end_frame,
+                                        gap = gap,
                                         scene_score = scene_score,
-                                        dark_pblack = pblack,
-                                        force_classification = "error",
-                                        force_marker_name = "[BFD-MIX] 真实画面短镜头夹帧",
-                                        force_note = string.format(
-                                            "最终渲染画面短镜头夹帧\n持续: %d帧\n切点: %d → %d\nscene score: %.3f\n判定: 渲染后的最终画面里出现极短镜头，不依赖黑帧比例",
-                                            math.max(1, end_frame - start_frame), start_frame, end_frame, scene_score
-                                        ),
-                                    }},
-                                    source_file = temp_path,
-                                    is_render_result = true,
-                                    is_flash_frame = true,
-                                    is_mixed_cut = true,
-                                })
-                                flash_count = flash_count + 1
+                                        pblack = pblack,
+                                        dense_count = dense_count,
+                                        pre_frames = pre_frames,
+                                        mid_frames = mid_frames,
+                                        post_frames = post_frames,
+                                    })
+                                else
+                                    skipped_no_hash = skipped_no_hash + 1
+                                end
                             end
                         end
                     end
-                    dlog(string.format("复杂模式：夹帧检测完成, 发现 %d 个极短场景(≤%d帧), 跳过密集快切 %d 个",
-                        flash_count, stuck_f, skipped_dense))
+                    local frame_hashes = {}
+                    if #flash_candidates > 0 then
+                        frame_hashes = extract_render_frame_hashes(frames_to_hash)
+                    end
+                    local same_threshold = tonumber(params.render_flash_same_hash_distance or 96) or 96
+                    local diff_threshold = tonumber(params.render_flash_diff_hash_distance or 80) or 80
+                    local diff_margin = tonumber(params.render_flash_diff_margin or 16) or 16
+                    local accepted_flash_results = {}
+                    local merged_nearby_flash = 0
+                    local merge_flash_window = math.max(stuck_f * 3, 6)
+                    for _, cand in ipairs(flash_candidates) do
+                        local pre_post_dist = best_hash_distance(frame_hashes, cand.pre_frames, cand.post_frames)
+                        local pre_mid_dist = best_hash_distance(frame_hashes, cand.pre_frames, cand.mid_frames)
+                        local post_mid_dist = best_hash_distance(frame_hashes, cand.post_frames, cand.mid_frames)
+                        local mid_diff = math.min(pre_mid_dist, post_mid_dist)
+                        local returning_same_shot = pre_post_dist <= same_threshold
+                        local middle_is_different = mid_diff >= math.max(diff_threshold, pre_post_dist + diff_margin)
+                        if pre_post_dist >= 9999 or mid_diff >= 9999 then
+                            skipped_no_hash = skipped_no_hash + 1
+                        elseif returning_same_shot and middle_is_different then
+                            local flash_result = {
+                                clip = dummy_clip,
+                                segments = {{
+                                    start = cand.start_frame / timeline_fps,
+                                    end_ = cand.end_frame / timeline_fps,
+                                    duration = math.max(1, cand.end_frame - cand.start_frame) / timeline_fps,
+                                    scene_score = cand.scene_score,
+                                    dark_pblack = cand.pblack,
+                                    timeline_frame = io_in + cand.start_frame,
+                                    force_classification = "error",
+                                    force_marker_name = "[BFD-MIX] 真实画面短镜头夹帧",
+                                    force_note = string.format(
+                                        "最终渲染画面短镜头夹帧\n持续: %d帧\n切点: %d → %d\nscene score: %.3f\n成片结构验证: 前后相似距离=%d，中段差异距离=%d\n判定: 短段前后回到同一画面结构，中间闪入不同画面；不依赖时间线 Fusion/复合片段信息。",
+                                        math.max(1, cand.end_frame - cand.start_frame), cand.start_frame, cand.end_frame,
+                                        cand.scene_score, pre_post_dist, mid_diff
+                                    ),
+                                }},
+                                source_file = temp_path,
+                                is_render_result = true,
+                                is_flash_frame = true,
+                                is_mixed_cut = true,
+                                _render_start_frame = cand.start_frame,
+                                _scene_score = cand.scene_score,
+                            }
+                            local last_flash = accepted_flash_results[#accepted_flash_results]
+                            if last_flash and math.abs((last_flash._render_start_frame or 0) - cand.start_frame) <= merge_flash_window then
+                                if (cand.scene_score or 0) > (last_flash._scene_score or 0) then
+                                    accepted_flash_results[#accepted_flash_results] = flash_result
+                                end
+                                merged_nearby_flash = merged_nearby_flash + 1
+                            else
+                                table.insert(accepted_flash_results, flash_result)
+                            end
+                        else
+                            skipped_not_returning = skipped_not_returning + 1
+                        end
+                    end
+                    for _, flash_result in ipairs(accepted_flash_results) do
+                        flash_result._render_start_frame = nil
+                        flash_result._scene_score = nil
+                        table.insert(ffmpeg_results, flash_result)
+                    end
+                    flash_count = #accepted_flash_results
+                    dlog(string.format("复杂模式：夹帧检测完成, 候选 %d 个, 验证通过 %d 个(≤%d帧), 合并近邻 %d 个, 跳过黑帧候选 %d 个, 跳过非回环快切 %d 个, 跳过无hash %d 个",
+                        #flash_candidates, flash_count, stuck_f, merged_nearby_flash, skipped_dark_flash, skipped_not_returning, skipped_no_hash))
                     print(string.format("[BFD] 场景检测完成: 发现 %d 个极短场景(≤%d帧)", flash_count, stuck_f))
                 else
-                    dlog("复杂模式：场景检测失败，无法启动FFmpeg")
+                    dlog("复杂模式：未检测到场景切点")
                 end
 
                 -- 【ABC三方案结合】signalstats 渲染坏帧检测
@@ -2827,6 +3189,11 @@ function Main()
                         end
                         local is_soft_occluded = (soft_vis_dur <= 0 or soft_vis_dur > stuck_frames)
 
+                        local clip_source_fps = tonumber(clip.source_fps or 0) or 0
+                        if clip_source_fps <= 0 then clip_source_fps = timeline_fps end
+                        local source_start_frame = (tonumber(clip.left_offset or 0) or 0)
+                            + (iv.start - (tonumber(clip.timeline_start_frame or 0) or 0))
+                        local source_dur_sec = vis_dur / clip_source_fps
                         local dur_sec = vis_dur / timeline_fps
                         if is_soft_occluded then
                             table.insert(overlay_stuck_records, {
@@ -2838,9 +3205,11 @@ function Main()
                                 timeline_start_tc = Analyzer.frame_to_timecode(iv.start, timeline_fps),
                                 timeline_end_tc = Analyzer.frame_to_timecode(iv.end_, timeline_fps),
                                 source_file = clip.file_path,
-                                source_start_sec = (clip.left_offset or 0) / timeline_fps,
-                                source_duration_sec = dur_sec,
+                                source_start_sec = source_start_frame / clip_source_fps,
+                                source_duration_sec = source_dur_sec,
                                 duration_frames = vis_dur,
+                                visual_window_start_frame = iv.start,
+                                visual_window_end_frame = iv.end_,
                                 note = string.format(
                                     "多轨道叠加夹帧(半透明遮挡)\n片段总长: %d帧, 可见: %d帧\n轨道%d: %s\n上层%d%%-%d%%半透明素材遮挡，肉眼可能不明显",
                                     tl_dur, vis_dur, clip.track_index or 1, clip.name, partial_threshold, full_threshold
@@ -2857,9 +3226,11 @@ function Main()
                                 timeline_start_tc = Analyzer.frame_to_timecode(iv.start, timeline_fps),
                                 timeline_end_tc = Analyzer.frame_to_timecode(iv.end_, timeline_fps),
                                 source_file = clip.file_path,
-                                source_start_sec = (clip.left_offset or 0) / timeline_fps,
-                                source_duration_sec = dur_sec,
+                                source_start_sec = source_start_frame / clip_source_fps,
+                                source_duration_sec = source_dur_sec,
                                 duration_frames = vis_dur,
+                                visual_window_start_frame = iv.start,
+                                visual_window_end_frame = iv.end_,
                                 note = string.format(
                                     "多轨道叠加夹帧\n片段总长: %d帧, 可见: %d帧\n轨道%d: %s\n被上层不透明轨道遮挡，仅曝光%d帧",
                                     tl_dur, vis_dur, clip.track_index or 1, clip.name, vis_dur
@@ -2900,60 +3271,69 @@ function Main()
             end
             return top_clip, top_track
         end
-        local function add_overlay_boundary_record(frame, lower_clip, upper_clip, reason, visible_frames)
-            if frame == nil or frame < 0 or boundary_seen[frame] then return end
-            if has_io_range and (frame < io_in or frame >= io_out) then return end
-            boundary_seen[frame] = true
-            local upper_name = upper_clip and upper_clip.name or "上层片段"
-            local lower_name = lower_clip and lower_clip.name or "下层片段"
-            local vf = math.max(1, tonumber(visible_frames or 1) or 1)
-            local is_nested_boundary = tostring(reason or ""):find("复合/Fusion", 1, true) ~= nil
-            local marker_name = is_nested_boundary
-                and "[BFD-MIX] 复合/Fusion外部覆盖边界"
-                or "[BFD-MIX] 上层覆盖边界夹帧"
-            local boundary_explain = is_nested_boundary
-                and "判定: 这是顶层片段之间的外部覆盖边界，普通模式未进入复合/Fusion内部；上层边界让下层短暂露出，疑似漏帧/夹帧。"
-                or "判定: 上层较长片段边界让下层最后/最前一帧仍在最终画面露出，疑似漏帧/夹帧。"
-            table.insert(overlay_stuck_records, {
-                classification = "error",
-                marker_color = config.MARKER_COLORS.ERROR,
-                marker_name = marker_name,
-                timeline_start_frame = frame,
-                timeline_end_frame = frame + vf,
-                timeline_start_tc = Analyzer.frame_to_timecode(frame, timeline_fps),
-                timeline_end_tc = Analyzer.frame_to_timecode(frame + vf, timeline_fps),
-                source_file = lower_clip and lower_clip.file_path or nil,
-                source_start_sec = lower_clip and ((lower_clip.left_offset or 0) + (frame - (lower_clip.timeline_start_frame or 0))) / timeline_fps or 0,
-                source_duration_sec = vf / timeline_fps,
-                duration_frames = vf,
-                note = string.format(
-                    "%s\n位置: %s\n普通镜头实际露出: %d帧\n下层: 轨道%d %s\n上层: 轨道%d %s\n%s",
-                    marker_name:gsub("^%[BFD%-MIX%]%s*", ""),
-                    reason or "覆盖开始前一帧",
-                    vf,
-                    lower_clip and (lower_clip.track_index or 1) or 1,
-                    lower_name,
-                    upper_clip and (upper_clip.track_index or 1) or 1,
-                    upper_name,
-                    boundary_explain
-                ),
-            })
-            overlay_boundary_count = overlay_boundary_count + 1
+        local function is_nested_clip(clip)
+            return clip and clip.media_type == "nested"
         end
-        local function visible_run_after(start_frame, clip, max_frames)
-            if not clip then return 0, start_frame end
-            local limit = math.max(1, tonumber(max_frames or 1) or 1)
+        local function is_regular_visible_video(clip)
+            return clip
+                and clip.media_type ~= "nested"
+                and clip.media_type ~= "adjustment_layer"
+                and clip.is_enabled ~= false
+                and (clip.opacity or 100) > 0
+                and tostring(clip.file_path or "") ~= ""
+        end
+        local function same_file_pair(a, b)
+            return is_regular_visible_video(a)
+                and is_regular_visible_video(b)
+                and tostring(a.file_path or "") == tostring(b.file_path or "")
+        end
+        local function boundary_reason_for(exposed_clip, cover_clip, default_reason, source_jump)
+            if is_nested_clip(cover_clip) then
+                return "复合/Fusion外部覆盖边界，普通镜头短暂露出"
+            end
+            if same_file_pair(exposed_clip, cover_clip) then
+                local jump = tonumber(source_jump or 0) or 0
+                local max_jump = tonumber(params.mixed_cut_overlay_max_source_jump or 600) or 600
+                if jump > max_jump then
+                    return nil
+                end
+                local min_jump = tonumber(params.mixed_cut_overlay_min_source_jump or 48) or 48
+                if jump >= min_jump then
+                    return default_reason .. "，源帧跳跃" .. tostring(math.floor(jump + 0.5)) .. "帧"
+                end
+                return nil
+            end
+            if is_regular_visible_video(exposed_clip) and is_regular_visible_video(cover_clip) then
+                return "不同素材覆盖边界，普通镜头短暂露出"
+            end
+            return nil
+        end
+        local function boundary_needs_short_visible_run(exposed_clip, cover_clip)
+            -- 复合/Fusion遮挡普通镜头：问题点就是切入/切出边界的那一帧，
+            -- 不能因为下层普通镜头前后可见时间较长就过滤掉。
+            if is_nested_clip(cover_clip) then return false end
+            -- 普通素材覆盖边界必须真的只短暂露出，避免正常叠层/同源覆盖被误报。
+            return true
+        end
+        local function visible_run_before(edge_frame, clip, max_frames)
             local count = 0
-            for f = start_frame, start_frame + limit - 1 do
-                if not clip_active_at(clip, f) then break end
+            local max_scan = math.max(1, (tonumber(max_frames) or 1) + 1)
+            for f = edge_frame - 1, edge_frame - max_scan, -1 do
                 local top = top_opaque_clip_at(f)
                 if top ~= clip then break end
                 count = count + 1
             end
-            return count, start_frame
+            return count, edge_frame - count
         end
-        local function is_nested_clip(clip)
-            return clip and clip.media_type == "nested"
+        local function visible_run_after(edge_frame, clip, max_frames)
+            local count = 0
+            local max_scan = math.max(1, (tonumber(max_frames) or 1) + 1)
+            for f = edge_frame, edge_frame + max_scan - 1 do
+                local top = top_opaque_clip_at(f)
+                if top ~= clip then break end
+                count = count + 1
+            end
+            return count, edge_frame
         end
         local function is_fusion_nested_clip(clip)
             if not is_nested_clip(clip) then return false end
@@ -2999,12 +3379,11 @@ function Main()
             for _, denom in ipairs(denominators) do
                 denom = tonumber(denom) or source_fps
                 if denom > 0 then
-                    local rel, score, err = ffmpeg:first_scene_cut_after(
+                    local cut, err = ffmpeg:first_scene_cut_after(
                         clip.file_path,
                         source_frame / denom,
-                        probe_frames / denom,
                         {
-                            fps = denom,
+                            window_sec = probe_frames / denom,
                             scene_threshold = params.nested_boundary_scene_threshold
                                 or params.mixed_cut_internal_flash_score
                                 or 0.16,
@@ -3014,19 +3393,198 @@ function Main()
                     if err then
                         dlog("复合/Fusion边界源内短镜头确认: " .. tostring(err))
                     end
-                    if rel then
-                        local frames = math.max(1, math.floor(rel * denom + 0.5))
+                    if cut and cut.relative_sec then
+                        local frames = math.max(1, math.floor(cut.relative_sec * denom + 0.5))
                         if frames > 0 and frames <= (tonumber(max_frames) or frames) then
                             dlog(string.format(
                                 "复合/Fusion边界源内短镜头确认: edge=%d rel=%.4f frames=%d denom=%.3f source_fps=%.3f",
-                                edge_frame, rel, frames, denom, source_fps
+                                edge_frame, cut.relative_sec, frames, denom, source_fps
                             ))
-                            return frames, score
+                            return frames, cut.score
                         end
                     end
                 end
             end
             return nil
+        end
+        local source_scene_near_cache = {}
+        local function source_scene_cut_near_boundary(edge_frame, clip, max_frames, direction)
+            if not clip or clip.media_type == "nested" or clip.media_type == "adjustment_layer" then return nil end
+            if clip.is_enabled == false or (clip.opacity or 100) <= 0 then return nil end
+            if not clip.file_path or clip.file_path == "" then return nil end
+
+            local clip_start = tonumber(clip.timeline_start_frame or 0) or 0
+            local clip_dur = tonumber(clip.source_duration_frames or 0) or 0
+            local clip_end = clip_start + clip_dur
+            if edge_frame < clip_start or edge_frame >= clip_end then return nil end
+
+            local ffmpeg = get_boundary_scene_ffmpeg()
+            if not ffmpeg or not ffmpeg.ffmpeg_path then return nil end
+
+            local source_fps = source_fps_for_clip(ffmpeg, clip, timeline_fps)
+            local source_frame = (tonumber(clip.left_offset or 0) or 0) + (edge_frame - clip_start)
+            if source_frame < 0 or source_fps <= 0 then return nil end
+
+            local tolerance_frames = math.max((tonumber(max_frames) or 1) + 3, 12)
+            local start_frame = math.max(0, source_frame - tolerance_frames)
+            local window_frames = tolerance_frames * 2 + 1
+            local threshold = tonumber(params.mixed_cut_overlay_scene_threshold
+                or params.mixed_cut_scene_threshold
+                or 0.04) or 0.04
+            local key = table.concat({
+                tostring(clip.file_path),
+                tostring(math.floor(start_frame + 0.5)),
+                tostring(window_frames),
+                string.format("%.3f", threshold),
+                tostring(direction or ""),
+            }, "|")
+            if source_scene_near_cache[key] ~= nil then
+                local cached = source_scene_near_cache[key]
+                if cached then
+                    return cached.distance, cached.score, cached.kind
+                end
+                return nil
+            end
+
+            local prefix = ""
+            if ffmpeg._bundled_lib_dir then
+                prefix = 'DYLD_LIBRARY_PATH="' .. ffmpeg._bundled_lib_dir .. '" '
+            end
+            local filter = string.format("select='gt(scene\\,%.3f)',metadata=print", threshold)
+            local cmd = string.format(
+                '%s%s -timelimit %d -ss %.6f -t %.6f -i %s -vf "%s" -an -f null - 2>&1',
+                prefix,
+                ffmpeg:_quote_path(ffmpeg.ffmpeg_path),
+                tonumber(params.nested_boundary_probe_timeout or 8) or 8,
+                start_frame / source_fps,
+                window_frames / source_fps,
+                ffmpeg:_quote_path(clip.file_path),
+                filter
+            )
+            local best_distance, best_score, best_tl_frame, best_kind = nil, nil, nil, nil
+            local handle = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
+            if handle then
+                local last_distance = nil
+                local start_time = os.time()
+                for line in handle:lines() do
+                    local t = line:match("pts_time:([%d%.%-]+)")
+                    if t then
+                        local rel = tonumber(t)
+                        if rel then
+                            local cut_frame = start_frame + math.floor(rel * source_fps + 0.5)
+                            local cut_tl_frame = clip_start + (cut_frame - (tonumber(clip.left_offset or 0) or 0))
+                            local distance = math.abs(cut_frame - source_frame)
+                            local edge_visible = top_opaque_clip_at(edge_frame) == clip
+                            local cut_visible = cut_tl_frame >= clip_start
+                                and cut_tl_frame < clip_end
+                                and top_opaque_clip_at(cut_tl_frame) == clip
+                            local hidden_boundary_cut = edge_visible
+                                and cut_tl_frame >= clip_start
+                                and cut_tl_frame < clip_end
+                                and top_opaque_clip_at(cut_tl_frame) ~= clip
+                                and (
+                                    (direction == "before" and cut_tl_frame > edge_frame)
+                                    or (direction == "after" and cut_tl_frame < edge_frame)
+                                )
+                            if direction == "before" and cut_tl_frame > edge_frame and not hidden_boundary_cut then
+                                cut_visible = false
+                            elseif direction == "after" and cut_tl_frame < edge_frame and not hidden_boundary_cut then
+                                cut_visible = false
+                            end
+                            local valid_cut = cut_visible or hidden_boundary_cut
+                            if valid_cut and distance <= tolerance_frames and (not best_distance or distance < best_distance) then
+                                best_distance = distance
+                                best_tl_frame = cut_tl_frame
+                                best_kind = hidden_boundary_cut and "hidden_boundary_cut" or "visible_cut"
+                                last_distance = distance
+                            else
+                                last_distance = nil
+                            end
+                        end
+                    end
+                    local score = line:match("lavfi%.scene_score=([%d%.%-]+)") or line:match("scene_score[:=]([%d%.%-]+)")
+                    if score and last_distance and last_distance == best_distance then
+                        best_score = tonumber(score) or best_score
+                    end
+                    if os.time() - start_time > (tonumber(params.nested_boundary_probe_timeout or 8) or 8) * 3 then
+                        break
+                    end
+                end
+                pcall(function() handle:close() end)
+            end
+
+            if best_distance then
+                dlog(string.format(
+                    "覆盖边界短镜头候选: edge=%d source_frame=%d distance=%d score=%.3f fps=%.3f kind=%s",
+                    edge_frame,
+                    math.floor(source_frame + 0.5),
+                    best_distance,
+                    tonumber(best_score or 0) or 0,
+                    source_fps,
+                    tostring(best_kind or "visible_cut")
+                ))
+                source_scene_near_cache[key] = {
+                    distance = best_distance,
+                    score = best_score or 0,
+                    timeline_frame = best_tl_frame,
+                    kind = best_kind or "visible_cut",
+                }
+                return best_distance, best_score or 0, best_kind or "visible_cut"
+            end
+            source_scene_near_cache[key] = false
+            return nil
+        end
+        local function add_overlay_boundary_record(frame, lower_clip, upper_clip, reason, duration_frames)
+            if frame == nil or frame < 0 or boundary_seen[frame] then return end
+            if has_io_range and (frame < io_in or frame >= io_out) then return end
+            if not is_regular_visible_video(lower_clip) then
+                -- 露出来的是复合/Fusion本身时，普通模式不猜内部画面；交给精查/复杂模式。
+                return
+            end
+            duration_frames = math.max(1, tonumber(duration_frames or 1) or 1)
+            boundary_seen[frame] = true
+            local upper_name = upper_clip and upper_clip.name or "上层片段"
+            local lower_name = lower_clip and lower_clip.name or "下层片段"
+            local is_nested_boundary = tostring(reason or ""):find("复合/Fusion", 1, true) ~= nil
+            local marker_name = is_nested_boundary
+                and "[BFD-MIX] 复合/Fusion外部覆盖边界"
+                or "[BFD-MIX] 上层覆盖边界夹帧"
+            local boundary_explain = is_nested_boundary
+                and "判定: 这是顶层片段之间的外部覆盖边界，普通模式未进入复合/Fusion内部；上层边界让下层短暂露出，疑似漏帧/夹帧。"
+                or "判定: 上层较长片段边界让下层最后/最前一帧仍在最终画面露出，疑似漏帧/夹帧。"
+            local lower_source_fps = lower_clip and tonumber(lower_clip.source_fps or 0) or 0
+            if lower_source_fps <= 0 then lower_source_fps = timeline_fps end
+            local lower_source_start_frame = lower_clip
+                and ((tonumber(lower_clip.left_offset or 0) or 0)
+                    + (frame - (tonumber(lower_clip.timeline_start_frame or 0) or 0)))
+                or 0
+            table.insert(overlay_stuck_records, {
+                classification = "error",
+                marker_color = config.MARKER_COLORS.ERROR,
+                marker_name = marker_name,
+                timeline_start_frame = frame,
+                timeline_end_frame = frame + duration_frames,
+                timeline_start_tc = Analyzer.frame_to_timecode(frame, timeline_fps),
+                timeline_end_tc = Analyzer.frame_to_timecode(frame + duration_frames, timeline_fps),
+                source_file = lower_clip and lower_clip.file_path or nil,
+                source_start_sec = lower_clip and (lower_source_start_frame / lower_source_fps) or 0,
+                source_duration_sec = duration_frames / lower_source_fps,
+                duration_frames = duration_frames,
+                visual_window_start_frame = frame,
+                visual_window_end_frame = frame + duration_frames,
+                note = string.format(
+                    "%s\n位置: %s\n普通镜头实际露出: %d帧\n下层: 轨道%d %s\n上层: 轨道%d %s\n%s",
+                    marker_name:gsub("^%[BFD%-MIX%]%s*", ""),
+                    reason or "覆盖开始前一帧",
+                    duration_frames,
+                    lower_clip and (lower_clip.track_index or 1) or 1,
+                    lower_name,
+                    upper_clip and (upper_clip.track_index or 1) or 1,
+                    upper_name,
+                    boundary_explain
+                ),
+            })
+            overlay_boundary_count = overlay_boundary_count + 1
         end
         for _, upper in ipairs(clips) do
             if upper.is_enabled == false then goto continue_overlay_boundary end
@@ -3044,25 +3602,46 @@ function Main()
             if top_after == upper and top_before and top_before ~= upper then
                 local lower_track = tonumber(top_before.track_index or 1) or 1
                 if lower_track < upper_track and clip_active_at(top_before, after) then
-                    local should_mark_boundary = false
-                    local reason = "覆盖开始前一帧"
-                    local same_file = upper.media_type ~= "nested"
-                        and top_before.media_type ~= "nested"
-                        and tostring(upper.file_path or "") ~= ""
-                        and tostring(upper.file_path or "") == tostring(top_before.file_path or "")
-                    if same_file then
+                    local reason = nil
+                    local source_jump = nil
+                    if same_file_pair(top_before, upper) then
                         local lower_start = tonumber(top_before.timeline_start_frame or 0) or 0
                         local lower_left = tonumber(top_before.left_offset or 0) or 0
                         local lower_source_next = lower_left + (before - lower_start) + 1
                         local upper_left = tonumber(upper.left_offset or 0) or 0
-                        local source_jump = math.abs(upper_left - lower_source_next)
-                        if source_jump > math.max(stuck_frames, 3) then
-                            should_mark_boundary = true
-                            reason = string.format("同源素材覆盖边界，源帧跳跃%d帧", source_jump)
-                        end
+                        source_jump = math.abs(upper_left - lower_source_next)
                     end
-                    if should_mark_boundary then
-                        add_overlay_boundary_record(before, top_before, upper, reason)
+                    reason = boundary_reason_for(top_before, upper, "同源素材覆盖边界", source_jump)
+                    if reason then
+                        if boundary_needs_short_visible_run(top_before, upper) then
+                            local exposure_frames, exposure_start = visible_run_before(edge, top_before, stuck_frames)
+                            if exposure_frames > 0 and exposure_frames <= stuck_frames then
+                                add_overlay_boundary_record(exposure_start, top_before, upper, reason, exposure_frames)
+                            else
+                                local distance, score, cut_kind = source_scene_cut_near_boundary(before, top_before, stuck_frames, "before")
+                                if distance then
+                                    local extra_reason = (cut_kind == "hidden_boundary_cut")
+                                        and ("，下层源内镜头切换被上层遮挡，边界前只露出±" .. tostring(distance) .. "帧")
+                                        or ("，下层露出帧附近存在源内镜头切换±" .. tostring(distance) .. "帧")
+                                    add_overlay_boundary_record(
+                                        before,
+                                        top_before,
+                                        upper,
+                                        reason .. extra_reason,
+                                        1
+                                    )
+                                end
+                            end
+                        else
+                            local mark_frame = before
+                            local mark_duration = 1
+                            if is_nested_clip(upper) then
+                                local lower_start = tonumber(top_before.timeline_start_frame or 0) or 0
+                                mark_frame = math.max(lower_start, edge - math.max(1, stuck_frames))
+                                mark_duration = math.max(1, before - mark_frame + 1)
+                            end
+                            add_overlay_boundary_record(mark_frame, top_before, upper, reason, mark_duration)
+                        end
                     end
                 end
             end
@@ -3075,54 +3654,66 @@ function Main()
             if top_before_end == upper and top_after_end and top_after_end ~= upper then
                 local lower_track = tonumber(top_after_end.track_index or 1) or 1
                 if lower_track < upper_track and clip_active_at(top_after_end, before_end) then
-                    local should_mark_boundary = false
-                    local reason = "覆盖结束后一帧"
-                    local same_file = upper.media_type ~= "nested"
-                        and top_after_end.media_type ~= "nested"
-                        and tostring(upper.file_path or "") ~= ""
-                        and tostring(upper.file_path or "") == tostring(top_after_end.file_path or "")
-                    if same_file then
+                    local reason = nil
+                    local source_jump = nil
+                    if same_file_pair(top_after_end, upper) then
                         local lower_start = tonumber(top_after_end.timeline_start_frame or 0) or 0
                         local lower_left = tonumber(top_after_end.left_offset or 0) or 0
                         local lower_source_after = lower_left + (after_end - lower_start)
                         local upper_left = tonumber(upper.left_offset or 0) or 0
                         local upper_source_next = upper_left + upper_dur
-                        local source_jump = math.abs(lower_source_after - upper_source_next)
-                        if source_jump > math.max(stuck_frames, 3) then
-                            should_mark_boundary = true
-                            reason = string.format("同源素材覆盖结束边界，源帧跳跃%d帧", source_jump)
-                        end
+                        source_jump = math.abs(lower_source_after - upper_source_next)
                     end
-                    if should_mark_boundary then
-                        add_overlay_boundary_record(after_end, top_after_end, upper, reason, 1)
-                    elseif is_nested_clip(upper) then
-                        if not is_fusion_nested_clip(upper) then
-                            local source_short_frames = nil
-                            source_short_frames = source_short_run_after_boundary(after_end, top_after_end, stuck_frames)
-                            if source_short_frames then
-                                add_overlay_boundary_record(
-                                    after_end,
-                                    top_after_end,
-                                    upper,
-                                    "复合/Fusion外部覆盖边界，普通镜头短暂露出，下层源内" .. tostring(source_short_frames) .. "帧后切走",
-                                    source_short_frames
-                                )
+                    reason = boundary_reason_for(top_after_end, upper, "同源素材覆盖结束边界", source_jump)
+                    if reason then
+                        if boundary_needs_short_visible_run(top_after_end, upper) then
+                            local exposure_frames, exposure_start = visible_run_after(after_end, top_after_end, stuck_frames)
+                            if exposure_frames > 0 and exposure_frames <= stuck_frames then
+                                add_overlay_boundary_record(exposure_start, top_after_end, upper, reason, exposure_frames)
                             else
-                                local exposure_frames, exposure_start = visible_run_after(after_end, top_after_end, stuck_frames)
-                                if exposure_frames > 0 and exposure_frames <= stuck_frames then
+                                local distance, score, cut_kind = source_scene_cut_near_boundary(after_end, top_after_end, stuck_frames, "after")
+                                if distance then
+                                    local extra_reason = (cut_kind == "hidden_boundary_cut")
+                                        and ("，下层源内镜头切换被上层遮挡，边界后只露出±" .. tostring(distance) .. "帧")
+                                        or ("，下层露出帧附近存在源内镜头切换±" .. tostring(distance) .. "帧")
                                     add_overlay_boundary_record(
-                                        exposure_start,
+                                        after_end,
                                         top_after_end,
                                         upper,
-                                        "复合/Fusion外部覆盖边界，普通镜头短暂露出",
-                                        exposure_frames
+                                        reason .. extra_reason,
+                                        1
                                     )
                                 end
                             end
-                        end
-                    end
-                end
-            end
+		                        else
+		                            local exposure_frames, exposure_start = visible_run_after(after_end, top_after_end, stuck_frames)
+		                            local source_short_frames = nil
+	                            if is_nested_clip(upper) and not is_fusion_nested_clip(upper) then
+	                                source_short_frames = source_short_run_after_boundary(after_end, top_after_end, stuck_frames)
+	                            end
+	                            if source_short_frames then
+	                                add_overlay_boundary_record(
+	                                    after_end,
+	                                    top_after_end,
+	                                    upper,
+	                                    reason .. "，下层源内" .. tostring(source_short_frames) .. "帧后切走",
+	                                    source_short_frames
+	                                )
+	                            elseif exposure_frames and exposure_frames > 0 and exposure_frames <= stuck_frames then
+	                                add_overlay_boundary_record(exposure_start, top_after_end, upper, reason, exposure_frames)
+	                            else
+	                                dlog(string.format(
+	                                    "跳过复合/Fusion结束边界: frame=%d lower_visible_run=%s upper=%s lower=%s",
+	                                    after_end,
+	                                    tostring(exposure_frames),
+	                                    tostring(upper.name or "?"),
+	                                    tostring(top_after_end and top_after_end.name or "?")
+	                                ))
+	                            end
+	                        end
+	                    end
+	                end
+	            end
             ::continue_overlay_boundary::
         end
 
@@ -3145,6 +3736,83 @@ function Main()
     end
     local ffmpeg_unique_files = {}
     for path, _ in pairs(ffmpeg_file_dedup) do table.insert(ffmpeg_unique_files, path) end
+
+    if complex_render_done then
+        local ffmpeg = shared_ffmpeg_for_late_pass
+        if not (ffmpeg and ffmpeg.ffmpeg_path) then
+            ffmpeg = FFmpegRunner:new()
+            if ffmpeg:find_ffmpeg() then
+                shared_ffmpeg_for_late_pass = ffmpeg
+                config._cached_ffmpeg_path = ffmpeg.ffmpeg_path
+            else
+                ffmpeg = nil
+            end
+        end
+
+        if ffmpeg then
+            if black_border_enabled() and (tonumber(params.black_border_matte_aspect or 0) or 0) <= 0 then
+                local explicit_border = explicit_black_border_enabled()
+                local border_count = 0
+                for file_path, file_clips in pairs(ffmpeg_file_dedup) do
+                    for _, clip in ipairs(file_clips) do
+                        local lo = tonumber(clip.left_offset or 0) or 0
+                        local dur = tonumber(clip.source_duration_frames or 0) or 0
+                        local clip_start_frame = tonumber(clip.timeline_start_frame or 0) or 0
+                        local clip_end_frame = clip_start_frame + dur
+                        local local_start_frame = lo
+                        local local_duration_frames = dur
+                        local timeline_start_frame = clip_start_frame
+                        if has_io_range then
+                            local visible_start = math.max(clip_start_frame, io_in)
+                            local visible_end = math.min(clip_end_frame, io_out)
+                            if visible_end <= visible_start then
+                                local_duration_frames = 0
+                            else
+                                local_start_frame = lo + (visible_start - clip_start_frame)
+                                local_duration_frames = visible_end - visible_start
+                                timeline_start_frame = visible_start
+                            end
+                        end
+                        if local_duration_frames > 0 then
+                            local adjustment_effects = adjustment_effects_for_span(
+                                clips,
+                                timeline_start_frame,
+                                timeline_start_frame + local_duration_frames,
+                                clip.track_index or 1
+                            )
+                            local should_probe_border = explicit_border
+                                or clip_has_basic_border_risk(clip, adjustment_effects)
+                            if should_probe_border then
+                                border_count = border_count + append_black_border_results(ffmpeg, file_path, clip, {
+                                    clip_start_sec = local_start_frame / timeline_fps,
+                                    clip_duration_sec = local_duration_frames / timeline_fps,
+                                    timeline_start_frame = timeline_start_frame,
+                                    adjustment_effects = adjustment_effects,
+                                    timeout = 45,
+                                })
+                            end
+                        end
+                    end
+                end
+                if border_count > 0 then
+                    dlog("复杂模式补充普通黑边检测命中 " .. tostring(border_count))
+                    print(string.format("[BFD] 复杂模式补充: 普通黑边检测发现 %d 处", border_count))
+                end
+            end
+
+            local mixed_cut_records = detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, clips, timeline_fps, params)
+            if #mixed_cut_records > 0 then
+                for _, mixed in ipairs(mixed_cut_records) do
+                    table.insert(ffmpeg_results, mixed)
+                end
+                print(string.format("[BFD] 复杂模式补充: 混剪源内夹帧发现 %d 个可见短镜头", #mixed_cut_records))
+            else
+                dlog("复杂模式补充: 混剪源内夹帧未发现可见短镜头")
+            end
+        else
+            dlog("复杂模式补充普通检测: FFmpeg不可用，跳过普通黑边/源内短镜头补充")
+        end
+    end
 
     if not complex_render_done then
     -- ----------------------------------------------------------
@@ -3288,24 +3956,23 @@ function Main()
                                 })
                             end
                         elseif source_start >= 0 and source_dur > 0 and top_clip.file_path and top_clip.file_path ~= "" then
-                            local segment_source_fps = source_fps_for_clip(ffmpeg, top_clip, timeline_fps)
                             local prev = segments[#segments]
                             if prev and prev.clip == top_clip
                                 and (prev.adjustment_signature or "") == adjustment_sig
                                 and math.abs((prev.timeline_start_frame + prev.duration_frames) - s) < 0.001
                                 and math.abs((prev.source_start_frame + prev.duration_frames) - source_start) < 0.001 then
                                 prev.duration_frames = prev.duration_frames + source_dur
-                                prev.duration_sec = prev.duration_frames / segment_source_fps
+                                prev.duration_sec = prev.duration_frames / timeline_fps
                                 prev.uncertain_upper = prev.uncertain_upper or skipped_uncertain_here
                             else
                                 table.insert(segments, {
                                     file_path = top_clip.file_path,
-                                    start_sec = source_start / segment_source_fps,
-                                    duration_sec = source_dur / segment_source_fps,
+                                    start_sec = source_start / timeline_fps,
+                                    duration_sec = source_dur / timeline_fps,
                                     clip = top_clip,
                                     timeline_start_frame = s,
                                     source_start_frame = source_start,
-                                    source_fps = segment_source_fps,
+                                    source_fps = timeline_fps,
                                     duration_frames = source_dur,
                                     uncertain_upper = skipped_uncertain_here,
                                     adjustment_effects = adjustment_effects,
@@ -3554,14 +4221,20 @@ function Main()
                 local explicit_border = explicit_black_border_enabled()
                 for _, segment in ipairs(segment_list) do
                     if segment.file_path and segment.clip and (explicit_border or not segment.uncertain_upper) then
-	                        border_count = border_count + append_black_border_results(ffmpeg, segment.file_path, segment.clip, {
-	                            clip_start_sec = segment.start_sec,
-	                            clip_duration_sec = segment.duration_sec,
-	                            timeline_start_frame = segment.timeline_start_frame,
-	                            adjustment_effects = segment.adjustment_effects,
-	                            timeout = 45,
-	                        })
+                        local should_probe_border = explicit_border
+                            or clip_has_basic_border_risk(segment.clip, segment.adjustment_effects)
+                        if not should_probe_border then
+                            goto continue_basic_border_segment
+                        end
+		                        border_count = border_count + append_black_border_results(ffmpeg, segment.file_path, segment.clip, {
+		                            clip_start_sec = segment.start_sec,
+		                            clip_duration_sec = segment.duration_sec,
+		                            timeline_start_frame = segment.timeline_start_frame,
+		                            adjustment_effects = segment.adjustment_effects,
+		                            timeout = 45,
+		                        })
                     end
+                    ::continue_basic_border_segment::
                 end
             end
             for _, segment in ipairs(segment_list) do
@@ -3683,6 +4356,7 @@ function Main()
                             timeline_frame = (segment.timeline_start_frame or 0)
                                 + math.floor((overlap_start - seg_cum_start) * timeline_fps + 0.5)
                         end
+                        local duration_frames = math.max(1, math.floor((overlap_end - overlap_start) * timeline_fps + 0.5))
 
                         local found = false
                         for _, fr in ipairs(ffmpeg_results) do
@@ -3692,6 +4366,10 @@ function Main()
                                     end_ = src_end,
                                     duration = src_end - src_start,
                                     timeline_frame = timeline_frame,
+                                    timeline_end_frame = timeline_frame and (timeline_frame + duration_frames) or nil,
+                                    duration_frames = duration_frames,
+                                    source_fps = segment_source_fps,
+                                    concat_black = true,
                                 })
                                 found = true
                                 break
@@ -3705,6 +4383,10 @@ function Main()
                                     end_ = src_end,
                                     duration = src_end - src_start,
                                     timeline_frame = timeline_frame,
+                                    timeline_end_frame = timeline_frame and (timeline_frame + duration_frames) or nil,
+                                    duration_frames = duration_frames,
+                                    source_fps = segment_source_fps,
+                                    concat_black = true,
                                 }},
                             })
                         end
@@ -3727,6 +4409,54 @@ function Main()
         dlog("阶段6(逐文件): FFmpeg分析, " .. #ffmpeg_unique_files .. " 个唯一源文件")
         print(string.format("[BFD] 开始分析 %d 个唯一源文件（已过滤低透明度素材）...", #ffmpeg_unique_files))
         local file_count = 0
+        local source_black_confirm_cache = {}
+        local function source_frame_is_black(file_path, source_frame, source_fps)
+            if not ffmpeg or not ffmpeg.ffmpeg_path or not file_path or file_path == "" then return true end
+            source_fps = tonumber(source_fps or 0) or 0
+            if source_fps <= 0 then return true end
+            local frame_index = math.max(0, math.floor(tonumber(source_frame or 0) or 0))
+            local key = table.concat({ tostring(file_path), tostring(frame_index), string.format("%.3f", source_fps) }, "|")
+            if source_black_confirm_cache[key] ~= nil then
+                return source_black_confirm_cache[key]
+            end
+
+            local amount = math.max(1, math.min(100, math.floor(((tonumber(params.pic_th or 0.95) or 0.95) * 100) + 0.5)))
+            local threshold = tonumber(params.black_confirm_threshold or 32) or 32
+            local filter = string.format("blackframe=amount=%d:threshold=%d", amount, threshold)
+            local prefix = ""
+            if ffmpeg._bundled_lib_dir then
+                prefix = 'DYLD_LIBRARY_PATH="' .. ffmpeg._bundled_lib_dir .. '" '
+            end
+            local cmd = string.format(
+                '%s%s -timelimit %d -i %s -ss %.6f -frames:v 1 -vf "%s" -an -f null - 2>&1',
+                prefix,
+                ffmpeg:_quote_path(ffmpeg.ffmpeg_path),
+                tonumber(params.black_confirm_timeout or 6) or 6,
+                ffmpeg:_quote_path(file_path),
+                frame_index / source_fps,
+                filter
+            )
+            local confirmed = false
+            local handle = io.popen(ffmpeg:_wrap_cmd(cmd), "r")
+            if handle then
+                local start_time = os.time()
+                for line in handle:lines() do
+                    local pblack = line:match("pblack:%s*([%d%.]+)") or line:match("pblack:([%d%.]+)")
+                    if pblack and (tonumber(pblack) or 0) >= amount then
+                        confirmed = true
+                        break
+                    end
+                    if os.time() - start_time > (tonumber(params.black_confirm_timeout or 6) or 6) * 3 then
+                        break
+                    end
+                end
+                pcall(function() handle:close() end)
+            else
+                confirmed = true
+            end
+            source_black_confirm_cache[key] = confirmed
+            return confirmed
+        end
 
         for file_path, file_clips in pairs(ffmpeg_file_dedup) do
             file_count = file_count + 1
@@ -3750,8 +4480,9 @@ function Main()
                 end
             end
             if min_lo and max_end then
-                params.clip_start_sec = min_lo / timeline_fps
-                params.clip_duration_sec = (max_end - min_lo) / timeline_fps
+                local file_source_fps = source_fps_for_clip(ffmpeg, file_clips[1], timeline_fps)
+                params.clip_start_sec = min_lo / file_source_fps
+                params.clip_duration_sec = (max_end - min_lo) / file_source_fps
             else
                 params.clip_start_sec = nil
                 params.clip_duration_sec = nil
@@ -3771,10 +4502,11 @@ function Main()
                     local lo = clip.left_offset or 0
                     local dur = clip.source_duration_frames or 0
                     local source_end_frame = lo + dur
+                    local clip_source_fps = source_fps_for_clip(ffmpeg, clip, timeline_fps)
 
                     for _, seg in ipairs(segments) do
-                        local seg_start_f = math.floor(seg.start * timeline_fps)
-                        local seg_end_f = math.floor(seg.end_ * timeline_fps)
+                        local seg_start_f = math.floor(seg.start * clip_source_fps)
+                        local seg_end_f = math.floor(seg.end_ * clip_source_fps)
 
                         -- 黑帧/夹帧必须在最终画面可见；同源逐文件分析也要按时间线可见区间二次裁剪。
                         if dur == 0 or (seg_end_f > lo and seg_start_f < source_end_frame) then
@@ -3791,11 +4523,24 @@ function Main()
                                 if overlap_end > overlap_start then
                                     local clipped_source_start = lo + (overlap_start - clip_start_frame)
                                     local clipped_source_end = lo + (overlap_end - clip_start_frame)
-                                    table.insert(clip_segments, {
-                                        start = clipped_source_start / timeline_fps,
-                                        end_ = clipped_source_end / timeline_fps,
-                                        duration = (clipped_source_end - clipped_source_start) / timeline_fps,
-                                    })
+                                    if source_frame_is_black(clip.file_path, clipped_source_start, clip_source_fps) then
+                                        table.insert(clip_segments, {
+                                            start = clipped_source_start / clip_source_fps,
+                                            end_ = clipped_source_end / clip_source_fps,
+                                            duration = (overlap_end - overlap_start) / timeline_fps,
+                                            duration_frames = math.max(1, overlap_end - overlap_start),
+                                            source_fps = clip_source_fps,
+                                            timeline_frame = overlap_start,
+                                            timeline_end_frame = overlap_end,
+                                        })
+                                    else
+                                        dlog(string.format(
+                                            "逐文件黑帧回填跳过: %s tl=%d source_frame=%d 非黑帧确认",
+                                            tostring(clip.name or clip.file_path),
+                                            overlap_start,
+                                            math.floor(clipped_source_start + 0.5)
+                                        ))
+                                    end
                                 end
                             end
                         end
@@ -3917,7 +4662,7 @@ function Main()
             pcall(function() duration = clip.item:GetDuration() end)
         end
         local clip_end = clip_start + duration
-        return clip_start >= io_in and clip_end <= io_out
+        return clip_end > io_in and clip_start < io_out
     end
     dlog(string.format("阶段8入口: detect_duplicate=%s ENABLED=%s clips=%d",
         tostring(params.detect_duplicate), tostring(config.DUPLICATE.ENABLED), #clips))
@@ -3926,16 +4671,16 @@ function Main()
         print("[BFD] [5/7] 正在检测重复片段（路径比对）...")
         check_progress_panel("重复片段检测", 82)
         -- 过滤隐藏/禁用素材：不参与重复检测（有意隐藏的副本不算重复）
-        local dup_source_clips = has_io_range and all_clips_for_duplicate_context or clips
+        local dup_source_clips = clips
         local dup_clips = {}
         for _, c in ipairs(dup_source_clips) do
-            if c.is_enabled ~= false and (c.opacity or 100) > 0 then
+            if c.is_enabled ~= false and (c.opacity or 100) > 0 and duplicate_clip_allowed_by_io(c) then
                 table.insert(dup_clips, c)
             end
         end
         if has_io_range then
-            print("[BFD] 路径重复: 使用全时间线作参照，仅输出入出点范围内的重复标记。")
-            dlog(string.format("阶段8a: IO范围重复检测使用全时间线参照 source_clips=%d filtered_clips=%d", #dup_source_clips, #clips))
+            print("[BFD] 路径重复: 仅比较入出点范围内的片段。")
+            dlog(string.format("阶段8a: IO范围重复检测仅使用IO内片段 source_clips=%d dup_clips=%d", #dup_source_clips, #dup_clips))
         end
         dlog(string.format("阶段8a: 路径重复检测开始, clips=%d dup_clips=%d", #dup_source_clips, #dup_clips))
         dup_results = DuplicateDetector.detect(dup_clips, timeline_fps, params)
@@ -4128,7 +4873,7 @@ function Main()
 
     -- 合并路径重复检测标记
     if dup_results and marker_types.duplicate ~= false then
-        local dup_records = DuplicateDetector.to_marker_records(dup_results, timeline_fps)
+        local dup_records = DuplicateDetector.to_marker_records(dup_results, timeline_fps, params)
         for _, r in ipairs(dup_records) do
             table.insert(selected_records, r)
         end
@@ -4245,6 +4990,255 @@ function Main()
     end
 
     do
+        local function is_external_overlay_short_record(r)
+            local name = tostring(r and r.marker_name or "")
+            return name:find("%[BFD%-MIX%]%s*复合/Fusion外部覆盖边界") ~= nil
+                or name:find("%[BFD%-MIX%]%s*上层覆盖边界夹帧") ~= nil
+                or name:find("%[BFD%-OVL%]%s*夹帧%(") ~= nil
+        end
+        local function is_visible_fragment_mixed_record(r)
+            local name = tostring(r and r.marker_name or "")
+            local seg = r and r.segment or nil
+            return name:find("%[BFD%-MIX%]%s*混剪源内夹帧") ~= nil
+                and seg
+                and seg.final_visible_fragment == true
+        end
+        local function short_visual_window(r)
+            local s = tonumber(r and r.visual_window_start_frame)
+            local e = tonumber(r and r.visual_window_end_frame)
+            if not s or not e then
+                s = tonumber(r and r.timeline_start_frame)
+                e = tonumber(r and r.timeline_end_frame)
+            end
+            if not s or not e then return nil end
+            s = math.floor(s + 0.5)
+            e = math.floor(e + 0.5)
+            if e <= s then return nil end
+            local max_window = tonumber(params.stuck_frames or config.CLASSIFICATION.STUCK_FRAMES) or 3
+            if (e - s) > max_window then return nil end
+            return s, e
+        end
+        local function record_start_frame(r)
+            local f = tonumber(r and r.timeline_start_frame)
+            if not f then return nil end
+            return math.floor(f + 0.5)
+        end
+        local function same_nonempty_source(a, b)
+            local sa = tostring(a and a.source_file or "")
+            local sb = tostring(b and b.source_file or "")
+            return sa ~= "" and sb ~= "" and sa == sb
+        end
+        local function source_time_range(r)
+            local s = tonumber(r and r.source_start_sec)
+            if not s then return nil end
+            local dur = tonumber(r and r.source_duration_sec)
+                or tonumber(r and r.duration_sec)
+                or ((tonumber(r and r.duration_frames) or 0) / timeline_fps)
+            if not dur or dur <= 0 then return nil end
+            return s, s + dur
+        end
+        local function source_ranges_overlap(a, b)
+            local as, ae = source_time_range(a)
+            local bs, be = source_time_range(b)
+            if not as or not ae or not bs or not be then return false end
+            local tol = math.max(2 / timeline_fps, 0.001)
+            return ae + tol > bs and be + tol > as
+        end
+        local function choose_visible_window_anchor(records, window_start)
+            local anchor = nil
+            for _, candidate in ipairs(records) do
+                local f = record_start_frame(candidate)
+                if f == window_start then return candidate end
+                if not anchor or (f and f < (record_start_frame(anchor) or f + 1)) then
+                    anchor = candidate
+                end
+            end
+            return anchor
+        end
+
+        local specific_records = {}
+        for _, r in ipairs(selected_records) do
+            if is_visible_fragment_mixed_record(r) then
+                table.insert(specific_records, r)
+            end
+        end
+
+        local merged_records = {}
+        local merged_overlay_evidence = 0
+        local skipped_ambiguous_overlay = 0
+        for _, r in ipairs(selected_records) do
+            if is_external_overlay_short_record(r) then
+                local ws, we = short_visual_window(r)
+                local contained_specifics = {}
+                if ws and we then
+                    for _, specific in ipairs(specific_records) do
+                        local f = record_start_frame(specific)
+                        if f and f >= ws and f < we
+                            and same_nonempty_source(r, specific)
+                            and source_ranges_overlap(r, specific)
+                        then
+                            table.insert(contained_specifics, specific)
+                        end
+                    end
+                end
+                if #contained_specifics == 1 then
+                    merged_overlay_evidence = merged_overlay_evidence + 1
+                    local last_frame = math.max(ws, we - 1)
+                    local anchor = choose_visible_window_anchor(contained_specifics, ws)
+                    if anchor then
+                        local original_frame = record_start_frame(anchor) or ws
+                        anchor.timeline_start_frame = ws
+                        anchor.timeline_end_frame = we
+                        anchor.timeline_start_tc = Analyzer.frame_to_timecode(ws, timeline_fps)
+                        anchor.timeline_end_tc = Analyzer.frame_to_timecode(we, timeline_fps)
+                        anchor.duration_frames = math.max(1, we - ws)
+                        anchor.source_duration_sec = anchor.duration_frames / timeline_fps
+                        anchor.duration_sec = anchor.source_duration_sec
+                        anchor.note = tostring(anchor.note or "") .. string.format(
+                            "\n合并证据: 同一最终可见短窗口且底层源时间重叠 %s-%s (%d帧) 也命中外部覆盖/叠加短段证据；标记已放到该短段第一帧，原源内证据帧为 %s。若同一短段内还有其他混剪源内证据，外部证据不会被折叠，避免不同镜头问题被合并。",
+                            Analyzer.frame_to_timecode(ws, timeline_fps),
+                            Analyzer.frame_to_timecode(last_frame, timeline_fps),
+                            we - ws,
+                            Analyzer.frame_to_timecode(original_frame, timeline_fps)
+                        )
+                    end
+                elseif #contained_specifics > 1 then
+                    skipped_ambiguous_overlay = skipped_ambiguous_overlay + 1
+                    table.insert(merged_records, r)
+                else
+                    table.insert(merged_records, r)
+                end
+            else
+                table.insert(merged_records, r)
+            end
+        end
+        if merged_overlay_evidence > 0 then
+            print(string.format("[BFD] 最终可见短段证据合并: 合并 %d 条外部覆盖/叠加重复证据", merged_overlay_evidence))
+            dlog("阶段9: 最终可见短段证据合并 merged_overlay_evidence="
+                .. tostring(merged_overlay_evidence)
+                .. " skipped_ambiguous=" .. tostring(skipped_ambiguous_overlay))
+            selected_records = merged_records
+        end
+    end
+
+    do
+        local function duplicate_should_yield(r)
+            local cls = tostring(r and r.classification or "")
+            local name = tostring(r and r.marker_name or "")
+            return cls == "duplicate"
+                or cls == "content_dup"
+                or name:find("%[BFD%-DUP%]") ~= nil
+                or name:find("%[BFD%-FP%]") ~= nil
+        end
+        local function conflict_priority(r)
+            if r and (r.nested_short_scene or (r.segment and r.segment.nested_short_scene)) then return 100 end
+            local name = r and tostring(r.marker_name or "") or ""
+            if name:find("%[BFD%-OVL%]") then return 90 end
+            if name:find("%[BFD%-MIX%].-真实画面短镜头夹帧") then return 85 end
+            if name:find("%[BFD%-ERR%]") then return 75 end
+            if r and r.classification == "error" then return 70 end
+            if name:find("%[BFD%-SUS%]") then return 65 end
+            if r and (r.is_mixed_cut or (r.segment and r.segment.is_mixed_cut)) then return 65 end
+            if name:find("%[BFD%-MIX%]") then return 65 end
+            if r and r.classification == "opacity" then return 60 end
+            if name:find("%[BFD%-BDR%]") or (r and r.classification == "black_border") then return 55 end
+            if r and r.classification == "gap" then return 50 end
+            if duplicate_should_yield(r) then return 30 end
+            return 10
+        end
+
+        local blocking_frames = {}
+        for _, r in ipairs(selected_records) do
+            if not duplicate_should_yield(r) and conflict_priority(r) > 30 then
+                local f = tonumber(r.timeline_start_frame or 0)
+                if f then blocking_frames[math.floor(f + 0.5)] = true end
+            end
+        end
+
+        local function choose_open_duplicate_span(record)
+            local start_frame = tonumber(record.timeline_start_frame or 0) or 0
+            local end_frame = tonumber(record.timeline_end_frame or (start_frame + (record.duration_frames or 1))) or (start_frame + 1)
+            start_frame = math.floor(start_frame + 0.5)
+            end_frame = math.floor(end_frame + 0.5)
+            if end_frame <= start_frame then
+                end_frame = start_frame + math.max(1, tonumber(record.duration_frames or 1) or 1)
+            end
+
+            local conflicts = {}
+            for frame, _ in pairs(blocking_frames) do
+                -- Resolve 的区间标记在 UI 上会盖到尾帧附近，所以尾帧也避让。
+                if frame >= start_frame and frame <= end_frame then
+                    table.insert(conflicts, frame)
+                end
+            end
+            if #conflicts == 0 then return record, false end
+            table.sort(conflicts)
+
+            local best = nil
+            local cursor = start_frame
+            local function consider(s, e)
+                local len = e - s
+                if len > 0 and (not best or len > best.len) then
+                    best = { start_frame = s, end_frame = e, len = len }
+                end
+            end
+            for _, blocked in ipairs(conflicts) do
+                consider(cursor, blocked - 1)
+                cursor = blocked + 1
+            end
+            consider(cursor, end_frame)
+            if not best then
+                return nil, true
+            end
+
+            record.timeline_start_frame = best.start_frame
+            record.timeline_end_frame = best.end_frame
+            record.duration_frames = math.max(1, best.end_frame - best.start_frame)
+            record.source_duration_sec = record.duration_frames / timeline_fps
+            record.duration_sec = record.source_duration_sec
+            record.timeline_start_tc = Analyzer.frame_to_timecode(record.timeline_start_frame, timeline_fps)
+            record.timeline_end_tc = Analyzer.frame_to_timecode(record.timeline_end_frame, timeline_fps)
+            record.note = tostring(record.note or "") .. string.format(
+                "\n重复/复用区间已避让高优先级标记，实际标记区间调整为: %d-%d帧 (%d帧)，避免盖住黑帧、夹帧、黑边、透明度或空隙提示。",
+                record.timeline_start_frame,
+                record.timeline_end_frame,
+                record.duration_frames
+            )
+            return record, true
+        end
+
+        local yielded_records = {}
+        local adjusted_duplicate_regions = 0
+        local skipped_duplicate_regions = 0
+        for _, r in ipairs(selected_records) do
+            if duplicate_should_yield(r) then
+                local adjusted, changed = choose_open_duplicate_span(r)
+                if adjusted then
+                    table.insert(yielded_records, adjusted)
+                    if changed then adjusted_duplicate_regions = adjusted_duplicate_regions + 1 end
+                else
+                    skipped_duplicate_regions = skipped_duplicate_regions + 1
+                end
+            else
+                table.insert(yielded_records, r)
+            end
+        end
+        if adjusted_duplicate_regions > 0 or skipped_duplicate_regions > 0 then
+            print(string.format(
+                "[BFD] 重复/复用标记避让: 调整 %d 条, 跳过 %d 条",
+                adjusted_duplicate_regions,
+                skipped_duplicate_regions
+            ))
+            dlog(string.format(
+                "阶段9: 重复/复用标记避让 adjusted=%d skipped=%d",
+                adjusted_duplicate_regions,
+                skipped_duplicate_regions
+            ))
+            selected_records = yielded_records
+        end
+    end
+
+    do
         table.sort(selected_records, function(a, b)
             return (a.timeline_start_frame or 0) < (b.timeline_start_frame or 0)
         end)
@@ -4287,10 +5281,13 @@ function Main()
             local name = r and tostring(r.marker_name or "") or ""
             if name:find("%[BFD%-OVL%]") then return 90 end
             if name:find("%[BFD%-MIX%].-真实画面短镜头夹帧") then return 85 end
+            if name:find("%[BFD%-ERR%]") then return 75 end
             if r and r.classification == "error" then return 70 end
+            if name:find("%[BFD%-SUS%]") then return 65 end
             if r and (r.is_mixed_cut or (r.segment and r.segment.is_mixed_cut)) then return 65 end
             if name:find("%[BFD%-MIX%]") then return 65 end
             if r and r.classification == "opacity" then return 60 end
+            if name:find("%[BFD%-BDR%]") or (r and r.classification == "black_border") then return 55 end
             if r and r.classification == "gap" then return 50 end
             if r and r.classification == "duplicate" then return 30 end
             if r and r.classification == "content_dup" then return 30 end
