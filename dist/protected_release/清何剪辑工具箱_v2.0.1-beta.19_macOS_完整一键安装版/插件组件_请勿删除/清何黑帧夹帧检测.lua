@@ -3215,11 +3215,10 @@ function Main()
             return nil
         end
         local function boundary_needs_short_visible_run(exposed_clip, cover_clip)
-            -- 同源跳帧、复合/Fusion遮挡普通镜头：问题点就是切入/切出边界的那一帧，
+            -- 复合/Fusion遮挡普通镜头：问题点就是切入/切出边界的那一帧，
             -- 不能因为下层普通镜头前后可见时间较长就过滤掉。
             if is_nested_clip(cover_clip) then return false end
-            if same_file_pair(exposed_clip, cover_clip) then return false end
-            -- 普通不同素材覆盖边界没有源帧连续性证据，仍要求实际短暂露出，避免正常叠层被误报。
+            -- 普通素材覆盖边界必须真的只短暂露出，避免正常叠层/同源覆盖被误报。
             return true
         end
         local function visible_run_before(edge_frame, clip, max_frames)
@@ -4091,6 +4090,7 @@ function Main()
                             timeline_frame = (segment.timeline_start_frame or 0)
                                 + math.floor((overlap_start - seg_cum_start) * timeline_fps + 0.5)
                         end
+                        local duration_frames = math.max(1, math.floor((overlap_end - overlap_start) * timeline_fps + 0.5))
 
                         local found = false
                         for _, fr in ipairs(ffmpeg_results) do
@@ -4100,6 +4100,10 @@ function Main()
                                     end_ = src_end,
                                     duration = src_end - src_start,
                                     timeline_frame = timeline_frame,
+                                    timeline_end_frame = timeline_frame and (timeline_frame + duration_frames) or nil,
+                                    duration_frames = duration_frames,
+                                    source_fps = segment_source_fps,
+                                    concat_black = true,
                                 })
                                 found = true
                                 break
@@ -4113,6 +4117,10 @@ function Main()
                                     end_ = src_end,
                                     duration = src_end - src_start,
                                     timeline_frame = timeline_frame,
+                                    timeline_end_frame = timeline_frame and (timeline_frame + duration_frames) or nil,
+                                    duration_frames = duration_frames,
+                                    source_fps = segment_source_fps,
+                                    concat_black = true,
                                 }},
                             })
                         end
@@ -4158,8 +4166,9 @@ function Main()
                 end
             end
             if min_lo and max_end then
-                params.clip_start_sec = min_lo / timeline_fps
-                params.clip_duration_sec = (max_end - min_lo) / timeline_fps
+                local file_source_fps = source_fps_for_clip(ffmpeg, file_clips[1], timeline_fps)
+                params.clip_start_sec = min_lo / file_source_fps
+                params.clip_duration_sec = (max_end - min_lo) / file_source_fps
             else
                 params.clip_start_sec = nil
                 params.clip_duration_sec = nil

@@ -510,15 +510,33 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
             local prev_note = prev and tostring(prev.note or "") or ""
             local prev_is_black = prev_note:find("黑帧:", 1, true) ~= nil
                 and not (prev and prev.segment and prev.segment.is_mixed_cut)
+            local record_is_concat = record.segment and record.segment.concat_black == true
+            local prev_is_concat = prev and prev.segment and prev.segment.concat_black == true
             if is_black_record and prev and prev_is_black
                 and tostring(prev.source_file or "") == tostring(record.source_file or "")
                 and (tonumber(record.timeline_start_frame or 0) or 0) <= (tonumber(prev.timeline_end_frame or 0) or 0) + 1
             then
                 local cur_end = tonumber(record.timeline_end_frame or record.timeline_start_frame or 0) or 0
                 local prev_end = tonumber(prev.timeline_end_frame or prev.timeline_start_frame or 0) or 0
-                if cur_end > prev_end then
-                    prev.timeline_end_frame = cur_end
-                    prev.timeline_end_tc = Analyzer.frame_to_timecode(cur_end, timeline_fps)
+                if prev_is_concat and record_is_concat
+                    and (tonumber(record.duration_frames or 0) or 0) > (tonumber(prev.duration_frames or 0) or 0)
+                then
+                    local merged_end = math.max(prev_end, cur_end)
+                    merged[#merged] = record
+                    prev = record
+                    prev.timeline_end_frame = merged_end
+                    prev.timeline_end_tc = Analyzer.frame_to_timecode(merged_end, timeline_fps)
+                elseif prev_is_concat and not record_is_concat then
+                    local merged_end = math.max(prev_end, cur_end)
+                    merged[#merged] = record
+                    prev = record
+                    prev.timeline_end_frame = merged_end
+                    prev.timeline_end_tc = Analyzer.frame_to_timecode(merged_end, timeline_fps)
+                else
+                    if cur_end > prev_end then
+                        prev.timeline_end_frame = cur_end
+                        prev.timeline_end_tc = Analyzer.frame_to_timecode(cur_end, timeline_fps)
+                    end
                 end
                 local prev_start = tonumber(prev.timeline_start_frame or 0) or 0
                 prev.duration_frames = math.max(1, (tonumber(prev.timeline_end_frame or prev_start) or prev_start) - prev_start)
