@@ -676,7 +676,7 @@ local function source_fps_for_clip(ffmpeg, clip, timeline_fps)
     return timeline_fps
 end
 
-local function add_mixed_cut_record(records, seen, clip, key_suffix, source_start, source_end, tl_start, timeline_fps, scene_score, reason)
+local function add_mixed_cut_record(records, seen, clip, key_suffix, source_start, source_end, tl_start, timeline_fps, scene_score, reason, visual_window_start, visual_window_end)
     local key = tostring(clip.file_path) .. ":" .. tostring(tl_start)
     if seen[key] then return end
     seen[key] = true
@@ -692,6 +692,8 @@ local function add_mixed_cut_record(records, seen, clip, key_suffix, source_star
             final_visible_fragment = reason == "visible_fragment",
             single_scene_candidate = reason == "single_scene",
             scene_score = scene_score or 0,
+            visual_window_start_frame = visual_window_start,
+            visual_window_end_frame = visual_window_end,
         }},
         is_mixed_cut = true,
     })
@@ -948,7 +950,8 @@ local function detect_source_mixed_cuts(ffmpeg, ffmpeg_clips, all_clips, timelin
                             local source_start = (left_offset + (overlap_start - (clip.timeline_start_frame or 0))) / source_fps
                             local source_end = (left_offset + (overlap_end - (clip.timeline_start_frame or 0))) / source_fps
                             add_mixed_cut_record(records, seen, clip, "visible_fragment",
-                                source_start, source_end, overlap_start, timeline_fps, scene_score, "visible_fragment")
+                                source_start, source_end, overlap_start, timeline_fps, scene_score, "visible_fragment",
+                                iv_start, iv_end)
                         end
                     end
                 end
@@ -3200,6 +3203,8 @@ function Main()
                                 source_start_sec = (clip.left_offset or 0) / timeline_fps,
                                 source_duration_sec = dur_sec,
                                 duration_frames = vis_dur,
+                                visual_window_start_frame = iv.start,
+                                visual_window_end_frame = iv.end_,
                                 note = string.format(
                                     "多轨道叠加夹帧(半透明遮挡)\n片段总长: %d帧, 可见: %d帧\n轨道%d: %s\n上层%d%%-%d%%半透明素材遮挡，肉眼可能不明显",
                                     tl_dur, vis_dur, clip.track_index or 1, clip.name, partial_threshold, full_threshold
@@ -3219,6 +3224,8 @@ function Main()
                                 source_start_sec = (clip.left_offset or 0) / timeline_fps,
                                 source_duration_sec = dur_sec,
                                 duration_frames = vis_dur,
+                                visual_window_start_frame = iv.start,
+                                visual_window_end_frame = iv.end_,
                                 note = string.format(
                                     "多轨道叠加夹帧\n片段总长: %d帧, 可见: %d帧\n轨道%d: %s\n被上层不透明轨道遮挡，仅曝光%d帧",
                                     tl_dur, vis_dur, clip.track_index or 1, clip.name, vis_dur
@@ -3552,6 +3559,8 @@ function Main()
                 source_start_sec = lower_clip and ((lower_clip.left_offset or 0) + (frame - (lower_clip.timeline_start_frame or 0))) / timeline_fps or 0,
                 source_duration_sec = duration_frames / timeline_fps,
                 duration_frames = duration_frames,
+                visual_window_start_frame = frame,
+                visual_window_end_frame = frame + duration_frames,
                 note = string.format(
                     "%s\n位置: %s\n普通镜头实际露出: %d帧\n下层: 轨道%d %s\n上层: 轨道%d %s\n%s",
                     marker_name:gsub("^%[BFD%-MIX%]%s*", ""),
@@ -4967,6 +4976,87 @@ function Main()
             dlog(string.format("IO range filter: skipped=%d io_in=%s io_out=%s", skipped_by_io, tostring(io_in), tostring(io_out)))
         end
         selected_records = filtered_records
+    end
+
+    do
+        local function is_external_overlay_short_record(r)
+            local name = tostring(r and r.marker_name or "")
+            return name:find("%[BFD%-MIX%]%s*复合/Fusion外部覆盖边界") ~= nil
+                or name:find("%[BFD%-MIX%]%s*上层覆盖边界夹帧") ~= nil
+                or name:find("%[BFD%-OVL%]%s*夹帧%(") ~= nil
+        end
+        local function is_visible_fragment_mixed_record(r)
+            local name = tostring(r and r.marker_name or "")
+            local seg = r and r.segment or nil
+            return name:find("%[BFD%-MIX%]%s*混剪源内夹帧") ~= nil
+                and seg
+                and seg.final_visible_fragment == true
+        end
+        local function short_visual_window(r)
+            local s = tonumber(r and r.visual_window_start_frame)
+            local e = tonumber(r and r.visual_window_end_frame)
+            if not s or not e then
+                s = tonumber(r and r.timeline_start_frame)
+                e = tonumber(r and r.timeline_end_frame)
+            end
+            if not s or not e then return nil end
+            s = math.floor(s + 0.5)
+            e = math.floor(e + 0.5)
+            if e <= s then return nil end
+            local max_window = tonumber(params.stuck_frames or config.CLASSIFICATION.STUCK_FRAMES) or 3
+            if (e - s) > max_window then return nil end
+            return s, e
+        end
+        local function record_start_frame(r)
+            local f = tonumber(r and r.timeline_start_frame)
+            if not f then return nil end
+            return math.floor(f + 0.5)
+        end
+
+        local specific_records = {}
+        for _, r in ipairs(selected_records) do
+            if is_visible_fragment_mixed_record(r) then
+                table.insert(specific_records, r)
+            end
+        end
+
+        local merged_records = {}
+        local merged_overlay_evidence = 0
+        for _, r in ipairs(selected_records) do
+            if is_external_overlay_short_record(r) then
+                local ws, we = short_visual_window(r)
+                local contained_specifics = {}
+                if ws and we then
+                    for _, specific in ipairs(specific_records) do
+                        local f = record_start_frame(specific)
+                        if f and f >= ws and f < we then
+                            table.insert(contained_specifics, specific)
+                        end
+                    end
+                end
+                if #contained_specifics > 0 then
+                    merged_overlay_evidence = merged_overlay_evidence + 1
+                    local last_frame = math.max(ws, we - 1)
+                    for _, specific in ipairs(contained_specifics) do
+                        specific.note = tostring(specific.note or "") .. string.format(
+                            "\n合并证据: 所在最终可见短段 %s-%s (%d帧) 也命中外部覆盖/叠加短段证据；已折叠泛化外部证据，混剪源内标记本身不互相合并。",
+                            Analyzer.frame_to_timecode(ws, timeline_fps),
+                            Analyzer.frame_to_timecode(last_frame, timeline_fps),
+                            we - ws
+                        )
+                    end
+                else
+                    table.insert(merged_records, r)
+                end
+            else
+                table.insert(merged_records, r)
+            end
+        end
+        if merged_overlay_evidence > 0 then
+            print(string.format("[BFD] 最终可见短段证据合并: 合并 %d 条外部覆盖/叠加重复证据", merged_overlay_evidence))
+            dlog("阶段9: 最终可见短段证据合并 merged_overlay_evidence=" .. tostring(merged_overlay_evidence))
+            selected_records = merged_records
+        end
     end
 
     do

@@ -468,6 +468,8 @@ function Analyzer.analyze_results(ffmpeg_results, timeline_fps, params, clips)
                 source_start_sec = segment.start,
                 source_duration_sec = segment.duration,
                 duration_frames = duration_frames,
+                visual_window_start_frame = segment.visual_window_start_frame,
+                visual_window_end_frame = segment.visual_window_end_frame,
 
                 note = segment.force_note or Analyzer.generate_note(segment, {
                     source_file = clip.file_path,
