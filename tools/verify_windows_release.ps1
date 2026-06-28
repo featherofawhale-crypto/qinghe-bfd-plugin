@@ -25,7 +25,7 @@ function Assert-NotContains($Path, $Pattern, $Label) {
     Write-Host "[OK] $Label does not contain $Pattern"
 }
 
-function Invoke-Isolated($Exe, [string[]]$Arguments, $Label, [int[]]$AllowedExitCodes = @(0), [string]$StandardInput = $null) {
+function Invoke-Isolated($Exe, [string[]]$Arguments, $Label, [int[]]$AllowedExitCodes = @(0)) {
     $envBackup = @{
         PATH = $env:PATH
         PYTHONHOME = $env:PYTHONHOME
@@ -39,30 +39,55 @@ function Invoke-Isolated($Exe, [string[]]$Arguments, $Label, [int[]]$AllowedExit
         Remove-Item Env:\PYTHONPATH -ErrorAction SilentlyContinue
         Remove-Item Env:\QT_PLUGIN_PATH -ErrorAction SilentlyContinue
         Remove-Item Env:\QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
-        if ($null -ne $StandardInput) {
-            $psi = [System.Diagnostics.ProcessStartInfo]::new()
-            $psi.FileName = $Exe
-            foreach ($arg in $Arguments) {
-                [void]$psi.ArgumentList.Add($arg)
-            }
-            $psi.UseShellExecute = $false
-            $psi.RedirectStandardInput = $true
-            $psi.RedirectStandardOutput = $true
-            $psi.RedirectStandardError = $true
-            $process = [System.Diagnostics.Process]::Start($psi)
-            $process.StandardInput.Write($StandardInput)
-            $process.StandardInput.Close()
-            $stdout = $process.StandardOutput.ReadToEnd()
-            $stderr = $process.StandardError.ReadToEnd()
-            $process.WaitForExit()
-            $exitCode = $process.ExitCode
-            $output = @($stdout, $stderr) | Where-Object { $_ }
-        } else {
-            $output = & $Exe @Arguments 2>&1
-            $exitCode = $LASTEXITCODE
-        }
+        $output = & $Exe @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
         if ($exitCode -notin $AllowedExitCodes) {
             throw "${Label} failed with exit code ${exitCode}: $($output -join "`n")"
+        }
+        Write-Host "[OK] $Label"
+    } finally {
+        foreach ($key in $envBackup.Keys) {
+            $value = $envBackup[$key]
+            if ($null -eq $value) {
+                Remove-Item "Env:\$key" -ErrorAction SilentlyContinue
+            } else {
+                Set-Item "Env:\$key" $value
+            }
+        }
+    }
+}
+
+function Invoke-IsolatedWithInput($Exe, [string[]]$Arguments, $StandardInput, $Label, [int[]]$AllowedExitCodes = @(0)) {
+    $envBackup = @{
+        PATH = $env:PATH
+        PYTHONHOME = $env:PYTHONHOME
+        PYTHONPATH = $env:PYTHONPATH
+        QT_PLUGIN_PATH = $env:QT_PLUGIN_PATH
+        QT_QPA_PLATFORM_PLUGIN_PATH = $env:QT_QPA_PLATFORM_PLUGIN_PATH
+    }
+    try {
+        $env:PATH = Split-Path -Parent $Exe
+        Remove-Item Env:\PYTHONHOME -ErrorAction SilentlyContinue
+        Remove-Item Env:\PYTHONPATH -ErrorAction SilentlyContinue
+        Remove-Item Env:\QT_PLUGIN_PATH -ErrorAction SilentlyContinue
+        Remove-Item Env:\QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
+
+        $psi = [System.Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName = $Exe
+        $psi.Arguments = ($Arguments | ForEach-Object { '"' + ($_ -replace '"', '\"') + '"' }) -join " "
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardInput = $true
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $process.StandardInput.Write($StandardInput)
+        $process.StandardInput.Close()
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        $output = @($stdout, $stderr) | Where-Object { $_ }
+        if ($process.ExitCode -notin $AllowedExitCodes) {
+            throw "${Label} failed with exit code $($process.ExitCode): $($output -join "`n")"
         }
         Write-Host "[OK] $Label"
     } finally {
@@ -133,7 +158,7 @@ Assert-NotContains $InstallScript "run_ui_hidden\.vbs|run_ui\.bat" "installer sc
 Invoke-Isolated $BundledFfmpeg @("-hide_banner", "-version") "bundled ffmpeg starts without PATH"
 Invoke-Isolated $BundledFfprobe @("-hide_banner", "-version") "bundled ffprobe starts without PATH"
 Invoke-Isolated $BundledPython @("-I", "-S", "-c", "import sys,json,ssl,subprocess; print(json.dumps({'exe':sys.executable,'ok':True}))") "bundled Python stdlib starts isolated"
-Invoke-Isolated $PackagedExe @("--resolve-bridge") "packaged PySide exe bridge-worker executes stdin script" @(0) "print('bridge-ok')"
+Invoke-IsolatedWithInput $PackagedExe @("--resolve-bridge") "print('bridge-ok')" "packaged PySide exe bridge-worker executes stdin script"
 
 $ZipSize = (Get-Item $ZipPath).Length
 if ($ZipSize -lt 100MB) {
