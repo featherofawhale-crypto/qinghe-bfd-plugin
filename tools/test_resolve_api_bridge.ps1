@@ -8,6 +8,15 @@ $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $PySideDir = Join-Path $Root "pyside_ui"
 
 function Resolve-PythonCommand {
+    $bundledPython = Join-Path $PySideDir "python_runtime\python.exe"
+    if (Test-Path $bundledPython) {
+        return @{
+            Exe = $bundledPython
+            Args = @("-I", "-S")
+            Label = $bundledPython
+        }
+    }
+
     if ($env:QINGHE_PYTHON) {
         if (!(Test-Path $env:QINGHE_PYTHON)) {
             throw "QINGHE_PYTHON points to a missing file: $env:QINGHE_PYTHON"
@@ -41,6 +50,9 @@ function Resolve-PythonCommand {
 }
 
 $python = Resolve-PythonCommand
+if (!(Test-Path (Join-Path $PySideDir "resolve_bridge.py"))) {
+    throw "Missing resolve_bridge.py in test root: $PySideDir"
+}
 $mode = if ($MutateTempMarker) { "mutate-temp-marker" } else { "readonly" }
 $code = @'
 import json
@@ -307,6 +319,9 @@ $tempScript = [System.IO.Path]::ChangeExtension([System.IO.Path]::GetTempFileNam
 try {
     [System.IO.File]::WriteAllText($tempScript, $code, (New-Object System.Text.UTF8Encoding $false))
     & $python.Exe @($python.Args) $tempScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "Resolve API bridge smoke test failed with exit code $LASTEXITCODE"
+    }
 } finally {
     if (Test-Path $tempScript) {
         Remove-Item -LiteralPath $tempScript -Force

@@ -182,6 +182,9 @@ Copy-Item (Join-Path $Root "tools\test_resolve_api_bridge.ps1") (Join-Path $Stag
 Copy-Item (Join-Path $PyInstallerDist "QingheBFDControl") $StageUi -Recurse -Force
 Copy-Item (Join-Path $Root "pyside_ui\icon.ico") $StageUi -Force
 Copy-Item (Join-Path $Root "pyside_ui\icon.svg") $StageUi -Force
+Copy-Item (Join-Path $SourceUi "resolve_bridge.py") $StageUi -Force
+Copy-Item (Join-Path $SourceUi "bpm_worker.py") $StageUi -Force
+Copy-Item (Join-Path $SourceUi "bridge_worker.py") $StageUi -Force
 Copy-Item (Join-Path $SourceUi "data") $StageUi -Recurse -Force
 Copy-Item (Join-Path $SourceUi "templates") $StageUi -Recurse -Force
 $PythonRuntimeSource = Split-Path -Parent $BuildPythonExe
