@@ -247,7 +247,7 @@ def build_resolve_python_process(body: str) -> tuple[list[str], str | None]:
     script = resolve_python_script(body)
     if getattr(sys, "frozen", False):
         return [sys.executable, BRIDGE_WORKER_ARG], script
-    return [sys.executable, "-c", script], None
+    return [sys.executable, "-c", "import sys; exec(sys.stdin.read())"], script
 
 
 def run_resolve_bridge_worker() -> int:
