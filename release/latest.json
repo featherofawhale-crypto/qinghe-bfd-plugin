@@ -1,0 +1,45 @@
+{
+  "version": "2.0.1-beta.23",
+  "channel": "beta",
+  "package_type": "dmg",
+  "sha256": "99dea22ba12bac539395d0b9470236c33d772f0df4a6bd6713f60ebedbc3905f",
+  "notes": "v2.0.1-beta.23 平台分流发布。macOS 保持原 dmg；Windows 新增一键安装 exe，内置 PySide6/Qt、Python runtime、ffmpeg/ffprobe、Resolve Lua 脚本和卸载入口。",
+  "mandatory": false,
+  "mirrors": [
+    {
+      "name": "CNB",
+      "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/latest.json",
+      "priority": 1,
+      "notes": "国内优先更新源。"
+    },
+    {
+      "name": "GitHub",
+      "manifest_url": "https://raw.githubusercontent.com/featherofawhale-crypto/qinghe-bfd-plugin/main/release/latest.json",
+      "priority": 2,
+      "notes": "备用更新源。"
+    }
+  ],
+  "platforms": {
+    "mac": {
+      "version": "2.0.1-beta.23",
+      "package_type": "dmg",
+      "sha256": "99dea22ba12bac539395d0b9470236c33d772f0df4a6bd6713f60ebedbc3905f",
+      "notes": "macOS 完整一键安装版本，保持现有 dmg 资产不替换。",
+      "size": 142105201,
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
+    },
+    "windows": {
+      "version": "2.0.1-beta.23",
+      "package_type": "exe",
+      "sha256": "a5ee8a8f8f8ec6a85074bac33474f56e7dfd9610d0000d216b5a459c7ea63856",
+      "notes": "Windows 一键安装 exe，已在隔离环境验证随包 PySide6/Qt、Python runtime、ffmpeg/ffprobe、Resolve 当前时间线 API、IO 点读取、标记读取、字体扫描、字幕模板和卸载入口。",
+      "size": 120432240,
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/QingheBFD_v2.0.1-beta.23_Windows_Setup.exe"
+    }
+  },
+  "size": 142105201,
+  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
+}
