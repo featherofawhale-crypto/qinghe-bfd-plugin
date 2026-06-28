@@ -25,7 +25,7 @@ function Assert-NotContains($Path, $Pattern, $Label) {
     Write-Host "[OK] $Label does not contain $Pattern"
 }
 
-function Invoke-Isolated($Exe, [string[]]$Arguments, $Label, [int[]]$AllowedExitCodes = @(0)) {
+function Invoke-Isolated($Exe, [string[]]$Arguments, $Label, [int[]]$AllowedExitCodes = @(0), [string]$StandardInput = $null) {
     $envBackup = @{
         PATH = $env:PATH
         PYTHONHOME = $env:PYTHONHOME
@@ -39,9 +39,30 @@ function Invoke-Isolated($Exe, [string[]]$Arguments, $Label, [int[]]$AllowedExit
         Remove-Item Env:\PYTHONPATH -ErrorAction SilentlyContinue
         Remove-Item Env:\QT_PLUGIN_PATH -ErrorAction SilentlyContinue
         Remove-Item Env:\QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
-        $output = & $Exe @Arguments 2>&1
-        if ($LASTEXITCODE -notin $AllowedExitCodes) {
-            throw "${Label} failed with exit code ${LASTEXITCODE}: $($output -join "`n")"
+        if ($null -ne $StandardInput) {
+            $psi = [System.Diagnostics.ProcessStartInfo]::new()
+            $psi.FileName = $Exe
+            foreach ($arg in $Arguments) {
+                [void]$psi.ArgumentList.Add($arg)
+            }
+            $psi.UseShellExecute = $false
+            $psi.RedirectStandardInput = $true
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $process = [System.Diagnostics.Process]::Start($psi)
+            $process.StandardInput.Write($StandardInput)
+            $process.StandardInput.Close()
+            $stdout = $process.StandardOutput.ReadToEnd()
+            $stderr = $process.StandardError.ReadToEnd()
+            $process.WaitForExit()
+            $exitCode = $process.ExitCode
+            $output = @($stdout, $stderr) | Where-Object { $_ }
+        } else {
+            $output = & $Exe @Arguments 2>&1
+            $exitCode = $LASTEXITCODE
+        }
+        if ($exitCode -notin $AllowedExitCodes) {
+            throw "${Label} failed with exit code ${exitCode}: $($output -join "`n")"
         }
         Write-Host "[OK] $Label"
     } finally {
@@ -112,7 +133,7 @@ Assert-NotContains $InstallScript "run_ui_hidden\.vbs|run_ui\.bat" "installer sc
 Invoke-Isolated $BundledFfmpeg @("-hide_banner", "-version") "bundled ffmpeg starts without PATH"
 Invoke-Isolated $BundledFfprobe @("-hide_banner", "-version") "bundled ffprobe starts without PATH"
 Invoke-Isolated $BundledPython @("-I", "-S", "-c", "import sys,json,ssl,subprocess; print(json.dumps({'exe':sys.executable,'ok':True}))") "bundled Python stdlib starts isolated"
-Invoke-Isolated $PackagedExe @("--resolve-bridge") "packaged PySide exe bridge-worker mode starts" @(0, 2)
+Invoke-Isolated $PackagedExe @("--resolve-bridge") "packaged PySide exe bridge-worker executes stdin script" @(0) "print('bridge-ok')"
 
 $ZipSize = (Get-Item $ZipPath).Length
 if ($ZipSize -lt 100MB) {
