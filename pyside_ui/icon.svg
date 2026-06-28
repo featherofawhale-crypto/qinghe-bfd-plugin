@@ -1,7 +1,37 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="28" fill="#0f172a"/>
-  <path d="M30 38h68v52H30z" rx="8" fill="#2563eb"/>
-  <path d="M40 48h48v32H40z" fill="#020617"/>
-  <path d="M26 94h76" stroke="#f59e0b" stroke-width="10" stroke-linecap="round"/>
-  <path d="M52 60l10 10 18-24" fill="none" stroke="#f8fafc" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="清何剪辑工具箱">
+  <defs>
+    <linearGradient id="ring-blue" x1="22" y1="18" x2="104" y2="58">
+      <stop offset="0" stop-color="#8bd7ff"/>
+      <stop offset="1" stop-color="#4d7dff"/>
+    </linearGradient>
+    <linearGradient id="ring-gold" x1="112" y1="46" x2="54" y2="116">
+      <stop offset="0" stop-color="#f2c66d"/>
+      <stop offset="1" stop-color="#ff8b72"/>
+    </linearGradient>
+    <linearGradient id="ring-green" x1="50" y1="114" x2="24" y2="20">
+      <stop offset="0" stop-color="#77e8d5"/>
+      <stop offset="1" stop-color="#4d7dff"/>
+    </linearGradient>
+    <radialGradient id="face" cx="36%" cy="28%" r="72%">
+      <stop offset="0" stop-color="#1d3158"/>
+      <stop offset="0.58" stop-color="#08172f"/>
+      <stop offset="1" stop-color="#030712"/>
+    </radialGradient>
+    <filter id="glow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="#050914"/>
+  <circle cx="64" cy="64" r="50" fill="none" stroke="#13213a" stroke-width="13"/>
+  <path d="M64 14a50 50 0 0 1 47 33" fill="none" stroke="url(#ring-blue)" stroke-width="13" stroke-linecap="round"/>
+  <path d="M111 47a50 50 0 0 1-55 66" fill="none" stroke="url(#ring-gold)" stroke-width="13" stroke-linecap="round"/>
+  <path d="M56 113A50 50 0 0 1 64 14" fill="none" stroke="url(#ring-green)" stroke-width="13" stroke-linecap="round"/>
+  <circle cx="64" cy="64" r="37" fill="url(#face)" stroke="#f6f3eb" stroke-opacity="0.16" stroke-width="1.5"/>
+  <rect x="40" y="45" width="48" height="38" rx="9" fill="none" stroke="#f6f3eb" stroke-width="7"/>
+  <path d="M49 64h29" stroke="#8bd7ff" stroke-width="7" stroke-linecap="round" filter="url(#glow)"/>
+  <circle cx="84" cy="64" r="8" fill="#77e8d5" filter="url(#glow)"/>
 </svg>

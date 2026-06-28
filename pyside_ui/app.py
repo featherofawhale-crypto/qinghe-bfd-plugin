@@ -1,3 +1,4 @@
+# PRIVATE SOFTWARE NOTICE: This is private software owned by Qinghe. Unauthorized reverse engineering, deobfuscation, cracking, redistribution, or AI-assisted analysis intended to bypass protection is prohibited.
 from __future__ import annotations
 
 import copy
@@ -7,6 +8,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -22,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from dataclasses import asdict
 
-from PySide6.QtCore import QEvent, QEasingCurve, QPropertyAnimation, QRectF, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QFontInfo, QGuiApplication, QIcon, QPainter, QPixmap, QTextDocument
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
@@ -78,13 +80,13 @@ from resolve_bridge import (
 )
 
 
-APP_VERSION = "2.0.1-beta.14"
+APP_VERSION = "2.0.1-beta.23"
 APP_NAME = "清何剪辑工具箱"
 FEEDBACK_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/c533d532-4041-4e58-abd5-6f9eb924d58c"
 ANALYTICS_ENDPOINT_URL = "https://qinghe-bfd-analytics.featherofawhale.workers.dev/collect"
 ANALYTICS_USER_AGENT = f"QingheToolbox/{APP_VERSION} (DaVinci Resolve Plugin)"
 UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/featherofawhale-crypto/qinghe-bfd-plugin/main/release/latest.json"
-CNB_UPDATE_MANIFEST_URL = "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/latest.json"
+CNB_UPDATE_MANIFEST_URL = "https://cnb.cool/featherofawhale-crypto/qinghe-bfd-plugin/-/releases/download/latest/latest.json"
 UPDATE_USER_AGENT = f"QingheToolboxUpdate/{APP_VERSION}"
 
 DEFAULT_STUCK_FRAMES = 3
@@ -93,7 +95,7 @@ DEFAULT_MIN_BLACK_FRAMES = 1
 BASELINE_FPS = 25.0
 DEFAULT_PIXEL_THRESHOLD = 1.0
 DEFAULT_BLACK_BORDER_PX = 3
-DEFAULT_CONTENT_SAMPLE_INTERVAL = 3
+DEFAULT_CONTENT_SAMPLE_INTERVAL = 5
 BLACK_BORDER_ASPECT_PRESETS = [
     ("不指定遮幅", 0.0),
     ("1.33", 1.33),
@@ -140,28 +142,6 @@ def update_platform_key() -> str:
     if system == "Windows":
         return "windows"
     return system.lower() or "unknown"
-
-
-def allowed_update_package_suffixes(platform_key: str | None = None) -> set[str]:
-    key = platform_key or update_platform_key()
-    if key == "mac":
-        return {".dmg", ".zip", ".command"}
-    if key == "windows":
-        return {".exe", ".msi", ".zip"}
-    return {".zip", ".tar", ".gz", ".tgz"}
-
-
-def is_update_package_compatible(download_url: str, package_type: str, platform_key: str | None = None) -> bool:
-    suffixes = allowed_update_package_suffixes(platform_key)
-    suffix = Path(urllib.parse.urlparse(str(download_url or "")).path).suffix.lower()
-    pkg_type = str(package_type or "").strip().lower()
-    if pkg_type and not pkg_type.startswith("."):
-        pkg_type = "." + pkg_type
-    if suffix and suffix not in suffixes:
-        return False
-    if pkg_type and pkg_type not in suffixes:
-        return False
-    return bool(download_url)
 
 
 def update_manifest_urls() -> list[str]:
@@ -244,29 +224,12 @@ def update_info_from_manifest(manifest: dict) -> dict:
     platform_key = update_platform_key()
     platforms = manifest.get("platforms") if isinstance(manifest.get("platforms"), dict) else {}
     platform_info = platforms.get(platform_key) if isinstance(platforms.get(platform_key), dict) else {}
-    if platforms and not platform_info:
-        return {
-            "platform": platform_key,
-            "latest_version": "",
-            "download_url": "",
-            "package_type": "",
-            "sha256": "",
-            "release_url": str(manifest.get("release_url") or "").strip(),
-            "notes": "",
-            "manifest_url": str(manifest.get("_manifest_url") or "").strip(),
-            "mandatory": False,
-        }
     latest_version = str(platform_info.get("version") or manifest.get("version") or "").strip()
-    download_url = str(platform_info.get("download_url") or ("" if platforms else manifest.get("download_url")) or "").strip()
-    package_type = str(platform_info.get("package_type") or ("" if platforms else manifest.get("package_type")) or "").strip().lower()
-    if download_url and not is_update_package_compatible(download_url, package_type, platform_key):
-        download_url = ""
-        package_type = ""
     return {
         "platform": platform_key,
         "latest_version": latest_version,
-        "download_url": download_url,
-        "package_type": package_type,
+        "download_url": str(platform_info.get("download_url") or manifest.get("download_url") or "").strip(),
+        "package_type": str(platform_info.get("package_type") or manifest.get("package_type") or "").strip().lower(),
         "sha256": str(platform_info.get("sha256") or manifest.get("sha256") or "").strip().lower(),
         "release_url": str(platform_info.get("release_url") or manifest.get("release_url") or "").strip(),
         "notes": str(platform_info.get("notes") or manifest.get("notes") or "").strip(),
@@ -279,6 +242,43 @@ def update_cache_dir() -> Path:
     path = Path.home() / ".qinghe_bfd" / "updates"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+UPDATE_PACKAGE_SUFFIXES = {".command", ".dmg", ".pkg", ".zip", ".exe", ".msi"}
+
+
+def cleanup_update_cache(keep_path: Path | None = None, keep_latest: int = 1) -> None:
+    cache_dir = update_cache_dir()
+    keep_resolved = None
+    if keep_path:
+        try:
+            keep_resolved = keep_path.resolve()
+        except Exception:
+            keep_resolved = keep_path
+    try:
+        for extracted in cache_dir.glob("extracted_*"):
+            if extracted.is_dir():
+                shutil.rmtree(extracted, ignore_errors=True)
+        packages = [
+            item for item in cache_dir.iterdir()
+            if item.is_file() and item.suffix.lower() in UPDATE_PACKAGE_SUFFIXES
+        ]
+        if keep_resolved is not None:
+            for item in packages:
+                try:
+                    if item.resolve() != keep_resolved:
+                        item.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            return
+        packages.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+        for item in packages[max(0, keep_latest):]:
+            try:
+                item.unlink(missing_ok=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 AUDIO_EFFECT_PRESETS = [
     {
@@ -667,20 +667,6 @@ def bring_window_to_front(window: QWidget) -> None:
         window.showNormal()
     window.raise_()
     window.activateWindow()
-    apply_macos_window_level(window, True)
-    if platform.system() == "Darwin":
-        try:
-            native_id = int(window.winId())
-            import objc  # type: ignore
-            from AppKit import NSApplication  # type: ignore
-
-            view = objc.objc_object(c_void_p=ctypes.c_void_p(native_id))
-            ns_window = view.window() if view is not None and hasattr(view, "window") else None
-            if ns_window is not None:
-                ns_window.makeKeyAndOrderFront_(None)
-            NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
-        except Exception:
-            pass
 
 
 def set_windows_app_user_model_id() -> None:
@@ -1131,6 +1117,14 @@ def font_probe_rules_path() -> Path:
     return plugin_data_dir() / "font_probe_rules.json"
 
 
+def basic_font_rules_path() -> Path:
+    return plugin_data_dir() / "basic_font_rules.json"
+
+
+def fallback_font_rules_path() -> Path:
+    return plugin_data_dir() / "fallback_probe_rules.json"
+
+
 def font_probe_report_path() -> Path:
     return plugin_data_dir() / "font_probe_report.json"
 
@@ -1194,6 +1188,18 @@ def install_cjk_font() -> str:
 
 def debug_log_path() -> Path:
     return Path.home() / "bfd_debug.log"
+
+
+def startup_trace(message: str) -> None:
+    if os.environ.get("QINGHE_BFD_STARTUP_TRACE") != "1":
+        return
+    try:
+        root = Path.home() / ".qinghe_bfd"
+        root.mkdir(parents=True, exist_ok=True)
+        with (root / "startup_trace.log").open("a", encoding="utf-8") as handle:
+            handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {time.time():.3f} {message}\n")
+    except Exception:
+        pass
 
 
 def read_debug_log_tail(max_chars: int = 12000) -> str:
@@ -1378,33 +1384,88 @@ class SubmitWorker(QThread):
         messages: list[str] = []
         for index, params in enumerate(self.jobs, 1):
             timeline_name = str(params.get("timeline_name", f"时间线 {index}"))
+            timeline_index = int(params.get("timeline_index", 1) or 1)
             base = int(((index - 1) / max(1, total)) * 90)
             span = max(8, int(90 / max(1, total)))
             self.progress.emit(base + 8, f"准备 {timeline_name}")
             time.sleep(0.12)
-            params_path = self.bridge.submit_params(params)
             self.progress.emit(base + 25, f"打开时间线：{timeline_name}")
             if self.bridge.is_connected():
-                ok, message = self.bridge.activate_timeline(int(params.get("timeline_index", 1)))
+                ok, message = self.bridge.activate_timeline(timeline_index)
                 if not ok:
                     self.done.emit(False, f"{timeline_name} 打开失败：{message}")
                     return
             else:
                 self.bridge.open_resolve_page()
+            if params.get("batch_read_io"):
+                io_ok, io_message = self.refresh_job_io(params, timeline_name, timeline_index, base, span)
+                if not io_ok:
+                    self.done.emit(False, io_message)
+                    return
+            params_path = self.bridge.submit_params(params)
+            job_id = str(params_path.stem).replace("params_", "", 1)
             self.progress.emit(base + 48, f"检测 {timeline_name}")
             ok, message = self.bridge.run_lua_entry_with_fuscript(params_path)
             if not ok:
                 self.done.emit(False, f"{timeline_name} 检测启动失败：{message}")
                 return
-            wait_ok, wait_message = self.wait_for_job_completion(timeline_name, base, span, bool(params.get("complex_mode")))
+            wait_ok, wait_message, progress_payload = self.wait_for_job_completion(
+                timeline_name,
+                base,
+                span,
+                bool(params.get("complex_mode")),
+                job_id,
+            )
             if not wait_ok:
                 self.done.emit(False, wait_message)
+                return
+            sync_ok, sync_message = self.wait_for_timeline_marker_sync(params, progress_payload, base, span)
+            if not sync_ok:
+                self.done.emit(False, sync_message)
                 return
             messages.append(f"{timeline_name}: {message or '已完成'}")
         self.progress.emit(100, "检测已提交")
         self.done.emit(True, "\n".join(messages) if messages else "检测已提交。")
 
-    def wait_for_job_completion(self, timeline_name: str, base: int, span: int, complex_mode: bool) -> tuple[bool, str]:
+    def refresh_job_io(
+        self,
+        params: dict,
+        timeline_name: str,
+        timeline_index: int,
+        base: int,
+        span: int,
+    ) -> tuple[bool, str]:
+        self.progress.emit(min(99, base + max(1, int(span * 0.32))), f"读取IO：{timeline_name}")
+        result = self.bridge.current_timeline_marks(timeline_index)
+        if not result.get("ok"):
+            params["manual_io_in"] = ""
+            params["manual_io_out"] = ""
+            message = str(result.get("message", "未读取到入出点。") or "未读取到入出点。")
+            if params.get("complex_mode"):
+                return False, f"{timeline_name} 读取IO失败：{message}"
+            params["io_source"] = "none"
+            return True, message
+        params["manual_io_in"] = str(result.get("in_tc", "") or "")
+        params["manual_io_out"] = str(result.get("out_tc", "") or "")
+        params["io_source"] = str(result.get("source", "timeline_marks") or "timeline_marks")
+        try:
+            params["timeline_fps"] = float(result.get("fps") or params.get("timeline_fps") or 25.0)
+        except Exception:
+            pass
+        if not params["manual_io_in"] or not params["manual_io_out"]:
+            if params.get("complex_mode"):
+                return False, f"{timeline_name} 读取IO失败：Resolve 未返回完整入出点。"
+            params["io_source"] = "none"
+        return True, "已读取IO"
+
+    def wait_for_job_completion(
+        self,
+        timeline_name: str,
+        base: int,
+        span: int,
+        complex_mode: bool,
+        job_id: str,
+    ) -> tuple[bool, str, dict]:
         timeout = 1800 if complex_mode else 600
         started = time.time()
         last_stage = ""
@@ -1412,6 +1473,10 @@ class SubmitWorker(QThread):
         while time.time() - started < timeout:
             progress = read_progress_file()
             if isinstance(progress, dict):
+                progress_job_id = str(progress.get("job_id") or "")
+                if progress_job_id and progress_job_id != job_id:
+                    time.sleep(0.5)
+                    continue
                 state = str(progress.get("state", ""))
                 stage = str(progress.get("stage", "检测中"))
                 try:
@@ -1426,12 +1491,79 @@ class SubmitWorker(QThread):
                     last_percent = pct
                 if state in {"complete", "failed", "cancelled"} or pct >= 100:
                     if state == "failed":
-                        return False, f"{timeline_name} 检测失败：{stage}"
+                        return False, f"{timeline_name} 检测失败：{stage}", progress
                     if state == "cancelled":
-                        return False, f"{timeline_name} 检测已取消。"
-                    return True, stage or "检测完成"
+                        return False, f"{timeline_name} 检测已取消。", progress
+                    return True, stage or "检测完成", progress
             time.sleep(0.5)
-        return False, f"{timeline_name} 检测超时，已等待 {timeout} 秒。"
+        return False, f"{timeline_name} 检测超时，已等待 {timeout} 秒。", {}
+
+    def wait_for_timeline_marker_sync(
+        self,
+        params: dict,
+        progress_payload: dict,
+        base: int,
+        span: int,
+    ) -> tuple[bool, str]:
+        timeline_index = int(params.get("timeline_index", 1))
+        timeline_name = str(params.get("timeline_name", f"时间线 {timeline_index}"))
+        records = progress_payload.get("records") if isinstance(progress_payload, dict) else None
+        expected_count = len(records) if isinstance(records, list) else 0
+        if expected_count <= 0:
+            self.progress.emit(min(99, base + span), f"{timeline_name}：确认无标记结果")
+            time.sleep(0.8)
+            return True, "检测完成"
+
+        self.progress.emit(min(99, base + span), f"{timeline_name}：确认标记写入")
+        deadline = time.time() + 45
+        last_count = -1
+        while time.time() < deadline:
+            result = self.bridge.bfd_marker_records(timeline_index)
+            if result.get("ok"):
+                counts = result.get("counts") if isinstance(result.get("counts"), dict) else {}
+                marker_count = int(counts.get("total") or 0)
+                if marker_count != last_count:
+                    self.progress.emit(
+                        min(99, base + span),
+                        f"{timeline_name}：已读回 {marker_count}/{expected_count} 个标记",
+                    )
+                    last_count = marker_count
+                if marker_count >= expected_count:
+                    return True, "标记已写入"
+            time.sleep(1.0)
+        return False, f"{timeline_name} 检测已完成，但未能在 Resolve 里确认全部标记写入。"
+
+
+class StartupSyncWorker(QThread):
+    done = Signal(dict)
+
+    def run(self) -> None:
+        bridge = ResolveBridge()
+        payload: dict = {
+            "ok": False,
+            "connected": False,
+            "timelines": [],
+            "current_identity": {},
+            "resolve_version": "",
+            "message": "",
+        }
+        try:
+            timelines = bridge.list_timelines()
+            current_identity = bridge.current_timeline_identity()
+            connected = bridge.is_connected()
+            resolve_version = bridge.resolve_version_string() if connected else ""
+            payload.update(
+                {
+                    "ok": True,
+                    "connected": bool(connected),
+                    "timelines": [asdict(timeline) for timeline in timelines],
+                    "current_identity": current_identity if isinstance(current_identity, dict) else {},
+                    "resolve_version": resolve_version,
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            payload["message"] = str(exc)
+        self.done.emit(payload)
 
 
 class UpdateInstallWorker(QThread):
@@ -1459,12 +1591,16 @@ class UpdateInstallWorker(QThread):
             if platform.system() == "Darwin":
                 self.install_macos_package(package_path, package_type)
                 return
+            if platform.system() == "Windows":
+                self.install_windows_package(package_path, package_type)
+                return
             self.done.emit(True, f"安装包已下载：{package_path}\n当前平台暂不自动安装，请手动运行安装包。", str(package_path))
         except Exception as exc:
             self.done.emit(False, f"一键更新失败：{exc}", "")
 
     def download_package(self, url: str) -> Path:
         self.progress.emit(5, "连接更新源")
+        cleanup_update_cache(keep_latest=1)
         request = urllib.request.Request(url, headers={"User-Agent": UPDATE_USER_AGENT})
         with urllib.request.urlopen(request, timeout=30) as response:
             total = int(response.headers.get("Content-Length") or 0)
@@ -1481,6 +1617,7 @@ class UpdateInstallWorker(QThread):
                     if total > 0:
                         percent = 8 + int(min(1.0, read / total) * 62)
                         self.progress.emit(percent, f"下载更新包 {read // 1024 // 1024}MB / {max(1, total // 1024 // 1024)}MB")
+        cleanup_update_cache(keep_path=target)
         self.progress.emit(72, "下载完成")
         return target
 
@@ -1532,8 +1669,49 @@ class UpdateInstallWorker(QThread):
         if result.returncode != 0:
             self.done.emit(False, "安装脚本执行失败：\n" + (result.stdout or "")[-2000:], str(package_path))
             return
+        if work_dir and work_dir.name.startswith("extracted_"):
+            shutil.rmtree(work_dir, ignore_errors=True)
         self.progress.emit(100, "更新完成")
         self.done.emit(True, "更新完成。请重新打开插件，让新版本完全生效。", str(package_path))
+
+    def install_windows_package(self, package_path: Path, package_type: str) -> None:
+        lower_name = package_path.name.lower()
+        installer: Path | None = None
+        work_dir: Path | None = None
+        if package_type == "zip" or lower_name.endswith(".zip"):
+            self.progress.emit(78, "解压 Windows 更新包")
+            work_dir = update_cache_dir() / f"extracted_{int(time.time())}"
+            work_dir.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(package_path, "r") as archive:
+                archive.extractall(work_dir)
+            setup_exes = sorted(work_dir.rglob("*_Setup.exe"))
+            if not setup_exes:
+                setup_exes = sorted(work_dir.rglob("*.exe"))
+            installer = setup_exes[0] if setup_exes else None
+            if installer is None:
+                scripts = list(work_dir.rglob("install_windows.bat")) or list(work_dir.rglob("install_windows.ps1"))
+                installer = scripts[0] if scripts else None
+        elif lower_name.endswith(".exe") or package_type in {"exe", "setup"}:
+            installer = package_path
+        elif lower_name.endswith(".msi") or package_type == "msi":
+            installer = package_path
+
+        if not installer or not installer.exists():
+            self.done.emit(False, f"Windows 更新包里没有找到安装器或 install_windows 脚本：{package_path}", str(package_path))
+            return
+
+        self.progress.emit(92, "启动 Windows 安装器")
+        env = os.environ.copy()
+        env["QINGHE_AUTO_UPDATE"] = "1"
+        if installer.suffix.lower() == ".ps1":
+            cmd = ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(installer)]
+        elif installer.suffix.lower() == ".msi":
+            cmd = ["msiexec.exe", "/i", str(installer)]
+        else:
+            cmd = [str(installer)]
+        subprocess.Popen(cmd, cwd=str(installer.parent), env=env)
+        self.progress.emit(100, "Windows 安装器已启动")
+        self.done.emit(True, "Windows 安装器已启动。请按安装器界面完成覆盖安装或卸载旧版。", str(installer))
 
 
 class TextPlusStyleApplyWorker(QThread):
@@ -1563,6 +1741,23 @@ class TextPlusStyleApplyWorker(QThread):
             else:
                 fail_count += 1
         self.done.emit({"ok_count": ok_count, "fail_count": fail_count, "skipped": skipped})
+
+
+class FontLayerScanWorker(QThread):
+    done = Signal(dict, bool, object)
+
+    def __init__(self, timeline_index: int, silent: bool, selected_keys: object) -> None:
+        super().__init__()
+        self.timeline_index = int(timeline_index or 1)
+        self.silent = bool(silent)
+        self.selected_keys = selected_keys
+
+    def run(self) -> None:
+        try:
+            result = ResolveBridge().scan_font_items(self.timeline_index)
+        except Exception as exc:  # noqa: BLE001
+            result = {"ok": False, "items": [], "message": f"扫描字体层失败：{exc}"}
+        self.done.emit(result, self.silent, self.selected_keys)
 
 
 class ResultTextEdit(QTextEdit):
@@ -1856,8 +2051,11 @@ class MainWindow(QMainWindow):
     update_check_finished = Signal(dict, bool, str)
 
     def __init__(self) -> None:
+        startup_trace("MainWindow init enter")
         super().__init__()
+        startup_trace("MainWindow after super")
         font_family = install_cjk_font()
+        startup_trace(f"MainWindow after install_cjk_font family={font_family}")
         app = QApplication.instance()
         if app:
             app.setFont(QFont(font_family, 10))
@@ -1867,6 +2065,7 @@ class MainWindow(QMainWindow):
         self.resize(1180, 780)
         self.setMinimumSize(960, 640)
         self.bridge = ResolveBridge()
+        startup_trace("MainWindow after bridge")
         self.timelines: list[TimelineInfo] = []
         self.worker: SubmitWorker | None = None
         self.result_values: dict[str, QLabel] = {}
@@ -1884,6 +2083,8 @@ class MainWindow(QMainWindow):
         self.font_family_styles: dict[str, list[str]] = {}
         self.font_probe_rules: dict[str, list[str]] = {}
         self.font_probe_rule_items: list[dict] = []
+        self._font_delivery_rules_loaded = False
+        self._qt_application_font_paths: set[str] = set()
         self.font_fusion_availability_cache: dict[str, dict] = {}
         self.font_inventory_consent = False
         self.donation_prompt_seen = False
@@ -1911,6 +2112,8 @@ class MainWindow(QMainWindow):
         self._normal_geometry = None
         self._checking_updates = False
         self._update_notice_shown = False
+        self.startup_sync_worker: StartupSyncWorker | None = None
+        self.font_scan_worker: FontLayerScanWorker | None = None
         self.update_worker: UpdateInstallWorker | None = None
         self.update_progress_dialog: QProgressDialog | None = None
         self.theme_name = "default"
@@ -1938,6 +2141,7 @@ class MainWindow(QMainWindow):
         root.setSpacing(9)
 
         root.addLayout(self._build_header())
+        startup_trace("MainWindow after header")
         body = QVBoxLayout()
         body.setSpacing(9)
 
@@ -1979,6 +2183,7 @@ class MainWindow(QMainWindow):
         self.detection_layout.setSpacing(8)
 
         body.addWidget(self._build_side_tabs(), 1)
+        startup_trace("MainWindow after side tabs")
         root.addLayout(body, 1)
 
         wrapper = QWidget()
@@ -1987,29 +2192,37 @@ class MainWindow(QMainWindow):
         wrapper_layout.addWidget(shell)
         self.setCentralWidget(wrapper)
         self.install_button_motion()
+        startup_trace("MainWindow after central widget")
 
-        self.refresh_timelines()
+        self.set_timeline_loading_state("正在同步 Resolve 时间线...")
         self.load_settings()
-        self.refresh_timelines()
-        self._capture_current_timeline_uid()
-        self.resolve_version_text = self.bridge.resolve_version_string()
         self.load_font_favorites()
         self.load_font_style_library()
         self.load_font_probe_rules()
-        self.load_available_fonts()
-        self.refresh_font_list()
-        self.refresh_font_style_library_list()
+        startup_trace("MainWindow after settings/rules")
         self.update_fps_hint()
+        startup_trace("MainWindow after update_fps_hint")
         self.on_complex_mode_changed(self.chk_complex.isChecked())
+        startup_trace("MainWindow after complex mode")
         self.resolve_watch_timer.start()
         self.timeline_poll_timer.start()
         self.font_auto_scan_timer.start()
-        self.window_level_timer.start()
-        self.enforce_resolve_window_level()
+        # Do not poll macOS foreground/window level. On some systems this blocks
+        # AppKit for seconds and makes the plugin feel frozen during launch.
+        startup_trace("MainWindow after timers start")
+        QTimer.singleShot(160, self.start_startup_sync)
+        QTimer.singleShot(350, self.initialize_font_inventory)
         QTimer.singleShot(1200, lambda: self.track_usage_event("app_start"))
         QTimer.singleShot(1600, self.show_first_run_donation_dialog)
         QTimer.singleShot(2600, lambda: self.check_for_updates(manual=False))
-        self._log("Resolve API: " + ("已连接" if self.bridge.is_connected() else "未连接，使用离线参数模式"))
+        startup_trace("MainWindow after schedule timers")
+        self._log("插件界面已打开，正在后台同步 Resolve 时间线。")
+        startup_trace("MainWindow init leave")
+
+    def initialize_font_inventory(self) -> None:
+        self.load_available_fonts()
+        self.refresh_font_list()
+        self.refresh_font_style_library_list()
 
     def _build_header(self) -> QHBoxLayout:
         layout = QHBoxLayout()
@@ -2028,8 +2241,8 @@ class MainWindow(QMainWindow):
         title_box.addWidget(self.subtitle_label)
         title_box.addWidget(disclaimer)
 
-        self.connection_badge = QLabel("已连接" if self.bridge.is_connected() else "离线参数")
-        self.connection_badge.setObjectName("BadgeOk" if self.bridge.is_connected() else "BadgeWarn")
+        self.connection_badge = QLabel("连接中")
+        self.connection_badge.setObjectName("BadgeWarn")
         self.connection_badge.setFixedHeight(34)
         self.connection_badge.setAlignment(Qt.AlignCenter)
         set_tip(self.connection_badge, "已连接：插件当前能通过 Resolve 脚本 API 读取工程和时间线；离线：只能改界面参数，检测/扫描类功能会失败。")
@@ -2310,7 +2523,7 @@ class MainWindow(QMainWindow):
 
         self.reset_thresholds_btn = QPushButton("还原默认")
         self.reset_thresholds_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
-        set_tip(self.reset_thresholds_btn, "恢复默认阈值：夹帧 3 帧、可疑 12 帧、最短黑场 1 帧、黑色阈值 1%、黑边 3px、指纹采样 3 帧。")
+        set_tip(self.reset_thresholds_btn, "恢复默认阈值：夹帧 3 帧、可疑 12 帧、最短黑场 1 帧、黑色阈值 1%、黑边 3px、指纹采样 5 帧。")
         self.reset_thresholds_btn.clicked.connect(self.reset_threshold_defaults)
 
         def add_threshold_row(row: int, text: str, field: QWidget, slider: QSlider) -> None:
@@ -2353,11 +2566,6 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(14)
 
-        self.chk_merge = self._check(
-            "成片模式（合并分析）",
-            True,
-            "默认开启。把时间线顶层可见的视频素材合并成连续流做 blackdetect，速度通常比逐文件更快，也能避开下层被遮挡素材误报。",
-        )
         self.chk_nested_render = self._check(
             "复合/Fusion 片段精查",
             False,
@@ -2370,7 +2578,7 @@ class MainWindow(QMainWindow):
         )
         self.chk_complex.toggled.connect(self.on_complex_mode_changed)
 
-        for check in [self.chk_merge, self.chk_nested_render, self.chk_complex]:
+        for check in [self.chk_nested_render, self.chk_complex]:
             layout.addWidget(check)
         layout.addStretch(1)
         return box
@@ -2432,15 +2640,35 @@ class MainWindow(QMainWindow):
         cache_row.addWidget(self.browse_complex_cache_btn)
         layout.addLayout(cache_row, 4, 1)
 
+        self.chk_keep_complex_cache = self._check(
+            "保存复杂模式缓存视频",
+            False,
+            "默认关闭。开启后，复杂模式渲染出的成片会保留在缓存目录，并写入清何匹配文件；以后可选择该视频跳过重复渲染。",
+        )
+        layout.addWidget(self.chk_keep_complex_cache, 5, 0, 1, 2)
+
+        self.imported_complex_render = QLineEdit("")
+        self.imported_complex_render.setMinimumWidth(260)
+        self.imported_complex_render.setPlaceholderText("选择复杂模式成片；缓存严格校验，外部成片按当前 IO/FPS 分析")
+        set_tip(self.imported_complex_render, "带清何匹配文件的缓存会校验时间线、入出点、帧率和时长；没有匹配文件的外部成片会直接按当前 IO/FPS 做映射分析，不再启动 Resolve 渲染。")
+        self.browse_imported_render_btn = QPushButton("选择视频")
+        self.browse_imported_render_btn.clicked.connect(self.choose_imported_complex_render)
+        set_tip(self.browse_imported_render_btn, "选择清何缓存成片或用户已渲染好的外部成片。")
+        layout.addWidget(QLabel("使用已保存成片"), 6, 0)
+        import_row = QHBoxLayout()
+        import_row.addWidget(self.imported_complex_render, 1)
+        import_row.addWidget(self.browse_imported_render_btn)
+        layout.addLayout(import_row, 6, 1)
+
         self.reset_all_defaults_btn = QPushButton("一键还原全部默认设置")
         self.reset_all_defaults_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
         set_tip(self.reset_all_defaults_btn, "恢复检测勾选、分析方式、批量检测、阈值、黑边遮幅、音频 BPM 标记和高级选项到插件默认值。不会删除字体收藏、样式库、捐赠记录或统计开关。")
         self.reset_all_defaults_btn.clicked.connect(self.reset_all_defaults)
-        layout.addWidget(self.reset_all_defaults_btn, 5, 0, 1, 2)
+        layout.addWidget(self.reset_all_defaults_btn, 7, 0, 1, 2)
 
         self.complex_hint.setObjectName("Muted")
         set_tip(self.complex_hint, "复杂模式会产生临时渲染文件，用最终画面做检测；调色后的坏帧要看最终像素，所以必须依赖它。")
-        layout.addWidget(self.complex_hint, 6, 0, 1, 2)
+        layout.addWidget(self.complex_hint, 8, 0, 1, 2)
         return box
 
     def _build_action_group(self) -> QWidget:
@@ -2628,16 +2856,25 @@ class MainWindow(QMainWindow):
 
         self.text_initial_panel = QFrame()
         self.text_initial_panel.setObjectName("Panel")
-        initial_layout = QVBoxLayout(self.text_initial_panel)
-        initial_layout.setContentsMargins(14, 12, 14, 12)
-        initial_layout.setSpacing(10)
+        self.text_initial_panel.setMaximumHeight(126)
+        initial_layout = QHBoxLayout(self.text_initial_panel)
+        initial_layout.setContentsMargins(18, 14, 18, 14)
+        initial_layout.setSpacing(18)
+        initial_copy = QVBoxLayout()
+        initial_copy.setContentsMargins(0, 0, 0, 0)
+        initial_copy.setSpacing(6)
         initial_title = QLabel("检测时间线文字")
         initial_title.setObjectName("SectionTitle")
         initial_hint = QLabel("先选择要读取的文字类型：SRT 字幕轨、Text+ Fusion 文本；检测完成后再进入搜索、替换和表格编辑。")
         initial_hint.setObjectName("Muted")
         initial_hint.setWordWrap(True)
+        initial_hint.setMaximumWidth(760)
+        initial_copy.addWidget(initial_title)
+        initial_copy.addWidget(initial_hint)
+        initial_copy.addStretch(1)
         initial_row = QHBoxLayout()
         initial_row.setContentsMargins(0, 0, 0, 0)
+        initial_row.setSpacing(10)
         self.text_scan_srt = QCheckBox("SRT")
         self.text_scan_srt.setChecked(True)
         self.text_scan_text = QCheckBox("TXT")
@@ -2657,11 +2894,11 @@ class MainWindow(QMainWindow):
         self.text_scan_type_hint = QLabel("当前扫描：SRT")
         self.text_scan_type_hint.setObjectName("Muted")
         initial_row.addWidget(self.text_scan_type_hint)
-        initial_row.addStretch(1)
         initial_row.addWidget(self.text_initial_scan_btn)
-        initial_layout.addWidget(initial_title)
-        initial_layout.addWidget(initial_hint)
-        initial_layout.addLayout(initial_row)
+        initial_layout.addStretch(1)
+        initial_layout.addLayout(initial_copy, 2)
+        initial_layout.addLayout(initial_row, 0)
+        initial_layout.addStretch(1)
         layout.addWidget(self.text_initial_panel)
 
         self.text_search_panel = QFrame()
@@ -3078,7 +3315,7 @@ class MainWindow(QMainWindow):
 
         self.audio_bpm_btn = QPushButton("识别选中BPM")
         self.audio_bpm_btn.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
-        set_tip(self.audio_bpm_btn, "识别一个音乐片段的 BPM：优先用时间线选中音频；选不中时用播放头所在音频。只分析，不写标记。")
+        set_tip(self.audio_bpm_btn, "识别音乐 BPM：优先读取鼠标选中的音频；Resolve 没返回选中对象时，会改用播放头所在音频，播放头下多条音频时再让你选择。")
         self.audio_bpm_btn.clicked.connect(self.estimate_selected_audio_bpm)
 
         bpm_options = QHBoxLayout()
@@ -3118,7 +3355,7 @@ class MainWindow(QMainWindow):
         self.bpm_marker_every_spin.setRange(1, 32)
         self.bpm_marker_every_spin.setValue(4)
         self.bpm_marker_every_spin.setSingleStep(1)
-        set_tip(self.bpm_marker_every_spin, "控制节拍标记密度：1 表示每拍都标；4 表示每 4 拍标一次，通常对应一小节，更适合剪辑对拍。")
+        set_tip(self.bpm_marker_every_spin, "控制节拍标记密度：1 表示每拍都标；4 表示每 4 拍标一次。插件会从播放头确认的重拍出发，保持完整拍号结构，并吸附附近可信的实际 beat 点。")
         marker_every_label = QLabel("每几拍")
         marker_every_label.setObjectName("Muted")
         bpm_options.addWidget(marker_every_label)
@@ -3139,12 +3376,16 @@ class MainWindow(QMainWindow):
 
         self.audio_bpm_mark_btn = QPushButton("生成节拍标记")
         self.audio_bpm_mark_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogNewFolder))
-        set_tip(self.audio_bpm_mark_btn, "先选中音乐片段，再把播放头放到你确认的节拍第一帧或重拍锚点上。插件会优先校准识别到的实际 beat 点；识别不到 beat 点时才用 BPM 网格兜底。")
+        set_tip(self.audio_bpm_mark_btn, "先选中音乐片段，再把播放头放到你确认的重拍锚点上。选中对象读不到时，会回到播放头音频/候选列表逻辑。")
         self.audio_bpm_mark_btn.clicked.connect(self.mark_selected_audio_beats)
         self.audio_bpm_clear_btn = QPushButton("清除节拍标记")
         self.audio_bpm_clear_btn.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
         set_tip(self.audio_bpm_clear_btn, "按“标记位置”清除插件生成的 [QH-BPM] 节拍标记，不会清除黑帧检测标记或你手动打的普通标记。")
         self.audio_bpm_clear_btn.clicked.connect(self.clear_audio_bpm_markers)
+        self.audio_bpm_clear_current_btn = QPushButton("清除当前音频节拍")
+        self.audio_bpm_clear_current_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogResetButton))
+        set_tip(self.audio_bpm_clear_current_btn, "清除 Resolve 当前返回的音频片段 [QH-BPM] 标记：能读到鼠标选中音频就清选中片段；读不到选中对象时，清播放头所在音频片段。")
+        self.audio_bpm_clear_current_btn.clicked.connect(self.clear_current_audio_bpm_markers)
 
         self.media_pool_probe_btn = QPushButton("媒体池探针")
         self.media_pool_probe_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogInfoView))
@@ -3158,6 +3399,7 @@ class MainWindow(QMainWindow):
         actions.addWidget(self.audio_bpm_btn)
         actions.addWidget(self.audio_bpm_mark_btn)
         actions.addWidget(self.audio_bpm_clear_btn)
+        actions.addWidget(self.audio_bpm_clear_current_btn)
         actions.addStretch(1)
         layout.addLayout(actions)
         layout.addLayout(bpm_options)
@@ -3210,6 +3452,7 @@ class MainWindow(QMainWindow):
             ("content_dup", "指纹", "不同文件或跨片段的画面指纹重复。", MARKER_COLORS["content_dup"]),
             ("opacity", "透明", "透明度、禁用或合成问题。", MARKER_COLORS["opacity"]),
             ("corrupt", "坏帧", "复杂模式下 signalstats/熵分析发现的渲染异常。", MARKER_COLORS["corrupt"]),
+            ("black_border", "黑边", "画面边缘露出的黑边。", MARKER_COLORS["black_border"]),
         ]
         for index, (key, title, tip, color) in enumerate(items):
             card = QFrame()
@@ -3298,14 +3541,80 @@ class MainWindow(QMainWindow):
         set_tip(slider, spinbox.toolTip())
         return slider
 
-    def refresh_timelines(self) -> None:
+    def set_connection_state(self, connected: bool | None, text: str | None = None) -> None:
+        if connected is None:
+            label = text or "连接中"
+            object_name = "BadgeWarn"
+        else:
+            label = text or ("已连接" if connected else "离线参数")
+            object_name = "BadgeOk" if connected else "BadgeWarn"
+        self.connection_badge.setText(label)
+        self.connection_badge.setObjectName(object_name)
+        self.connection_badge.style().unpolish(self.connection_badge)
+        self.connection_badge.style().polish(self.connection_badge)
+
+    def set_timeline_loading_state(self, message: str) -> None:
         self._loading_timelines = True
-        self.timelines = self.bridge.list_timelines()
-        current_identity = self.bridge.current_timeline_identity()
+        self.timeline_combo.clear()
+        self.timeline_combo.addItem(message, {"index": 1, "name": "当前时间线", "fps": BASELINE_FPS})
+        self.timeline_combo.setEnabled(False)
+        self.batch_timeline_list.clear()
+        self.batch_timeline_list.setEnabled(False)
+        self._loading_timelines = False
+        self.set_connection_state(None, "连接中")
+
+    def start_startup_sync(self) -> None:
+        if self.startup_sync_worker is not None and self.startup_sync_worker.isRunning():
+            return
+        self.set_timeline_loading_state("正在同步 Resolve 时间线...")
+        self.startup_sync_worker = StartupSyncWorker()
+        self.startup_sync_worker.done.connect(self.on_startup_sync_done)
+        self.startup_sync_worker.finished.connect(self.startup_sync_worker.deleteLater)
+        self.startup_sync_worker.start()
+
+    def on_startup_sync_done(self, payload: dict) -> None:
+        timelines: list[TimelineInfo] = []
+        for item in payload.get("timelines") or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                timelines.append(
+                    TimelineInfo(
+                        int(item.get("index", len(timelines) + 1)),
+                        str(item.get("name") or f"Timeline {len(timelines) + 1}"),
+                        float(item.get("fps") or BASELINE_FPS),
+                        str(item.get("uid") or ""),
+                    )
+                )
+            except Exception:
+                continue
+        self.apply_timeline_snapshot(
+            timelines,
+            payload.get("current_identity") if isinstance(payload.get("current_identity"), dict) else {},
+            bool(payload.get("connected")),
+        )
+        self.resolve_version_text = str(payload.get("resolve_version") or "")
+        self._capture_current_timeline_uid()
+        if payload.get("ok"):
+            self._log("Resolve API: " + ("已连接" if payload.get("connected") else "未连接，使用离线参数模式"))
+        else:
+            self._log("Resolve API 同步失败：" + str(payload.get("message") or "未知错误"))
+        self.startup_sync_worker = None
+
+    def apply_timeline_snapshot(
+        self,
+        timelines: list[TimelineInfo],
+        current_identity: dict | None = None,
+        connected: bool | None = None,
+    ) -> None:
+        current_identity = current_identity or {}
         current_uid = str(current_identity.get("uid", "")) if current_identity.get("ok") else ""
         current_name = str(current_identity.get("name", "")) if current_identity.get("ok") else ""
         current_combo_index = 0
+        self._loading_timelines = True
+        self.timelines = timelines
         self.timeline_combo.clear()
+        self.timeline_combo.setEnabled(True)
         self.batch_timeline_list.clear()
         for tl in self.timelines:
             data = asdict(tl)
@@ -3328,19 +3637,26 @@ class MainWindow(QMainWindow):
             elif current_uid or current_name:
                 item.setCheckState(Qt.Unchecked)
             self.batch_timeline_list.addItem(item)
-        self.connection_badge.setText("已连接" if self.bridge.is_connected() else "离线参数")
-        self.connection_badge.setObjectName("BadgeOk" if self.bridge.is_connected() else "BadgeWarn")
-        self.connection_badge.style().unpolish(self.connection_badge)
-        self.connection_badge.style().polish(self.connection_badge)
+        if not self.timelines:
+            self.timeline_combo.addItem("未读取到 Resolve 时间线", {"index": 1, "name": "当前时间线", "fps": BASELINE_FPS})
+        if connected is not None:
+            self.set_connection_state(bool(connected))
         if self.batch_timeline_list.count() > 0 and not any(
             self.batch_timeline_list.item(i).checkState() == Qt.Checked for i in range(self.batch_timeline_list.count())
         ):
             self.batch_timeline_list.item(0).setCheckState(Qt.Checked)
         if self.timeline_combo.count() > 0:
             self.timeline_combo.setCurrentIndex(current_combo_index)
+        self.batch_timeline_list.setEnabled(self.chk_batch_timelines.isChecked())
         self._loading_timelines = False
         self._control_fps = self.selected_fps()
         self.update_fps_hint()
+
+    def refresh_timelines(self) -> None:
+        timelines = self.bridge.list_timelines()
+        current_identity = self.bridge.current_timeline_identity()
+        connected = self.bridge.is_connected()
+        self.apply_timeline_snapshot(timelines, current_identity, connected)
 
     def on_timeline_changed(self) -> None:
         if self._loading_timelines or self._loading_settings:
@@ -3354,6 +3670,10 @@ class MainWindow(QMainWindow):
 
     def selected_timeline_data(self) -> dict:
         return self.timeline_combo.currentData() or {"index": 1, "name": "当前时间线", "fps": 25.0}
+
+    def current_resolve_timeline_data(self) -> dict:
+        self.refresh_timelines()
+        return self.selected_timeline_data()
 
     def selected_fps(self) -> float:
         selected = self.selected_timeline_data()
@@ -3392,6 +3712,7 @@ class MainWindow(QMainWindow):
         data = {
             "theme": self.theme_name,
             "donation_prompt_seen": bool(self.donation_prompt_seen),
+            "timeline_index": self.timeline_combo.currentIndex(),
             "stuck_frames": self.stuck_frames.value(),
             "suspect_frames": self.suspect_frames.value(),
             "pix_th": self.pixel_threshold.value(),
@@ -3401,9 +3722,12 @@ class MainWindow(QMainWindow):
             "black_border_matte_aspect": self.current_black_border_aspect(),
             "min_black_frames": self.min_black_frames.value(),
             "content_sample_interval": self.content_sample_interval.value(),
+            "content_sample_default_v7": True,
             "bpm_marker_every": self.bpm_marker_every_spin.value(),
             "bpm_marker_phase": self.bpm_marker_phase_spin.value(),
             "complex_cache_dir": self.complex_cache_dir.text().strip(),
+            "keep_complex_cache": self.chk_keep_complex_cache.isChecked(),
+            "imported_complex_render": self.imported_complex_render.text().strip(),
             "batch_enabled": self.chk_batch_timelines.isChecked(),
             "batch_read_io": self.chk_batch_read_io.isChecked(),
             "batch_timeline_indices": [
@@ -3426,8 +3750,7 @@ class MainWindow(QMainWindow):
                 "partial_opacity": self.chk_partial_opacity.isChecked(),
                 "png_opaque": self.chk_png_opaque.isChecked(),
                 "png_opaque_default_v2": True,
-                "merge": self.chk_merge.isChecked(),
-                "nested_render": self.chk_nested_render.isChecked(),
+                "nested_render": (not complex_mode) and self.chk_nested_render.isChecked(),
                 "complex": self.chk_complex.isChecked(),
                 "html": self.chk_html.isChecked(),
                 "analytics": self.chk_analytics.isChecked(),
@@ -3456,6 +3779,18 @@ class MainWindow(QMainWindow):
                 self.apply_theme(str(data.get("theme") or "default"), update_combo=True, persist=False)
             else:
                 self.apply_theme("default", update_combo=True, persist=False)
+            has_current_timeline = any(
+                "当前" in self.timeline_combo.itemText(index)
+                for index in range(self.timeline_combo.count())
+            )
+            if (
+                self.timeline_combo.count() > 0
+                and self.timeline_combo.isEnabled()
+                and not self.bridge.is_connected()
+                and not has_current_timeline
+                and isinstance(data.get("timeline_index"), int)
+            ):
+                self.timeline_combo.setCurrentIndex(max(0, min(self.timeline_combo.count() - 1, data["timeline_index"])))
             for name, widget in [
                 ("content_sample_interval", self.content_sample_interval),
                 ("black_border_px", self.black_border_px),
@@ -3463,9 +3798,16 @@ class MainWindow(QMainWindow):
                 ("bpm_marker_phase", self.bpm_marker_phase_spin),
             ]:
                 if isinstance(data.get(name), int):
-                    widget.setValue(data[name])
+                    value = int(data[name])
+                    if name == "content_sample_interval" and value == 3 and data.get("content_sample_default_v7") is not True:
+                        value = DEFAULT_CONTENT_SAMPLE_INTERVAL
+                    widget.setValue(value)
             if isinstance(data.get("complex_cache_dir"), str) and data["complex_cache_dir"].strip():
                 self.complex_cache_dir.setText(data["complex_cache_dir"].strip())
+            if isinstance(data.get("keep_complex_cache"), bool):
+                self.chk_keep_complex_cache.setChecked(bool(data.get("keep_complex_cache")))
+            if isinstance(data.get("imported_complex_render"), str):
+                self.imported_complex_render.setText(data.get("imported_complex_render", "").strip())
             if isinstance(data.get("black_border_matte_aspect"), (int, float)):
                 self.set_black_border_aspect_from_value(float(data.get("black_border_matte_aspect") or 0.0))
             for name, widget in [
@@ -3491,7 +3833,6 @@ class MainWindow(QMainWindow):
                 "mark_hidden": self.chk_mark_hidden,
                 "partial_opacity": self.chk_partial_opacity,
                 "png_opaque": self.chk_png_opaque,
-                "merge": self.chk_merge,
                 "nested_render": self.chk_nested_render,
                 "complex": self.chk_complex,
                 "html": self.chk_html,
@@ -3502,6 +3843,9 @@ class MainWindow(QMainWindow):
             for key, widget in check_map.items():
                 if isinstance(checks.get(key), bool):
                     widget.setChecked(checks[key])
+            if self.chk_complex.isChecked():
+                self.chk_nested_render.setChecked(False)
+                self.chk_nested_render.setEnabled(False)
             if isinstance(checks.get("font_inventory_consent"), bool):
                 self.font_inventory_consent = bool(checks.get("font_inventory_consent"))
             if isinstance(checks.get("corrupt"), bool) and self.chk_complex.isChecked():
@@ -3552,6 +3896,22 @@ class MainWindow(QMainWindow):
             return QColor("#e3efbd"), QColor("#334229")
         return QColor("#fff3bf"), QColor("#172033")
 
+    def ask_enable_complex_mode(self, title: str, message: str, confirm_text: str = "启用复杂模式") -> bool:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle(title)
+        box.setText(message)
+        cancel_btn = box.addButton("继续普通模式 / 取消", QMessageBox.RejectRole)
+        confirm_btn = box.addButton(confirm_text, QMessageBox.AcceptRole)
+        confirm_btn.setStyleSheet(
+            "QPushButton { color: #64748b; background: #e5e7eb; border-color: #cbd5e1; }"
+            "QPushButton:hover { background: #dbe1ea; }"
+        )
+        box.setDefaultButton(cancel_btn)
+        box.setEscapeButton(cancel_btn)
+        box.exec()
+        return box.clickedButton() is confirm_btn
+
     def on_theme_changed(self, *_args) -> None:
         if not hasattr(self, "theme_combo"):
             return
@@ -3568,6 +3928,7 @@ class MainWindow(QMainWindow):
         self.set_black_border_aspect_from_value(0.0)
         self.content_sample_interval.setValue(DEFAULT_CONTENT_SAMPLE_INTERVAL)
         self.update_fps_hint()
+        self.save_settings()
 
     def reset_all_defaults(self) -> None:
         answer = QMessageBox.question(
@@ -3589,7 +3950,6 @@ class MainWindow(QMainWindow):
         self.chk_opacity.setChecked(True)
         self.chk_black_border.setChecked(False)
         self.chk_corrupt.setChecked(False)
-        self.chk_merge.setChecked(True)
         self.chk_nested_render.setChecked(False)
         self.chk_complex.setChecked(False)
         self.chk_clear.setChecked(True)
@@ -3605,6 +3965,8 @@ class MainWindow(QMainWindow):
         if 0 <= selected < self.batch_timeline_list.count():
             self.batch_timeline_list.item(selected).setCheckState(Qt.Checked)
         self.complex_cache_dir.setText(str(default_complex_cache_dir()))
+        self.chk_keep_complex_cache.setChecked(False)
+        self.imported_complex_render.clear()
         if hasattr(self, "bpm_marker_scope_combo"):
             self.bpm_marker_scope_combo.setCurrentIndex(0)
         if hasattr(self, "bpm_marker_every_spin"):
@@ -3656,24 +4018,35 @@ class MainWindow(QMainWindow):
         if selected:
             self.complex_cache_dir.setText(selected)
 
+    def choose_imported_complex_render(self) -> None:
+        current = self.imported_complex_render.text().strip() or self.complex_cache_dir.text().strip() or str(default_complex_cache_dir())
+        selected, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择已保存复杂模式成片",
+            current,
+            "视频文件 (*.mp4 *.mov *.m4v);;所有文件 (*)",
+        )
+        if selected:
+            self.imported_complex_render.setText(selected)
+
     def on_complex_mode_changed(self, checked: bool) -> None:
         if not checked:
+            self.chk_nested_render.setEnabled(True)
             self.chk_corrupt.setChecked(False)
             self.complex_hint.setText("坏帧检测依赖复杂模式：需要入点和出点。")
         else:
+            self.chk_nested_render.setChecked(False)
+            self.chk_nested_render.setEnabled(False)
             self.complex_hint.setText("复杂模式会先渲染入出点范围，再分析最终画面；调色/OFX/Fusion 后的坏帧检测现在可选。")
 
     def on_corrupt_toggled(self, checked: bool) -> None:
         if not checked or self.chk_complex.isChecked():
             return
-        answer = QMessageBox.question(
-            self,
+        answer = self.ask_enable_complex_mode(
             "开启复杂模式",
             "渲染坏帧检测必须先开启复杂模式并填写入出点。是否自动勾选复杂模式？",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes,
         )
-        if answer == QMessageBox.Yes:
+        if answer:
             self.chk_complex.setChecked(True)
         else:
             self.chk_corrupt.setChecked(False)
@@ -3682,7 +4055,9 @@ class MainWindow(QMainWindow):
         selected = selected or self.selected_timeline_data()
         black_border_aspect = self.current_black_border_aspect()
         black_border_forces_complex = self.chk_black_border.isChecked() and black_border_aspect > 0 and not self.chk_complex.isChecked()
-        complex_mode = self.chk_complex.isChecked() or black_border_forces_complex
+        imported_render = self.imported_complex_render.text().strip()
+        complex_mode = self.chk_complex.isChecked() or black_border_forces_complex or bool(imported_render)
+        render_nested_segments = (not complex_mode) and self.chk_nested_render.isChecked()
         timeline_fps = float(selected.get("fps", 25.0))
         return {
             "timeline_index": int(selected.get("index", 1)),
@@ -3697,7 +4072,11 @@ class MainWindow(QMainWindow):
             "content_sample_interval": self.content_sample_interval.value(),
             "manual_io_in": self.io_in.text().strip(),
             "manual_io_out": self.io_out.text().strip(),
+            "batch_read_io": False,
             "complex_cache_dir": self.complex_cache_dir.text().strip() or str(default_complex_cache_dir()),
+            "keep_complex_cache": self.chk_keep_complex_cache.isChecked(),
+            "imported_complex_render_path": imported_render,
+            "complex_mode_from_import": bool(imported_render),
             "marker_types": {
                 "error": self.chk_error.isChecked(),
                 "suspect": self.chk_suspect.isChecked(),
@@ -3720,8 +4099,8 @@ class MainWindow(QMainWindow):
             "html_report": self.chk_html.isChecked(),
             "clear_existing": self.chk_clear.isChecked(),
             "complex_mode": complex_mode,
-            "merge_mode": self.chk_merge.isChecked(),
-            "render_nested_segments": self.chk_nested_render.isChecked(),
+            "merge_mode": True,
+            "render_nested_segments": render_nested_segments,
             "mark_hidden_clips": self.chk_mark_hidden.isChecked(),
             "mark_partial_opacity": self.chk_partial_opacity.isChecked(),
             "png_as_opaque": self.chk_png_opaque.isChecked(),
@@ -3734,20 +4113,10 @@ class MainWindow(QMainWindow):
         for selected in self.selected_batch_timelines():
             job = self.collect_params(selected)
             if use_per_timeline_io:
-                result = self.bridge.current_timeline_marks(int(selected.get("index", 1)))
-                if result.get("ok"):
-                    job["manual_io_in"] = str(result.get("in_tc", "") or "")
-                    job["manual_io_out"] = str(result.get("out_tc", "") or "")
-                    job["io_source"] = str(result.get("source", "timeline_marks") or "timeline_marks")
-                    self._log(
-                        f"批量IO：{selected.get('name', '时间线')} -> "
-                        f"{job['manual_io_in']} - {job['manual_io_out']} ({job['io_source']})"
-                    )
-                else:
-                    self._log(
-                        f"批量IO：{selected.get('name', '时间线')} 读取失败，回退手动范围："
-                        f"{result.get('message', '未读取到入出点。')}"
-                    )
+                job["batch_read_io"] = True
+                job["manual_io_in"] = ""
+                job["manual_io_out"] = ""
+                job["io_source"] = "pending_after_activate"
             jobs.append(job)
         return jobs
 
@@ -3955,7 +4324,12 @@ class MainWindow(QMainWindow):
                 return
             if self.prompt_complex_mode_for_risky_timelines(jobs):
                 return
-            if any(job["complex_mode"] and (not job["manual_io_in"] or not job["manual_io_out"]) for job in jobs):
+            if any(
+                job["complex_mode"]
+                and not job.get("batch_read_io")
+                and (not job["manual_io_in"] or not job["manual_io_out"])
+                for job in jobs
+            ):
                 QMessageBox.warning(self, "复杂模式需要入出点", "复杂模式会先渲染检测范围，请填写手动入点和出点。")
                 return
 
@@ -4013,28 +4387,31 @@ class MainWindow(QMainWindow):
             f"当前遮幅比例为 {aspect:.2f}。\n"
             "插件会按这个比例识别预期遮幅区域，再检查有效画面里是否还有额外露黑。"
         )
-        answer = QMessageBox.question(
-            self,
+        answer = self.ask_enable_complex_mode(
             "画面黑边需要最终画面检测",
             "你勾选了“画面黑边”，并指定了遮幅比例。为了避免把正常遮幅误报成黑边，"
             "本次会临时启用复杂模式，先渲染当前 IO 范围的最终画面。\n\n"
             f"{formula}\n\n"
             "如果当前项目没有加遮幅，请把遮幅预设改成“不指定遮幅”，就可以走普通模式快速检测。\n\n"
             "继续本次遮幅黑边检测吗？",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes,
+            "启用复杂模式检测黑边",
         )
-        if answer != QMessageBox.Yes:
+        if not answer:
             self._log("用户取消画面黑边最终画面检测。")
             return True
         if any(
-            job.get("black_border_forces_complex") and (not job.get("manual_io_in") or not job.get("manual_io_out"))
+            job.get("black_border_forces_complex")
+            and not job.get("batch_read_io")
+            and (not job.get("manual_io_in") or not job.get("manual_io_out"))
             for job in jobs
         ):
             self.fill_in_out_from_current_timeline_marks()
         for job in jobs:
             if job.get("black_border_forces_complex"):
                 job["complex_mode"] = True
+                job["render_nested_segments"] = False
+                if job.get("batch_read_io"):
+                    continue
                 if not job.get("manual_io_in"):
                     job["manual_io_in"] = self.io_in.text().strip()
                 if not job.get("manual_io_out"):
@@ -4053,43 +4430,62 @@ class MainWindow(QMainWindow):
     def prompt_complex_mode_for_risky_timelines(self, jobs: list[dict]) -> bool:
         if self.chk_complex.isChecked() or any(job.get("complex_mode") for job in jobs):
             return False
-        risky_tokens = ("mix", "final", "output", "成片", "混剪", "合集")
         for job in jobs:
             timeline_name = str(job.get("timeline_name") or job.get("name") or "当前时间线")
             risk_message = ""
-            risk_count = 0
-            if self.bridge.is_connected():
-                result = self.bridge.detect_complex_timeline_risk(int(job.get("timeline_index", 1)))
-                if result and result.get("ok"):
-                    risk_count = int(result.get("count", 0) or 0)
-                    if risk_count > 0:
-                        risk_message = f"检测到 {risk_count} 个疑似成片/Fusion/复合片段风险。"
-            if not risk_message and any(token in timeline_name.lower() for token in risky_tokens):
-                risk_message = "时间线命名疑似混剪/成片。"
+            risk_kind = ""
+            timeline_index = int(job.get("timeline_index", 1) or 1)
+            if timeline_index < 1:
+                timeline_index = 1
+            result = self.bridge.detect_complex_timeline_risk(timeline_index)
+            if result and result.get("ok"):
+                complex_count = int(result.get("complex_count", 0) or 0)
+                nested_count = int(result.get("nested_count", 0) or 0)
+                if complex_count > 0:
+                    risk_kind = "complex"
+                    risk_message = f"检测到 {complex_count} 个源内切点密集的疑似混剪成片。"
+                elif nested_count > 0 and not self.chk_nested_render.isChecked() and not job.get("render_nested_segments"):
+                    risk_kind = "nested"
+                    risk_message = f"检测到 {nested_count} 个复合/Fusion 片段。"
+            elif result and result.get("message"):
+                self._log("复杂模式风险扫描失败：" + str(result.get("message")))
             if not risk_message:
                 continue
-            prompt = (
-                f"时间线“{timeline_name}”{risk_message}\n\n"
-                "普通模式只做时间线结构和源素材检测，不会渲染最终画面；如果要检查调色、OFX、Fusion、叠加后的最终画面，请启用复杂模式。\n\n"
-                "是否现在切换到复杂模式？"
-            )
-            answer = QMessageBox.question(
-                self,
-                "建议启用复杂模式",
+            if risk_kind == "complex":
+                prompt = (
+                    f"时间线“{timeline_name}”{risk_message}\n\n"
+                    "普通模式不会渲染最终画面；如果要检查调色、OFX、叠加后的最终像素，请启用复杂模式。\n\n"
+                    "是否现在切换到复杂模式？"
+                )
+                title = "建议启用复杂模式"
+            else:
+                prompt = (
+                    f"时间线“{timeline_name}”{risk_message}\n\n"
+                    "普通模式不会进入复合片段/Fusion片段内部；如果要检查这些片段内部的黑帧、夹帧和短空隙，请启用复合/Fusion 片段精查。\n\n"
+                    "是否现在启用复合/Fusion 片段精查？"
+                )
+                title = "建议启用复合/Fusion 片段精查"
+            answer = self.ask_enable_complex_mode(
+                title,
                 prompt,
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
+                "启用复合/Fusion 精查" if risk_kind == "nested" else "启用复杂模式",
             )
-            if answer == QMessageBox.Yes:
-                self.fill_in_out_from_current_timeline_marks()
-                job["complex_mode"] = True
-                job["detect_content_dup"] = self.chk_content_dup.isChecked()
-                job["detect_corrupt"] = self.chk_corrupt.isChecked()
-                job["manual_io_in"] = self.io_in.text().strip()
-                job["manual_io_out"] = self.io_out.text().strip()
-                self._log("本次检测临时启用复杂模式；高级选项里的复杂模式不会被永久勾选。")
+            if answer == QMessageBox.Yes or answer is True:
+                if risk_kind == "complex":
+                    job["complex_mode"] = True
+                    job["render_nested_segments"] = False
+                    job["detect_content_dup"] = self.chk_content_dup.isChecked()
+                    job["detect_corrupt"] = self.chk_corrupt.isChecked()
+                    if not job.get("batch_read_io"):
+                        self.fill_in_out_from_current_timeline_marks()
+                        job["manual_io_in"] = self.io_in.text().strip()
+                        job["manual_io_out"] = self.io_out.text().strip()
+                    self._log("本次检测临时启用复杂模式；高级选项里的复杂模式不会被永久勾选。")
+                else:
+                    job["render_nested_segments"] = True
+                    self._log("本次检测临时启用复合/Fusion 片段精查；高级选项里的开关不会被永久勾选。")
                 continue
-            self._log("用户选择继续普通模式；疑似成片/Fusion/复合片段不会执行渲染深扫。")
+            self._log("用户选择继续普通模式；相关片段不会执行渲染深扫。")
             return False
         return False
 
@@ -4228,10 +4624,20 @@ class MainWindow(QMainWindow):
         self.side_tabs.setCurrentWidget(self.audio_tab)
         self._log(str(result.get("message", "音频 FX API 探测完成。")))
 
-    def _resolve_audio_bpm_result(self, timeline_index: int, status_text: str) -> dict:
+    def _resolve_audio_bpm_result(
+        self,
+        timeline_index: int,
+        status_text: str,
+        prefer_playhead_clip: bool = False,
+        require_selected_audio: bool = False,
+    ) -> dict:
         self.audio_summary.setText(status_text)
         QApplication.processEvents()
-        result = self.bridge.estimate_selected_audio_bpm(timeline_index)
+        result = self.bridge.estimate_selected_audio_bpm(
+            timeline_index,
+            prefer_playhead_clip=prefer_playhead_clip,
+            require_selected_audio=require_selected_audio,
+        )
         if result.get("needs_selection"):
             candidates = result.get("candidates") if isinstance(result.get("candidates"), list) else []
             choices: list[str] = []
@@ -4263,20 +4669,31 @@ class MainWindow(QMainWindow):
                     selector = selector_by_choice.get(choice, "")
                     self.audio_summary.setText(status_text)
                     QApplication.processEvents()
-                    result = self.bridge.estimate_selected_audio_bpm(timeline_index, selector)
+                    result = self.bridge.estimate_selected_audio_bpm(
+                        timeline_index,
+                        selector,
+                        prefer_playhead_clip=prefer_playhead_clip,
+                        require_selected_audio=require_selected_audio,
+                    )
         return result
 
     def estimate_selected_audio_bpm(self) -> None:
-        selected = self.timeline_combo.currentData() or {"index": 1}
-        result = self._resolve_audio_bpm_result(int(selected.get("index", 1)), "正在识别选中音乐 BPM...")
+        selected = self.current_resolve_timeline_data()
+        result = self._resolve_audio_bpm_result(
+            int(selected.get("index", 1)),
+            "正在识别选中音乐 BPM...",
+        )
         self.render_audio_bpm(result)
         self.side_tabs.setCurrentWidget(self.audio_tab)
         self._log(str(result.get("message", "BPM 识别完成。")))
 
     def mark_selected_audio_beats(self) -> None:
-        selected = self.timeline_combo.currentData() or {"index": 1}
+        selected = self.current_resolve_timeline_data()
         timeline_index = int(selected.get("index", 1))
-        result = self._resolve_audio_bpm_result(timeline_index, "正在识别 BPM 并生成节拍标记...")
+        result = self._resolve_audio_bpm_result(
+            timeline_index,
+            "正在识别 BPM 并生成节拍标记...",
+        )
         if result.get("ok") and result.get("bpm"):
             clip = result.get("clip") if isinstance(result.get("clip"), dict) else {}
             try:
@@ -4304,7 +4721,7 @@ class MainWindow(QMainWindow):
                     "当前播放头会作为节拍锚点：\n"
                     f"{anchor_tc}（距片段起点 {anchor_delta} 帧）\n\n"
                     "请确认播放头已经放在你听到的第一拍/重拍的准确帧上。\n"
-                    "继续后，插件会优先用这个锚点校准识别到的实际 beat 点；识别不到 beat 点时才用 BPM 网格兜底。"
+                    "继续后，插件会优先生成稳定 BPM 网格；只有在 beat 点足够可信时才使用真实鼓点辅助校准。"
                 ),
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes,
@@ -4316,6 +4733,37 @@ class MainWindow(QMainWindow):
                 self._log(result["message"])
                 return
             marker_scope = str(self.bpm_marker_scope_combo.currentData() or "clip")
+            beat_source_start_frame = 0 if result.get("beat_times_relative_to_clip") else int(float(clip.get("source_start_frame") or 0))
+            confidence = 0.0
+            jitter = 1.0
+            try:
+                confidence = float(result.get("confidence") or 0)
+            except Exception:
+                confidence = 0.0
+            try:
+                jitter = float(result.get("beat_interval_jitter") or 1.0)
+            except Exception:
+                jitter = 1.0
+            beat_times_for_markers = result.get("beat_times_seconds") if isinstance(result.get("beat_times_seconds"), list) else None
+            stable_grid_reason = ""
+            try:
+                source_start_frame = int(float(clip.get("source_start_frame") or 0))
+                source_end_frame = int(float(clip.get("source_end_frame") or 0))
+            except Exception:
+                source_start_frame = 0
+                source_end_frame = 0
+            source_range_known = source_end_frame > source_start_frame or bool(result.get("beat_times_relative_to_clip"))
+            if confidence < 0.55:
+                stable_grid_reason = f"Essentia 置信度偏低({confidence:.2f})"
+            elif jitter > 0.12:
+                stable_grid_reason = f"beat 间隔抖动偏大({jitter:.2%})"
+            elif not source_range_known:
+                stable_grid_reason = "Resolve 未返回音频切段源入点"
+            if stable_grid_reason:
+                result["force_grid_markers"] = True
+                result["marker_mode_note"] = stable_grid_reason + "，已改用播放头锚点+BPM稳定网格。"
+            if not source_range_known:
+                beat_times_for_markers = None
             marker_result = self.bridge.add_bpm_grid_markers(
                 timeline_index,
                 float(result.get("bpm") or 0),
@@ -4330,15 +4778,18 @@ class MainWindow(QMainWindow):
                 int(clip.get("item_index") or -1),
                 str(clip.get("unique_id") or ""),
                 0.0,
-                int(float(clip.get("source_start_frame") or 0)),
-                result.get("beat_times_seconds") if isinstance(result.get("beat_times_seconds"), list) else None,
+                beat_source_start_frame,
+                beat_times_for_markers,
                 int(self.bpm_marker_every_spin.value()),
                 1,
                 playhead_frame,
+                bool(result.get("force_grid_markers")),
             )
             result["marker_result"] = marker_result
             if marker_result.get("ok"):
                 result["message"] = str(marker_result.get("message", result.get("message", "节拍标记完成。")))
+                if result.get("marker_mode_note"):
+                    result["message"] += " " + str(result.get("marker_mode_note"))
             else:
                 result["ok"] = False
                 result["message"] = str(marker_result.get("message", "节拍标记失败。"))
@@ -4347,13 +4798,21 @@ class MainWindow(QMainWindow):
         self._log(str(result.get("message", "节拍标记完成。")))
 
     def clear_audio_bpm_markers(self) -> None:
-        selected = self.timeline_combo.currentData() or {"index": 1}
+        selected = self.current_resolve_timeline_data()
         marker_scope = str(self.bpm_marker_scope_combo.currentData() or "clip")
         result = self.bridge.clear_bpm_markers(int(selected.get("index", 1)), marker_scope)
         self.audio_summary.setText(str(result.get("message", "节拍标记已清除。")))
         self.audio_list.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
         self.side_tabs.setCurrentWidget(self.audio_tab)
         self._log(str(result.get("message", "节拍标记清除完成。")))
+
+    def clear_current_audio_bpm_markers(self) -> None:
+        selected = self.current_resolve_timeline_data()
+        result = self.bridge.clear_current_audio_bpm_markers(int(selected.get("index", 1)))
+        self.audio_summary.setText(str(result.get("message", "当前音频节拍标记已清除。")))
+        self.audio_list.setPlainText(json.dumps(result, ensure_ascii=False, indent=2))
+        self.side_tabs.setCurrentWidget(self.audio_tab)
+        self._log(str(result.get("message", "当前音频节拍标记清除完成。")))
 
     def run_media_pool_probe(self, silent: bool = False) -> dict:
         selected = self.timeline_combo.currentData() or {"index": 1}
@@ -4468,6 +4927,98 @@ class MainWindow(QMainWindow):
         if clean_path not in bucket:
             bucket.append(clean_path)
 
+    def font_candidate_family_part(self, value: str) -> str:
+        text = str(value or "").strip()
+        if "|||" in text:
+            return str(text.split("|||", 1)[0] or "").strip()
+        family, _style = self.split_font_style(text)
+        return family or text
+
+    def parse_font_candidate(self, value: str) -> tuple[str, str, str]:
+        text = str(value or "").strip()
+        if "|||" in text:
+            parts = text.split("|||", 2)
+            while len(parts) < 3:
+                parts.append("")
+            return parts[0].strip(), parts[1].strip(), parts[2].strip()
+        family, style = self.split_font_style(text)
+        return family, style, ""
+
+    def ensure_qt_font_candidate_loaded(self, candidate: str) -> list[str]:
+        family, _style, path_text = self.parse_font_candidate(candidate)
+        paths = self.font_file_path_variants(path_text)
+        loaded_families: list[str] = []
+        for path in paths:
+            if path in self._qt_application_font_paths:
+                continue
+            font_id = QFontDatabase.addApplicationFont(path)
+            if font_id < 0:
+                continue
+            self._qt_application_font_paths.add(path)
+            for loaded_family in QFontDatabase.applicationFontFamilies(font_id):
+                loaded = str(loaded_family or "").strip()
+                if not loaded:
+                    continue
+                loaded_families.append(loaded)
+                if family and loaded != family:
+                    self.add_font_alias(family, [loaded])
+                    self.add_font_alias(loaded, [family])
+                    self.add_font_file_alias(loaded, path)
+                try:
+                    self._font_qt_family_set.add(loaded)
+                except Exception:
+                    pass
+        return loaded_families
+
+    def is_corrupt_font_candidate(self, value: str) -> bool:
+        family = self.font_candidate_family_part(value)
+        if not family:
+            return False
+        question_count = family.count("?")
+        if question_count < 3:
+            return False
+        meaningful = re.sub(r"[?\s._\\/|-]+", "", family)
+        has_cjk = any("\u4e00" <= char <= "\u9fff" for char in meaningful)
+        has_alnum = any(char.isalnum() for char in meaningful)
+        if not meaningful or (not has_cjk and not has_alnum):
+            return True
+        return question_count >= max(3, len(family) // 2)
+
+    def clean_font_probe_candidate(self, value: str) -> str:
+        text = str(value or "").strip()
+        if not text or self.is_corrupt_font_candidate(text):
+            return ""
+        return text
+
+    def font_file_path_variants(self, file_name_or_path: str) -> list[str]:
+        text = str(file_name_or_path or "").strip()
+        if not text:
+            return []
+        candidates: list[str] = []
+
+        def add(path_text: str) -> None:
+            path = Path(str(path_text or "")).expanduser()
+            try:
+                resolved = str(path) if path.exists() else ""
+            except Exception:
+                resolved = ""
+            if resolved and resolved not in candidates:
+                candidates.append(resolved)
+
+        add(text)
+        basename = Path(text).name
+        if basename and basename != text:
+            add(basename)
+        if basename:
+            for root in (
+                Path.home() / "Library" / "Fonts",
+                Path("/Library/Fonts"),
+                Path("/System/Library/Fonts"),
+                Path("/System/Library/Fonts/Supplemental"),
+            ):
+                add(str(root / basename))
+        return candidates
+
     def font_name_variants(self, name: str) -> list[str]:
         clean_name = " ".join(str(name or "").replace("_", " ").split()).strip()
         raw_name = str(name or "").strip()
@@ -4556,6 +5107,8 @@ class MainWindow(QMainWindow):
 
     def font_candidates(self, name: str) -> list[str]:
         clean_name = str(name or "").strip()
+        if not getattr(self, "_font_delivery_rules_loaded", False):
+            self.load_basic_font_delivery_rules()
         cache = getattr(self, "_font_candidates_cache", None)
         if cache is None:
             cache = {}
@@ -4581,9 +5134,11 @@ class MainWindow(QMainWindow):
             return not learned_style or learned_style == style
 
         for learned in probe_rules.get(clean_name, []):
+            learned = self.clean_font_probe_candidate(learned)
             if learned and learned not in candidates:
                 candidates.append(learned)
         for learned in probe_rules.get(family, []):
+            learned = self.clean_font_probe_candidate(learned)
             if learned and learned not in candidates and learned_matches_selected_style(learned):
                 candidates.append(learned)
         aliases = [
@@ -4615,7 +5170,7 @@ class MainWindow(QMainWindow):
         clean_is_direct = bool(family and (family in family_set or system_family in family_set))
 
         def candidate_priority(value: str) -> tuple[int, str]:
-            candidate_family, candidate_style = self.split_font_style(value)
+            candidate_family, candidate_style, _candidate_path = self.parse_font_candidate(value)
             resolved_family = self.font_system_family(candidate_family)
             if resolved_family in family_set and candidate_style:
                 return (0, resolved_family.casefold(), candidate_style.casefold())
@@ -4657,6 +5212,16 @@ class MainWindow(QMainWindow):
                 if fallback not in styles:
                     styles.append(fallback)
             return styles
+
+        direct_source_names = [clean_name, family, system_family]
+        for source_name in direct_source_names:
+            if not source_name:
+                continue
+            for candidate_style in known_styles_for([source_name]):
+                if candidate_style:
+                    packed = f"{source_name}|||{candidate_style}"
+                    if packed not in candidates and not self.is_corrupt_font_candidate(packed):
+                        candidates.append(packed)
 
         for source_name in [clean_name, family, system_family, *aliases[:24]]:
             candidate_styles = known_styles_for([source_name, *self.font_aliases.get(source_name, [])[:8]])
@@ -4735,13 +5300,97 @@ class MainWindow(QMainWindow):
         self._font_candidates_cache = {}
         for item in self.font_probe_rule_items:
             source = str(item.get("source", "")).strip()
-            accepted_candidate = str(item.get("local_accepted_candidate") or item.get("accepted_candidate") or "").strip()
-            accepted = accepted_candidate or str(item.get("accepted", "")).strip()
+            accepted_candidate = self.clean_font_probe_candidate(
+                str(item.get("local_accepted_candidate") or item.get("accepted_candidate") or "").strip()
+            )
+            accepted_plain = self.clean_font_probe_candidate(str(item.get("accepted", "")).strip())
+            accepted = accepted_candidate or accepted_plain
+            registered_file = str(item.get("registered_font_file") or "").strip()
+            registered_paths = self.font_file_path_variants(registered_file)
+            registered_name = self.clean_font_probe_candidate(str(item.get("registered_font_name") or "").strip())
             if source and accepted:
                 for key in self.font_rule_source_keys(source):
                     bucket = self.font_probe_rules.setdefault(key, [])
                     if accepted not in bucket:
                         bucket.append(accepted)
+                    family = self.clean_font_probe_candidate(self.font_candidate_family_part(accepted))
+                    _unused_family, style = self.split_font_style(accepted)
+                    if "|||" in str(accepted or ""):
+                        parts = str(accepted).split("|||")
+                        style = str(parts[1] if len(parts) > 1 else style).strip()
+                    if not style:
+                        style = "Regular"
+                    for path in registered_paths:
+                        for candidate_family in (family, registered_name, accepted_plain, source):
+                            candidate_family = self.clean_font_probe_candidate(candidate_family)
+                            if not candidate_family:
+                                continue
+                            packed = f"{candidate_family}|||{style}|||{path}"
+                            if packed not in bucket:
+                                bucket.append(packed)
+        self._font_delivery_rules_loaded = False
+
+    def add_font_probe_candidate_rule(self, source: str, candidate: str) -> None:
+        clean_source = str(source or "").strip()
+        clean_candidate = self.clean_font_probe_candidate(candidate)
+        if not clean_source or not clean_candidate:
+            return
+        for key in self.font_rule_source_keys(clean_source):
+            bucket = self.font_probe_rules.setdefault(key, [])
+            if clean_candidate not in bucket:
+                bucket.append(clean_candidate)
+
+    def load_basic_font_delivery_rules(self) -> None:
+        if self._font_delivery_rules_loaded:
+            return
+        self._font_delivery_rules_loaded = True
+        path = basic_font_rules_path()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except Exception:
+            return
+        rules = data.get("rules", []) if isinstance(data, dict) else []
+        if not isinstance(rules, list):
+            return
+        self.font_delivery_rule_count = len(rules)
+        for item in rules:
+            if not isinstance(item, dict):
+                continue
+            source = str(item.get("source") or "").strip()
+            accepted = self.clean_font_probe_candidate(str(item.get("accepted") or "").strip())
+            accepted_candidate = self.clean_font_probe_candidate(str(item.get("accepted_candidate") or "").strip())
+            style = str(item.get("style") or "").strip()
+            registered_file = str(item.get("registered_font_file") or "").strip()
+            metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+            if not source:
+                continue
+            source_keys = [source]
+            for group in ("families", "full_names", "postscript_names"):
+                values = metadata.get(group) if isinstance(metadata, dict) else None
+                if isinstance(values, list):
+                    for value in values:
+                        text = str(value or "").strip()
+                        if text and text not in source_keys:
+                            source_keys.append(text)
+            candidate_values = []
+            for value in (accepted_candidate, accepted):
+                if value and value not in candidate_values:
+                    candidate_values.append(value)
+            if accepted and style:
+                packed = f"{accepted}|||{style}"
+                if packed not in candidate_values:
+                    candidate_values.append(packed)
+            for path_variant in self.font_file_path_variants(registered_file):
+                for value in (accepted, accepted_candidate.split("|||", 1)[0] if accepted_candidate else ""):
+                    value = self.clean_font_probe_candidate(value)
+                    if not value:
+                        continue
+                    packed = f"{value}|||{style or 'Regular'}|||{path_variant}"
+                    if packed not in candidate_values:
+                        candidate_values.append(packed)
+            for key in source_keys:
+                for candidate in candidate_values:
+                    self.add_font_probe_candidate_rule(key, candidate)
 
     def save_font_probe_rules(self) -> None:
         path = font_probe_rules_path()
@@ -4765,6 +5414,8 @@ class MainWindow(QMainWindow):
 
         def scrub_candidate(value: str) -> str:
             text = str(value or "").strip()
+            if self.is_corrupt_font_candidate(text):
+                return ""
             parts = text.split("|||")
             if len(parts) >= 3:
                 parts[2] = Path(parts[2]).name
@@ -4784,12 +5435,30 @@ class MainWindow(QMainWindow):
             text = scrub_candidate(str(candidate or ""))
             if text and text not in clean_candidates:
                 clean_candidates.append(text)
-        local_accepted_candidate = accepted_candidate_raw
+        local_accepted_candidate = self.clean_font_probe_candidate(accepted_candidate_raw)
         export_accepted_candidate = scrub_candidate(accepted_candidate_raw)
+        if accepted and not local_accepted_candidate:
+            accepted_family, accepted_style = self.split_font_style(accepted)
+            if accepted_family and accepted_style:
+                local_accepted_candidate = f"{accepted_family}|||{accepted_style}"
+                export_accepted_candidate = local_accepted_candidate
         source_keys = self.font_rule_source_keys(source)
         raw_candidate_trace = result.get("candidate_trace") if isinstance(result.get("candidate_trace"), list) else []
         candidate_trace = [scrub_trace_item(item) for item in raw_candidate_trace if isinstance(item, dict)]
         registered_font_file = Path(str(result.get("registered_font_path") or "")).name
+        proof = {
+            "direct_before": bool(result.get("direct_before")) if "direct_before" in result else None,
+            "textplus_ok": ok,
+            "textplus_font": str(result.get("font") or ""),
+            "textplus_style": str(result.get("style") or ""),
+            "accepted_candidate": export_accepted_candidate,
+            "candidate_attempts": int(result.get("candidate_attempts") or 0),
+            "registered": bool(result.get("registered_font_path") or result.get("registered_font_name")),
+            "visual_ok": bool(result.get("visual_ok")) if "visual_ok" in result else False,
+            "visible": bool(result.get("visible")) if "visible" in result else False,
+            "tofu_suspect": bool(result.get("tofu_suspect")) if "tofu_suspect" in result else False,
+            "error_frame_suspect": bool(result.get("error_frame_suspect")) if "error_frame_suspect" in result else False,
+        }
         report_item = {
             "ok": ok,
             "source": source,
@@ -4800,6 +5469,7 @@ class MainWindow(QMainWindow):
             "registered_font_name": str(result.get("registered_font_name") or ""),
             "candidate_attempts": int(result.get("candidate_attempts") or 0),
             "candidate_trace": candidate_trace[:24],
+            "proof": proof,
             "probe_warning": str(result.get("probe_warning") or ""),
             "message": str(result.get("message") or "")[:500],
             "resolve_version": self.resolve_version_text,
@@ -4807,9 +5477,6 @@ class MainWindow(QMainWindow):
             "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         }
         write_font_probe_report_cache(report_item)
-        if ok:
-            self.track_usage_event("font_probe_success", {"rule": report_item})
-            return
         rejected = []
         if not ok:
             for candidate in clean_candidates:
@@ -4837,6 +5504,8 @@ class MainWindow(QMainWindow):
             "registered_font_file": registered_font_file,
             "registered_font_name": str(result.get("registered_font_name") or ""),
             "candidate_attempts": int(result.get("candidate_attempts") or 0),
+            "candidate_trace": candidate_trace[:24],
+            "proof": proof,
             "probe_warning": str(result.get("probe_warning") or ""),
             "message": str(result.get("message") or "")[:300],
             "resolve_version": self.resolve_version_text,
@@ -5144,6 +5813,7 @@ class MainWindow(QMainWindow):
                     self.font_family_styles[family].append(style)
                 self.add_font_alias(styled_name, [family, *self.font_aliases.get(family, [])])
         self.available_fonts = sorted(expanded_fonts, key=self.font_sort_key)
+        self._font_delivery_rules_loaded = False
 
     def load_font_favorites(self) -> None:
         path = font_favorites_path()
@@ -5469,8 +6139,7 @@ class MainWindow(QMainWindow):
         selected = self.timeline_combo.currentData() or {"index": 1}
         result = self.bridge.check_font_available(int(selected.get("index", 1)), clean_name, self.font_candidates(clean_name))
         self.font_fusion_availability_cache[key] = result
-        if not result.get("ok"):
-            self.learn_font_probe_rule(clean_name, self.font_candidates(clean_name), result)
+        self.learn_font_probe_rule(clean_name, self.font_candidates(clean_name), result)
         if self.font_fusion_cache_key(self.selected_font_name()) == key:
             self.update_font_preview(clean_name)
 
@@ -5510,8 +6179,12 @@ class MainWindow(QMainWindow):
             wanted_keys = self.font_known_names(name)
             preview_candidates = self.font_candidates(name) or [name]
             for candidate in preview_candidates:
-                family, style = self.split_font_style(candidate)
+                family, style, _path_text = self.parse_font_candidate(candidate)
+                loaded_families = self.ensure_qt_font_candidate_loaded(candidate)
+                wanted_keys.update(loaded.casefold() for loaded in loaded_families if loaded)
                 resolved_family = self.font_system_family(family)
+                if loaded_families and resolved_family not in set(QFontDatabase.families()):
+                    resolved_family = loaded_families[0]
                 if style:
                     candidate_font = QFontDatabase.font(resolved_family or family, style, 30)
                 else:
@@ -5546,14 +6219,25 @@ class MainWindow(QMainWindow):
             fusion_status = self.font_fusion_availability_cache.get(self.font_fusion_cache_key(name))
             if fusion_status and not fusion_status.get("ok"):
                 painter.setPen(Qt.NoPen)
-                painter.setBrush(QColor(220, 38, 38, 218))
-                banner = QRectF(10, 8, width - 20, 30)
+                painter.setBrush(QColor(127, 29, 29, 190))
+                painter.drawRect(pixmap.rect())
+                painter.setPen(QColor("#ef4444"))
+                painter.setBrush(Qt.NoBrush)
+                painter.drawRoundedRect(QRectF(3, 3, width - 6, height - 6), 8, 8)
+                painter.setPen(Qt.NoPen)
+                painter.setBrush(QColor(220, 38, 38, 235))
+                banner = QRectF(10, 8, width - 20, 42)
                 painter.drawRoundedRect(banner, 6, 6)
                 painter.setPen(QColor("#ffffff"))
-                painter.setFont(QFont(install_cjk_font(), 11, QFont.Bold))
+                painter.setFont(QFont(install_cjk_font(), 13, QFont.Bold))
                 message = str(fusion_status.get("message") or "当前 Fusion 不可用：该字体未被 Resolve/Fusion 识别。")
                 message = painter.fontMetrics().elidedText(message, Qt.ElideRight, max(120, width - 42))
                 painter.drawText(banner.adjusted(10, 0, -10, 0), Qt.AlignVCenter | Qt.AlignLeft, message)
+                painter.setFont(QFont(install_cjk_font(), 10, QFont.Bold))
+                painter.setPen(QColor("#fecaca"))
+                hint = "本地预览能显示不代表 Resolve 可用；请换 Fusion 字体下拉列表中可用的字体。"
+                hint = painter.fontMetrics().elidedText(hint, Qt.ElideRight, max(120, width - 42))
+                painter.drawText(QRectF(16, height - 32, width - 32, 22), Qt.AlignVCenter | Qt.AlignLeft, hint)
         painter.end()
         self.font_preview_image.setPixmap(pixmap)
 
@@ -5628,9 +6312,27 @@ class MainWindow(QMainWindow):
             )
             for record in self.selected_font_records()
         } if silent else set()
-        self.refresh_timelines()
         selected = self.timeline_combo.currentData() or {"index": 1}
-        result = self.bridge.scan_font_items(int(selected.get("index", 1)))
+        if self.font_scan_worker is not None and self.font_scan_worker.isRunning():
+            self.font_status.setText("正在扫描字体层，请稍候...")
+            return
+        if not silent:
+            self.side_tabs.setCurrentWidget(self.font_tab)
+        self.font_status.setText("正在后台扫描当前时间线文字层...")
+        self.font_scan_worker = FontLayerScanWorker(int(selected.get("index", 1)), silent, selected_keys)
+        self.font_scan_worker.done.connect(self.on_font_scan_done)
+        self.font_scan_worker.finished.connect(self.font_scan_worker.deleteLater)
+        self.font_scan_worker.start()
+
+    def on_font_scan_done(self, result: dict, silent: bool, selected_keys_obj: object) -> None:
+        try:
+            selected_keys = set(selected_keys_obj or set())
+        except Exception:
+            selected_keys = set()
+        self.render_font_scan_result(result, bool(silent), selected_keys)
+        self.font_scan_worker = None
+
+    def render_font_scan_result(self, result: dict, silent: bool, selected_keys: set) -> None:
         self.font_records = result.get("items") if isinstance(result.get("items"), list) else []
         self.font_table.setRowCount(0)
         unsupported_bg, unsupported_fg = self.table_muted_colors()
@@ -6638,6 +7340,15 @@ end tell
                 lines.append(f"分析时长：{float(result.get('analyzed_seconds') or 0):.1f} 秒")
             if isinstance(result.get("beat_times_seconds"), list):
                 lines.append(f"Essentia beat 点：{len(result.get('beat_times_seconds') or [])} 个")
+            if result.get("median_beat_interval_seconds"):
+                lines.append(f"beat 中位间隔：{result.get('median_beat_interval_seconds')} 秒")
+            if result.get("beat_interval_jitter") is not None:
+                try:
+                    lines.append(f"beat 间隔抖动：{float(result.get('beat_interval_jitter') or 0):.2%}")
+                except Exception:
+                    lines.append(f"beat 间隔抖动：{result.get('beat_interval_jitter')}")
+            if result.get("marker_mode_note"):
+                lines.append(f"标记策略：{result.get('marker_mode_note')}")
             if result.get("essentia_message"):
                 lines.append(f"Essentia：{result.get('essentia_message')}")
         bpm_props = clip.get("bpm_properties") if isinstance(clip.get("bpm_properties"), dict) else {}
@@ -6664,13 +7375,19 @@ end tell
             if marker_result.get("marker_count") is not None:
                 lines.append(f"标记数量：{marker_result.get('marker_count')}")
             if marker_result.get("interval_frames") is not None:
-                lines.append(f"节拍间隔：{marker_result.get('interval_frames')} 帧")
+                lines.append(f"单拍间隔：{marker_result.get('interval_frames')} 帧")
+            if marker_result.get("marker_spacing_frames") is not None:
+                lines.append(f"标记间距：{marker_result.get('marker_spacing_frames')} 帧")
             if marker_result.get("first_marker_delta_frames") is not None:
                 lines.append(f"首个标记距片段起点：{marker_result.get('first_marker_delta_frames')} 帧")
             if marker_result.get("first_beat_anchor_delta_frames") is not None:
                 lines.append(f"首拍锚点距片段起点：{marker_result.get('first_beat_anchor_delta_frames')} 帧")
+            if marker_result.get("anchor_snap_delta_frames"):
+                lines.append(f"锚点吸附修正：{marker_result.get('anchor_snap_delta_frames')} 帧")
             if marker_result.get("beat_source"):
                 lines.append(f"标记来源：{marker_result.get('beat_source')}")
+            if marker_result.get("manual_restart_count") is not None:
+                lines.append(f"手动段落锚点：{marker_result.get('manual_restart_count')} 个")
             if marker_result.get("beat_marker_step"):
                 lines.append(f"标记间隔：每 {marker_result.get('beat_marker_step')} 拍")
         if not result.get("ok"):
@@ -6857,10 +7574,9 @@ end tell
 
     def animate_current_tab(self) -> None:
         widget = self.side_tabs.currentWidget()
-        if widget:
-            self.animate_widget(widget, 180)
         if widget is self.font_tab:
-            QTimer.singleShot(0, lambda: self.scan_font_layers(silent=True))
+            self.font_status.setText("正在后台扫描当前时间线文字层...")
+            QTimer.singleShot(220, lambda: self.scan_font_layers(silent=True))
 
     def install_button_motion(self) -> None:
         for button in self.findChildren(QPushButton):
@@ -6914,10 +7630,8 @@ end tell
 
     def changeEvent(self, event) -> None:  # noqa: N802
         super().changeEvent(event)
-        if event.type() == QEvent.WindowStateChange:
-            self.enforce_resolve_window_level()
-            if not self.isMinimized():
-                QTimer.singleShot(120, self.enforce_resolve_window_level)
+        # Keep macOS foreground checks off the hot path. They can block for
+        # seconds when Resolve owns focus; showing the window is enough.
 
     def _capture_current_timeline_uid(self) -> None:
         """Store the current timeline identity for change detection."""
@@ -6998,28 +7712,57 @@ def _ensure_macos_dock_icon() -> None:
 
 def main(argv: list[str] | None = None) -> int:
     argv = argv or sys.argv
+    startup_trace("main enter")
     if BRIDGE_WORKER_ARG in argv[1:]:
+        startup_trace("bridge worker enter")
         return run_resolve_bridge_worker()
+    if "--self-test" in argv[1:]:
+        print(json.dumps({
+            "ok": True,
+            "app": APP_NAME,
+            "version": APP_VERSION,
+            "defaults": {
+                "stuck_frames": DEFAULT_STUCK_FRAMES,
+                "suspect_frames": DEFAULT_SUSPECT_FRAMES,
+                "min_black_frames": DEFAULT_MIN_BLACK_FRAMES,
+                "pixel_threshold_percent": DEFAULT_PIXEL_THRESHOLD,
+                "black_border_px": DEFAULT_BLACK_BORDER_PX,
+                "content_sample_interval": DEFAULT_CONTENT_SAMPLE_INTERVAL,
+            },
+        }, ensure_ascii=False))
+        return 0
 
+    startup_trace("before mac app setup")
     set_windows_app_user_model_id()
-    _ensure_macos_dock_icon()
+    # PyObjC/NSBundle setup can cost several seconds when launched from Resolve.
+    # The Qt window can be shown without it, so keep startup on the fast path.
+    startup_trace("before QApplication")
     app = QApplication(argv)
+    startup_trace("after QApplication")
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
     if ICON_PATH.exists():
         app.setWindowIcon(QIcon(str(ICON_PATH)))
     instance_guard = SingleInstanceGuard(SINGLE_INSTANCE_NAME)
+    startup_trace(f"single instance already_running={instance_guard.already_running}")
     if instance_guard.already_running:
         return 0
     app._qinghe_single_instance_guard = instance_guard  # type: ignore[attr-defined]
+    startup_trace("before install_cjk_font")
     font_family = install_cjk_font()
+    startup_trace(f"after install_cjk_font family={font_family}")
     app.setStyleSheet(APP_STYLE)
     app.setFont(QFont(font_family, 10))
+    startup_trace("before MainWindow")
     window = MainWindow()
+    startup_trace("after MainWindow")
     instance_guard.bind_window(window)
+    startup_trace("before show")
     bring_window_to_front(window)
+    startup_trace(f"after show visible={window.isVisible()} winid={int(window.winId())}")
     QTimer.singleShot(250, lambda: bring_window_to_front(window))
+    startup_trace("before app.exec")
     return app.exec()
 
 

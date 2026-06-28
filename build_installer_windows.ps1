@@ -1,6 +1,9 @@
+param(
+    [string]$Version = "2.0.1-beta.23"
+)
+
 $ErrorActionPreference = "Stop"
 
-$Version = "2.0.1-beta.14"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ReleaseName = "QingheBFD_v${Version}_Windows"
 $ReleaseRoot = Join-Path $Root "release"

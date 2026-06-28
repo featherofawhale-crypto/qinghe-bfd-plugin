@@ -111,18 +111,6 @@
     },
     {
       "ok": true,
-      "source": "云峰飞云体",
-      "accepted": "云峰飞云体",
-      "accepted_candidate": "云峰飞云体|||Regular|||YunFengFeiYunTi-2.ttf",
-      "local_accepted_candidate": "云峰飞云体|||Regular|||/Users/qinghe/Library/Fonts/YunFengFeiYunTi-2.ttf",
-      "actual_font": "云峰飞云体",
-      "registered_font_file": "YunFengFeiYunTi-2.ttf",
-      "registered_font_name": "云峰飞云体",
-      "candidate_attempts": 3,
-      "message": "全量字体探针修复规则"
-    },
-    {
-      "ok": true,
       "source": "字体圈伟君黑 W3",
       "accepted": "字体圈伟君黑 W3",
       "accepted_candidate": "??????|||W3",
@@ -291,27 +279,85 @@
     },
     {
       "ok": true,
-      "source": "今年也要加油鸭",
       "accepted": "今年也要加油鸭",
-      "accepted_candidate": "???????|||Regular",
-      "local_accepted_candidate": "???????|||Regular",
+      "accepted_candidate": "今年也要加油鸭|||Regular|||JinNianYeYaoJiaYouYa-2.ttf",
+      "local_accepted_candidate": "今年也要加油鸭|||Regular|||/Users/qinghe/Library/Fonts/JinNianYeYaoJiaYouYa-2.ttf",
       "actual_font": "???????",
       "registered_font_file": "JinNianYeYaoJiaYouYa-2.ttf",
       "registered_font_name": "???????",
-      "candidate_attempts": 4,
-      "message": "全量字体探针修复规则"
+      "candidate_attempts": 1,
+      "candidate_trace": [
+        {
+          "candidate": "今年也要加油鸭|||Regular|||/Users/qinghe/Library/Fonts/JinNianYeYaoJiaYouYa-2.ttf",
+          "font": "今年也要加油鸭",
+          "style": "Regular",
+          "path": "/Users/qinghe/Library/Fonts/JinNianYeYaoJiaYouYa-2.ttf",
+          "registered": false,
+          "accepted": true,
+          "resolved_font": "???????",
+          "resolved_style": "Regular"
+        }
+      ],
+      "proof": {
+        "direct_before": null,
+        "textplus_ok": true,
+        "textplus_font": "???????",
+        "textplus_style": "Regular",
+        "accepted_candidate": "今年也要加油鸭|||Regular|||JinNianYeYaoJiaYouYa-2.ttf",
+        "candidate_attempts": 1,
+        "registered": true,
+        "visual_ok": true,
+        "visible": true,
+        "tofu_suspect": false,
+        "error_frame_suspect": false
+      },
+      "probe_warning": "",
+      "message": "Fusion 手动下拉可用字体：通过字体文件路径映射到 FontManager 内部 key。",
+      "resolve_version": "19.0.0.69",
+      "platform": "macOS",
+      "created_at": "2026-06-22T00:00:00Z",
+      "source": "今年也要加油鸭"
     },
     {
       "ok": true,
-      "source": "SJjnyyjyy",
-      "accepted": "SJjnyyjyy",
-      "accepted_candidate": "???????|||Regular",
-      "local_accepted_candidate": "???????|||Regular",
+      "accepted": "今年也要加油鸭",
+      "accepted_candidate": "今年也要加油鸭|||Regular|||JinNianYeYaoJiaYouYa-2.ttf",
+      "local_accepted_candidate": "今年也要加油鸭|||Regular|||/Users/qinghe/Library/Fonts/JinNianYeYaoJiaYouYa-2.ttf",
       "actual_font": "???????",
       "registered_font_file": "JinNianYeYaoJiaYouYa-2.ttf",
       "registered_font_name": "???????",
-      "candidate_attempts": 4,
-      "message": "全量字体探针修复规则"
+      "candidate_attempts": 1,
+      "candidate_trace": [
+        {
+          "candidate": "今年也要加油鸭|||Regular|||/Users/qinghe/Library/Fonts/JinNianYeYaoJiaYouYa-2.ttf",
+          "font": "今年也要加油鸭",
+          "style": "Regular",
+          "path": "/Users/qinghe/Library/Fonts/JinNianYeYaoJiaYouYa-2.ttf",
+          "registered": false,
+          "accepted": true,
+          "resolved_font": "???????",
+          "resolved_style": "Regular"
+        }
+      ],
+      "proof": {
+        "direct_before": null,
+        "textplus_ok": true,
+        "textplus_font": "???????",
+        "textplus_style": "Regular",
+        "accepted_candidate": "今年也要加油鸭|||Regular|||JinNianYeYaoJiaYouYa-2.ttf",
+        "candidate_attempts": 1,
+        "registered": true,
+        "visual_ok": true,
+        "visible": true,
+        "tofu_suspect": false,
+        "error_frame_suspect": false
+      },
+      "probe_warning": "",
+      "message": "Fusion 手动下拉可用字体：通过字体文件路径映射到 FontManager 内部 key。",
+      "resolve_version": "19.0.0.69",
+      "platform": "macOS",
+      "created_at": "2026-06-22T00:00:00Z",
+      "source": "SJjnyyjyy"
     }
   ]
 }

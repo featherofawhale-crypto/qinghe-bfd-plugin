@@ -1,9 +1,9 @@
 #define MyAppName "Qinghe BFD"
 #ifndef MyAppVersion
-#define MyAppVersion "2.0.1-beta.14"
+#define MyAppVersion "2.0.1-beta.23"
 #endif
 #ifndef SourceDir
-#define SourceDir "release\QingheBFD_v2.0.1-beta.14_Windows"
+#define SourceDir "release\QingheBFD_v2.0.1-beta.23_Windows"
 #endif
 #ifndef OutputDir
 #define OutputDir "release\installer"
@@ -37,7 +37,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install_windows.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "Installing DaVinci Resolve plugin..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install_windows.ps1"""; Flags: runhidden waituntilterminated; StatusMsg: "正在安装 DaVinci Resolve 插件..."
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall_windows.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "QingheBFDPluginCleanup"
@@ -93,7 +93,7 @@ begin
     if not Exec(Uninstaller, '/SILENT', '', SW_SHOW, ewWaitUntilTerminated, ExitCode) then begin
       MsgBox('无法启动旧版本卸载程序：' + Uninstaller, mbError, MB_OK);
     end else begin
-      MsgBox('旧版本卸载流程已结束。需要安装新版时，请重新运行本安装包。', mbInformation, MB_OK);
+      MsgBox('旧版本卸载流程已结束。需要安装新版本时，请重新运行本安装包。', mbInformation, MB_OK);
     end;
     Result := False;
   end else begin

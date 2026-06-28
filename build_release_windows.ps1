@@ -1,17 +1,25 @@
+[CmdletBinding()]
+param(
+    [string]$Version = "2.0.1-beta.23",
+    [string]$SourcePluginRoot = ""
+)
+
 $ErrorActionPreference = "Stop"
 
-$Version = "2.0.1-beta.14"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$PackageRoot = Get-ChildItem -Path $Root -Directory -Filter "*_Windows" |
-    Sort-Object LastWriteTime -Descending |
-    Select-Object -First 1
+if ($SourcePluginRoot -and (Test-Path $SourcePluginRoot)) {
+    $PackageRoot = Get-Item -LiteralPath $SourcePluginRoot
+} else {
+    $PackageRoot = Get-Item -LiteralPath $Root
+}
 
-if (-not $PackageRoot) { throw "Cannot find package folder ending with _Windows." }
+if (-not $PackageRoot) { throw "Cannot resolve package source root." }
 
 $SourceModules = Join-Path $PackageRoot.FullName "black_frame_detector"
 if (!(Test-Path $SourceModules)) {
     $SourceModules = Join-Path $PackageRoot.FullName "modules"
 }
+$SourceUi = Join-Path $Root "pyside_ui"
 $SourceMain = Get-ChildItem -Path $PackageRoot.FullName -File -Filter "*.lua" |
     Select-Object -First 1
 $SourceFfmpeg = Join-Path $PackageRoot.FullName "ffmpeg"
@@ -19,6 +27,7 @@ $FallbackFfmpegBin = Join-Path $Root "ffmpeg\bin"
 
 if (-not $SourceMain) { throw "Cannot find main Lua script in package folder." }
 if (!(Test-Path $SourceModules)) { throw "Missing module folder: $SourceModules" }
+if (!(Test-Path $SourceUi)) { throw "Missing pyside_ui folder: $SourceUi" }
 
 $BuildRoot = Join-Path $Root "build\windows"
 $PyInstallerDist = Join-Path $BuildRoot "pyinstaller-dist"
@@ -112,7 +121,7 @@ if ($LASTEXITCODE -ne 0) {
     Invoke-Python -Arguments @("-m", "pip", "install", "pyinstaller")
 }
 
-Invoke-Python -Arguments @("-m", "pip", "install", "-r", (Join-Path $Root "pyside_ui\requirements.txt"))
+Invoke-Python -Arguments @("-m", "pip", "install", "-r", (Join-Path $SourceUi "requirements.txt"))
 
 $BuildPythonInfo = Invoke-PythonCapture -Arguments @(
     "-c",
@@ -128,15 +137,17 @@ $pyinstallerArgs = @(
     "--windowed",
     "--name", "QingheBFDControl",
     "--icon", (Join-Path $Root "pyside_ui\icon.ico"),
-    "--paths", (Join-Path $Root "pyside_ui"),
-    "--add-data", "$(Join-Path $Root "pyside_ui\icon.svg");.",
+    "--paths", $SourceUi,
+    "--add-data", "$(Join-Path $SourceUi "icon.svg");.",
     "--add-data", "$(Join-Path $Root "pyside_ui\icon.ico");.",
-    "--add-data", "$(Join-Path $Root "pyside_ui\donate");donate",
-    "--add-data", "$(Join-Path $Root "pyside_ui\templates");templates",
-    "--add-data", "$(Join-Path $Root "pyside_ui\data");data",
+    "--add-data", "$(Join-Path $SourceUi "donate");donate",
+    "--add-data", "$(Join-Path $SourceUi "templates");templates",
+    "--add-data", "$(Join-Path $SourceUi "data");data",
+    "--add-data", "$(Join-Path $SourceUi "bpm_worker.py");.",
+    "--add-data", "$(Join-Path $SourceUi "bridge_worker.py");.",
     "--distpath", $PyInstallerDist,
     "--workpath", $PyInstallerWork,
-    (Join-Path $Root "pyside_ui\app.py")
+    (Join-Path $SourceUi "app.py")
 )
 Invoke-Python -Arguments $pyinstallerArgs
 
@@ -167,8 +178,8 @@ Copy-Item (Join-Path $Root "tools\test_resolve_api_bridge.ps1") (Join-Path $Stag
 Copy-Item (Join-Path $PyInstallerDist "QingheBFDControl") $StageUi -Recurse -Force
 Copy-Item (Join-Path $Root "pyside_ui\icon.ico") $StageUi -Force
 Copy-Item (Join-Path $Root "pyside_ui\icon.svg") $StageUi -Force
-Copy-Item (Join-Path $Root "pyside_ui\data") $StageUi -Recurse -Force
-Copy-Item (Join-Path $Root "pyside_ui\templates") $StageUi -Recurse -Force
+Copy-Item (Join-Path $SourceUi "data") $StageUi -Recurse -Force
+Copy-Item (Join-Path $SourceUi "templates") $StageUi -Recurse -Force
 $PythonRuntimeSource = Split-Path -Parent $PythonCommand.Exe
 $StagePythonRuntime = Join-Path $StageUi "python_runtime"
 if (Test-Path $StagePythonRuntime) {

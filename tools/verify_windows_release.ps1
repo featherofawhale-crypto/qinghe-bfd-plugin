@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "2.0.1-beta.14"
+    [string]$Version = "2.0.1-beta.23"
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,6 +88,21 @@ Assert-Path (Join-Path $UiInternal "donate") "donation assets"
 Assert-Path (Join-Path $UiInternal "templates\caption-bin.drb") "caption template"
 Assert-Path (Join-Path $UiInternal "data\font_probe_rules.json") "font probe rules"
 Assert-Path (Join-Path $UiInternal "data\font_style_library.json") "font style library"
+Assert-Path (Join-Path $UiInternal "bpm_worker.py") "BPM worker script"
+
+$ForbiddenMacArtifacts = Get-ChildItem -LiteralPath $StageRoot -Recurse -Force -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.Name -like "*.dylib" -or
+        $_.Name -like "*.framework" -or
+        $_.Name -like "*.app" -or
+        $_.Name -like "*.command" -or
+        $_.Name -like "*_com.apple.provenance"
+    } |
+    Select-Object -First 20 -ExpandProperty FullName
+if ($ForbiddenMacArtifacts) {
+    throw "Forbidden macOS artifacts found in Windows release:`n$($ForbiddenMacArtifacts -join "`n")"
+}
+Write-Host "[OK] no macOS binary/provenance artifacts in Windows release"
 
 Assert-NotContains $InstallScript "pip\s+install" "installer script"
 Assert-NotContains $InstallScript "Get-Command\s+(py|python)" "installer script"

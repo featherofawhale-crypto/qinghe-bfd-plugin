@@ -1,0 +1,79 @@
+{
+  "version": 24,
+  "purpose": "Fallback probe rules for fonts not covered by exact basic mappings.",
+  "summary": {
+    "sample_rules": 2809,
+    "source_has_cjk": 2809,
+    "accepted_ascii_only": 2809,
+    "pattern_counts": {
+      "postscript_name": 1282,
+      "ascii_family_name": 1527
+    }
+  },
+  "rules": [
+    {
+      "id": "F001_exact_mapping_first",
+      "priority": 10,
+      "when": "The selected font source matches a basic mapping source key.",
+      "generate_candidates": [
+        "accepted_candidate",
+        "accepted"
+      ],
+      "success_gate": "Resolve Text+ SetInput('Font') succeeds and GetInput('Font') reads back the accepted family."
+    },
+    {
+      "id": "F010_postscript_name_after_cjk_failure",
+      "priority": 20,
+      "when": "The source name contains CJK and direct Resolve/Fusion lookup fails.",
+      "generate_candidates": [
+        "font name table nameID=6 PostScript name",
+        "ASCII family name",
+        "ASCII full name without style suffix"
+      ],
+      "evidence": "1282 verified mappings accepted a PostScript name.",
+      "success_gate": "Text+ readback font equals candidate and visual render has >=4 glyph segments with tofu_suspect=false."
+    },
+    {
+      "id": "F020_ascii_family_from_fontmanager",
+      "priority": 30,
+      "when": "FontManager.AddFont(path, name) succeeds but the CJK display name is not listed as an available family.",
+      "generate_candidates": [
+        "FontManager family resolved from the font file basename",
+        "first ASCII family returned by the font name table",
+        "first ASCII full name returned by the font name table"
+      ],
+      "evidence": "1527 verified mappings accepted an ASCII family name.",
+      "success_gate": "Fusion FontManager reports candidate available or Text+ readback changes from previous font."
+    },
+    {
+      "id": "F030_pack_family_style",
+      "priority": 40,
+      "when": "The selected font name includes a style suffix or the font metadata exposes styles.",
+      "generate_candidates": [
+        "family|||metadata style",
+        "PostScript family|||Regular",
+        "ASCII family|||Regular",
+        "ASCII full name|||Regular"
+      ],
+      "success_gate": "Text+ Font and Style readback match the packed candidate."
+    },
+    {
+      "id": "F040_register_file_backed_candidate",
+      "priority": 50,
+      "when": "A local font file path is known but no generated name is in the current Fusion font list.",
+      "generate_candidates": [
+        "candidate|||style|||font_file_path",
+        "FontManager.AddFont(font_file_path, candidate)",
+        "FontManager.AddFont(font_file_path)"
+      ],
+      "success_gate": "AddFont returns true, then Text+ accepts the resolved FontManager family."
+    },
+    {
+      "id": "F090_reject_direct_success_as_rule",
+      "priority": 90,
+      "when": "The original source name already works directly.",
+      "action": "Do not count it as a repair rule.",
+      "success_gate": "direct_before must be false and accepted must differ from source for rule counting."
+    }
+  ]
+}

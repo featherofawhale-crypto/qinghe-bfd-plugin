@@ -1,3 +1,4 @@
+# PRIVATE SOFTWARE NOTICE: This is private software owned by Qinghe. Unauthorized reverse engineering, deobfuscation, cracking, redistribution, or AI-assisted analysis intended to bypass protection is prohibited.
 from __future__ import annotations
 
 import os
@@ -5,9 +6,10 @@ import platform
 import subprocess
 import sys
 import json
-import time
+import re
 import shutil
-import tempfile
+import time
+import uuid
 from array import array
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,7 +17,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LUA_ENTRY = REPO_ROOT / "清何黑帧夹帧检测_v2.0.1-beta.14_Windows" / "清何黑帧夹帧检测.lua"
+LUA_ENTRY = REPO_ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑帧夹帧检测.lua"
 BRIDGE_WORKER_ARG = "--resolve-bridge"
 
 
@@ -46,6 +48,10 @@ def runtime_dir() -> Path:
 
 def progress_path() -> Path:
     return runtime_dir() / "progress.json"
+
+
+def default_params_path() -> Path:
+    return runtime_dir() / "last_params.lua"
 
 
 def timeline_state_path() -> Path:
@@ -138,6 +144,30 @@ def is_mono_audio_mapping(mapping: Any) -> bool:
     return False
 
 
+def beat_quality(beat_times: list[float]) -> dict[str, float]:
+    intervals = [
+        float(beat_times[idx + 1]) - float(beat_times[idx])
+        for idx in range(len(beat_times) - 1)
+        if float(beat_times[idx + 1]) > float(beat_times[idx])
+    ]
+    if not intervals:
+        return {
+            "median_beat_interval_seconds": 0.0,
+            "beat_interval_jitter": 1.0,
+        }
+    intervals_sorted = sorted(intervals)
+    median = intervals_sorted[len(intervals_sorted) // 2]
+    if median <= 0:
+        jitter = 1.0
+    else:
+        deviations = sorted(abs(value - median) for value in intervals)
+        jitter = deviations[len(deviations) // 2] / median
+    return {
+        "median_beat_interval_seconds": round(float(median), 4),
+        "beat_interval_jitter": round(float(jitter), 4),
+    }
+
+
 def lua_string(value: str) -> str:
     escaped = (
         value.replace("\\", "\\\\")
@@ -170,7 +200,6 @@ def lua_value(value: Any) -> str:
 def resolve_python_script(body: str) -> str:
     bootstrap = r'''
 import importlib.util
-import builtins
 import json
 import os
 import platform
@@ -209,70 +238,15 @@ def add_default_module_path():
         sys.path.insert(0, path)
 
 add_default_module_path()
-if "bmd" in globals():
-    class _BmdScriptModule:
-        @staticmethod
-        def scriptapp(name):
-            return bmd.scriptapp(name)
-
-    dvr_script = _BmdScriptModule()
-else:
-    import DaVinciResolveScript as dvr_script
-
-_bridge_output_path = os.environ.get("QINGHE_RESOLVE_BRIDGE_OUTPUT")
-if _bridge_output_path:
-    _original_print = builtins.print
-
-    def _bridge_print(*args, **kwargs):
-        _original_print(*args, **kwargs)
-        text = kwargs.get("sep", " ").join(str(arg) for arg in args) + kwargs.get("end", "\n")
-        try:
-            with open(_bridge_output_path, "a", encoding="utf-8") as _bridge_output:
-                _bridge_output.write(text)
-        except Exception:
-            pass
-
-    builtins.print = _bridge_print
+import DaVinciResolveScript as dvr_script
 '''
     return bootstrap + "\n" + body
 
 
-def write_temp_resolve_script(script: str) -> str:
-    handle, path = tempfile.mkstemp(prefix="qinghe_resolve_bridge_", suffix=".py")
-    with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as file:
-        file.write(script)
-    return path
-
-
-def find_bundled_python_runtime() -> Path | None:
-    candidates: list[Path] = []
-    executable = Path(sys.executable).resolve()
-    for parent in [executable.parent, *executable.parents]:
-        candidates.extend(
-            [
-                parent / "python_runtime" / "python.exe",
-                parent / "pyside_ui" / "python_runtime" / "python.exe",
-            ]
-        )
-    module_file = Path(__file__).resolve()
-    for parent in [module_file.parent, *module_file.parents]:
-        candidates.append(parent / "python_runtime" / "python.exe")
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
-
-
 def build_resolve_python_process(body: str) -> tuple[list[str], str | None]:
     script = resolve_python_script(body)
-    if getattr(sys, "frozen", False) and platform.system().lower() == "windows":
-        bundled_python = find_bundled_python_runtime()
-        if bundled_python:
-            return [str(bundled_python), write_temp_resolve_script(script)], None
     if getattr(sys, "frozen", False):
         return [sys.executable, BRIDGE_WORKER_ARG], script
-    if platform.system().lower() == "windows":
-        return [sys.executable, write_temp_resolve_script(script)], None
     return [sys.executable, "-c", script], None
 
 
@@ -344,7 +318,7 @@ def find_lua_entry() -> Path | None:
 
 
 def write_lua_params(params: dict[str, Any], target: Path | None = None) -> Path:
-    target = target or runtime_dir() / "last_params.lua"
+    target = target or default_params_path()
     target.parent.mkdir(parents=True, exist_ok=True)
     lines = ["return {"]
     for key, value in params.items():
@@ -400,6 +374,48 @@ class ResolveBridge:
     def is_connected(self) -> bool:
         return self._connected
 
+    def _subtitle_operation_timeout(self, timeline_index: int = 1, minimum: float = 120, per_item: float = 0.15) -> float:
+        """Allow long subtitle timelines on macOS without cutting Resolve API reads short."""
+        timeout = float(minimum)
+        state = read_timeline_state(max_age_seconds=1800) or {}
+        timelines = state.get("timelines") if isinstance(state, dict) else []
+        info = {}
+        if isinstance(timelines, list):
+            for item in timelines:
+                if isinstance(item, dict) and int(item.get("index", 0) or 0) == int(timeline_index):
+                    info = item
+                    break
+        fps = 25.0
+        try:
+            fps = float(info.get("fps") or state.get("fps") or 25.0)
+        except Exception:
+            fps = 25.0
+        frame_span = 0.0
+        for start_key, end_key in (
+            ("start_frame", "end_frame"),
+            ("timeline_start_frame", "timeline_end_frame"),
+            ("start", "end"),
+        ):
+            try:
+                start = float(info.get(start_key, state.get(start_key, 0)) or 0)
+                end = float(info.get(end_key, state.get(end_key, 0)) or 0)
+            except Exception:
+                continue
+            if end > start:
+                frame_span = max(frame_span, end - start)
+        duration_sec = frame_span / max(1.0, fps)
+        if duration_sec:
+            timeout = max(timeout, 90 + duration_sec / 18)
+        item_count = 0
+        for key in ("subtitle_count", "text_item_count", "clip_count"):
+            try:
+                item_count = max(item_count, int(info.get(key, state.get(key, 0)) or 0))
+            except Exception:
+                pass
+        if item_count:
+            timeout = max(timeout, minimum + item_count * per_item)
+        return min(900.0, timeout)
+
     @staticmethod
     def _timelines_from_state(state: dict[str, Any]) -> list[TimelineInfo]:
         timelines = state.get("timelines")
@@ -421,6 +437,10 @@ class ResolveBridge:
         data = self._run_resolve_python(
             r'''
 import json
+import os
+import re
+import shutil
+import subprocess
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
@@ -494,17 +514,32 @@ print(json.dumps({"connected": True, "timelines": items}, ensure_ascii=False))
 
     def submit_params(self, params: dict[str, Any]) -> Path:
         params = dict(params)
+        job_id = str(params.get("job_id") or uuid.uuid4().hex)
+        safe_job_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", job_id).strip("._") or "job"
+        params["job_id"] = job_id
         params["enabled"] = True
         params["submitted_at"] = int(time.time())
         params["progress_file"] = str(progress_path())
         progress_path().write_text(
             json.dumps(
-                {"percent": 1, "stage": "参数已提交，等待 Resolve 执行", "state": "pending"},
+                {
+                    "percent": 1,
+                    "stage": "参数已提交，等待 Resolve 执行",
+                    "state": "pending",
+                    "job_id": job_id,
+                    "timeline_index": params.get("timeline_index"),
+                    "timeline_name": params.get("timeline_name"),
+                },
                 ensure_ascii=False,
             ),
             encoding="utf-8",
         )
-        return write_lua_params(params)
+        params_path = write_lua_params(params, runtime_dir() / f"params_{safe_job_id}.lua")
+        try:
+            write_lua_params(params, default_params_path())
+        except Exception:
+            pass
+        return params_path
 
     def current_timeline_clip_snapshot(self, timeline_index: int = 1) -> dict[str, Any]:
         data = self._run_resolve_python(
@@ -770,10 +805,14 @@ import json
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
-timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+timeline = project.GetTimelineByIndex({max(1, int(timeline_index))}) if project else None
 if not timeline:
     print(json.dumps({{"ok": False, "message": "未找到目标时间线。"}}, ensure_ascii=False))
     raise SystemExit(0)
+try:
+    project.SetCurrentTimeline(timeline)
+except Exception:
+    pass
 try:
     resolve_version = resolve.GetVersion() or []
 except Exception:
@@ -1006,6 +1045,10 @@ print(json.dumps({{
         data = self._run_resolve_python(
             rf'''
 import json
+import os
+import re
+import shutil
+import subprocess
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
@@ -1043,6 +1086,12 @@ def clip_file_path(media_pool_item):
                 return str(value)
     return ""
 
+def clip_type(media_pool_item):
+    if not media_pool_item:
+        return ""
+    value = safe(lambda: media_pool_item.GetClipProperty("Type"), "")
+    return str(value or "")
+
 fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), 25) or 25
 try:
     fps = float(fps_raw)
@@ -1052,35 +1101,101 @@ long_clip_frames = max(1, int(round(fps * 30)))
 track_count = int(safe(lambda: timeline.GetTrackCount("video"), 0) or 0)
 candidates = []
 
+def find_ffmpeg():
+    for candidate in (
+        shutil.which("ffmpeg"),
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+    ):
+        if candidate and os.path.exists(candidate):
+            return candidate
+    return ""
+
+ffmpeg_path = find_ffmpeg()
+scene_probe_budget = 2
+
+def source_scene_cut_count(path, start_sec, duration_sec):
+    if not ffmpeg_path or not path or not os.path.exists(path):
+        return 0
+    if duration_sec < 15:
+        return 0
+    probe_duration = min(float(duration_sec), 90.0)
+    cmd = [
+        ffmpeg_path,
+        "-hide_banner",
+        "-ss", "%.3f" % max(0.0, float(start_sec or 0.0)),
+        "-t", "%.3f" % probe_duration,
+        "-i", path,
+        "-vf", "select='gt(scene\\,0.18)',metadata=print",
+        "-an",
+        "-f", "null",
+        "-",
+    ]
+    try:
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=7)
+    except Exception:
+        return 0
+    text = (proc.stdout or "") + "\\n" + (proc.stderr or "")
+    return len(re.findall(r"lavfi\\.scene_score\\s*=", text))
+
 for track_index in range(1, track_count + 1):
     items = safe(lambda track_index=track_index: timeline.GetItemListInTrack("video", track_index), []) or []
     for item_index, item in enumerate(items):
         media_pool_item = safe(lambda item=item: item.GetMediaPoolItem())
         name = clip_name(item, media_pool_item)
         path = clip_file_path(media_pool_item)
+        ctype = clip_type(media_pool_item)
         start = int(safe(lambda item=item: item.GetStart(), 0) or 0)
         end = int(safe(lambda item=item: item.GetEnd(), start) or start)
         duration = max(0, end - start)
         fusion_count = int(safe(lambda item=item: item.GetFusionCompCount(), 0) or 0)
+        left_offset = int(safe(lambda item=item: item.GetLeftOffset(), 0) or 0)
+        source_fps_raw = safe(lambda: media_pool_item.GetClipProperty("FPS") if media_pool_item else None, None)
+        try:
+            source_fps = float(source_fps_raw or fps or 25.0)
+        except Exception:
+            source_fps = fps or 25.0
         lower_name = name.lower()
-        if not path and duration > 0:
+        lower_type = ctype.lower()
+        is_text_generator = any(token in lower_type or token in lower_name for token in (
+            "text+", "text", "title", "subtitle", "caption", "generator",
+            "文本", "字幕", "标题", "生成器"
+        ))
+        if fusion_count > 0 and not is_text_generator:
             candidates.append({{
                 "name": name,
                 "track_index": track_index,
-                "reason": "复合片段/Fusion片段或无源文件路径，需要复杂模式看最终画面",
-            }})
-        elif duration >= long_clip_frames and any(token in lower_name for token in ("mix", "final", "output", "成片", "混剪", "合集")):
-            candidates.append({{
-                "name": name,
-                "track_index": track_index,
-                "reason": "长成片命名疑似多镜头导出文件",
-            }})
-        elif fusion_count > 0:
-            candidates.append({{
-                "name": name,
-                "track_index": track_index,
+                "kind": "nested",
                 "reason": "片段含 Fusion 合成，普通模式不分析最终画面",
             }})
+        elif (not is_text_generator) and any(token in lower_type for token in ("fusion", "复合", "compound")):
+            candidates.append({{
+                "name": name,
+                "track_index": track_index,
+                "kind": "nested",
+                "reason": f"片段类型为 {{ctype or '无源文件片段'}}，建议复合/Fusion 片段精查",
+            }})
+        elif not path and duration > 0 and not is_text_generator:
+            candidates.append({{
+                "name": name,
+                "track_index": track_index,
+                "kind": "nested",
+                "reason": "疑似复合/Fusion片段或无源文件路径，建议复合/Fusion 片段精查",
+            }})
+        elif path and duration >= long_clip_frames and scene_probe_budget > 0:
+            scene_probe_budget -= 1
+            source_start_sec = float(left_offset) / max(1.0, source_fps)
+            duration_sec = float(duration) / max(1.0, fps)
+            scene_cut_count = source_scene_cut_count(path, source_start_sec, duration_sec)
+            scene_cut_density = scene_cut_count / max(0.25, min(duration_sec, 90.0) / 60.0)
+            if scene_cut_count >= 5 and scene_cut_density >= 4.0:
+                candidates.append({{
+                    "name": name,
+                    "track_index": track_index,
+                    "kind": "complex",
+                    "reason": "源文件内部检测到多处切点，疑似混剪/成片导出文件",
+                    "scene_cut_count": scene_cut_count,
+                }})
 
 deduped = []
 seen = set()
@@ -1091,10 +1206,19 @@ for item in candidates:
     seen.add(key)
     deduped.append(item)
 
-message = f"发现 {{len(deduped)}} 个疑似成片/Fusion/复合片段，建议启用复杂模式。" if deduped else "未发现明显成片/Fusion/复合片段风险。"
+nested_count = sum(1 for item in deduped if item.get("kind") == "nested")
+complex_count = sum(1 for item in deduped if item.get("kind") == "complex")
+if complex_count:
+    message = f"发现 {{complex_count}} 个疑似混剪/成片文件，建议启用复杂模式。"
+elif nested_count:
+    message = f"发现 {{nested_count}} 个复合/Fusion 片段，建议启用复合/Fusion 片段精查。"
+else:
+    message = "未发现明显复合/Fusion/成片风险。"
 print(json.dumps({{
     "ok": True,
     "count": len(deduped),
+    "nested_count": nested_count,
+    "complex_count": complex_count,
     "message": message,
     "candidates": deduped[:8],
 }}, ensure_ascii=False))
@@ -1117,7 +1241,9 @@ import json
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
-timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+timeline = project.GetCurrentTimeline() if project else None
+if not timeline and project:
+    timeline = project.GetTimelineByIndex({int(timeline_index)})
 if not timeline:
     print(json.dumps({{"ok": False, "message": "未找到目标时间线。"}}, ensure_ascii=False))
     raise SystemExit(0)
@@ -1127,6 +1253,15 @@ def safe(callable_obj, default=None):
         return callable_obj()
     except Exception:
         return default
+
+def as_items(value):
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        return [item for item in value.values() if item]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if item]
+    return [value]
 
 def marker_custom(marker):
     if not isinstance(marker, dict):
@@ -1150,7 +1285,7 @@ for frame_id, marker in list((safe(lambda: timeline.GetMarkers(), {{}}) or {{}})
 
 track_count = int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0)
 for track_index in range(1, track_count + 1):
-    for item in safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), []) or []:
+    for item in as_items(safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), [])):
         markers = safe(lambda item=item: item.GetMarkers(), {{}}) or {{}}
         for frame_id, marker in list(markers.items()):
             if not is_audio_marker(marker):
@@ -1205,7 +1340,9 @@ import json
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
-timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+timeline = project.GetCurrentTimeline() if project else None
+if not timeline and project:
+    timeline = project.GetTimelineByIndex({int(timeline_index)})
 if not timeline:
     print(json.dumps({{"ok": False, "message": "未找到目标时间线。", "probe": {{}}}}, ensure_ascii=False))
     raise SystemExit(0)
@@ -1334,15 +1471,25 @@ print(json.dumps({{
             return {"ok": False, "message": "音频 FX API 探测失败：Resolve API 未返回结果。", "probe": {}}
         return data
 
-    def estimate_selected_audio_bpm(self, timeline_index: int = 1, clip_selector: str = "") -> dict[str, Any]:
+    def estimate_selected_audio_bpm(
+        self,
+        timeline_index: int = 1,
+        clip_selector: str = "",
+        prefer_playhead_clip: bool = False,
+        require_selected_audio: bool = False,
+    ) -> dict[str, Any]:
         data = self._run_resolve_python(
             rf'''
 import json
 CLIP_SELECTOR = {json.dumps(clip_selector)}
+PREFER_PLAYHEAD_CLIP = {bool(prefer_playhead_clip)!r}
+REQUIRE_SELECTED_AUDIO = {bool(require_selected_audio)!r}
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
-timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+timeline = project.GetCurrentTimeline() if project else None
+if not timeline and project:
+    timeline = project.GetTimelineByIndex({int(timeline_index)})
 if not timeline:
     print(json.dumps({{"ok": False, "message": "未找到目标时间线。", "clip": {{}}}}, ensure_ascii=False))
     raise SystemExit(0)
@@ -1447,6 +1594,7 @@ def item_record(item, source, track_index=0, item_index=-1):
         "end_frame": item_frame(item, "GetEnd", 0),
         "source_start_frame": item_frame(item, "GetSourceStartFrame", 0),
         "source_end_frame": item_frame(item, "GetSourceEndFrame", 0),
+        "fps": fps,
         "playhead_frame": current_playhead_frame,
         "playhead_timecode": current_tc,
         "bpm_properties": bpm_props,
@@ -1489,21 +1637,52 @@ def selected_audio_items():
                 selected.append((item, method_name, 0, -1))
     return selected
 
-items = selected_audio_items()
+selected_items = selected_audio_items()
+playhead_items = []
+for track_index in range(1, int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0) + 1):
+    for item_index, item in enumerate(as_items(safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), []))):
+        start = item_frame(item, "GetStart", 0)
+        end = item_frame(item, "GetEnd", start)
+        if current_playhead_frame is not None and start <= current_playhead_frame < end:
+            playhead_items.append((item, "playhead_audio_clip", track_index, item_index))
+
+items = selected_items
 source_label = "selected"
-if not items:
-    for track_index in range(1, int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0) + 1):
-        for item_index, item in enumerate(safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), []) or []):
-            start = item_frame(item, "GetStart", 0)
-            end = item_frame(item, "GetEnd", start)
-            if current_playhead_frame is not None and start <= current_playhead_frame < end:
-                items.append((item, "playhead_audio_clip", track_index, item_index))
+if REQUIRE_SELECTED_AUDIO:
+    if selected_items:
+        items = selected_items
+        source_label = "selected"
+    elif len(playhead_items) == 1:
+        items = playhead_items
+        source_label = "playhead"
+    elif len(playhead_items) > 1:
+        print(json.dumps({{
+            "ok": False,
+            "message": "播放头下有多条音频，请先用鼠标选中要识别的音乐音频。",
+            "clip": {{}},
+            "source_mode": "playhead_multiple",
+        }}, ensure_ascii=False))
+        raise SystemExit(0)
+    else:
+        items = []
+        source_label = "selected"
+elif PREFER_PLAYHEAD_CLIP and playhead_items:
+    selected_under_playhead = []
+    for item, method_name, track_index, item_index in selected_items:
+        start = item_frame(item, "GetStart", 0)
+        end = item_frame(item, "GetEnd", start)
+        if current_playhead_frame is not None and start <= current_playhead_frame < end:
+            selected_under_playhead.append((item, method_name, track_index, item_index))
+    items = selected_under_playhead or playhead_items
+    source_label = "selected" if selected_under_playhead else "playhead"
+elif not items:
+    items = playhead_items
     source_label = "playhead"
 
 if not items:
     print(json.dumps({{
         "ok": False,
-        "message": "请先在时间线选中一段音乐；如果当前 Resolve 不开放选中音频 API，可把播放头停在音乐片段上再试。",
+        "message": "请先用鼠标在时间线选中一段音乐音频；如果未选中，播放头需要停在唯一一条音乐音频上。",
         "clip": {{}},
     }}, ensure_ascii=False))
     raise SystemExit(0)
@@ -1532,7 +1711,7 @@ if CLIP_SELECTOR:
     filtered = [record for record in records if str(record.get("selector", "")) == CLIP_SELECTOR]
     if filtered:
         records = filtered
-if not CLIP_SELECTOR and len(records) > 1:
+if not CLIP_SELECTOR and len(records) > 1 and not (REQUIRE_SELECTED_AUDIO or PREFER_PLAYHEAD_CLIP):
     print(json.dumps({{
         "ok": False,
         "needs_selection": True,
@@ -1579,7 +1758,30 @@ print(json.dumps({{
             data["ok"] = False
             data["message"] = "已定位音频片段，但 Resolve 没有返回可访问的源文件路径，无法用 FFmpeg 估算 BPM。"
             return data
-        estimate = self._estimate_bpm_with_essentia(Path(path))
+        try:
+            fps = float(clip.get("fps") or 25.0)
+        except Exception:
+            fps = 25.0
+        fps = fps if fps > 0 else 25.0
+        try:
+            source_start_frame = int(float(clip.get("source_start_frame") or 0))
+            source_end_frame = int(float(clip.get("source_end_frame") or 0))
+            timeline_start_frame = int(float(clip.get("start_frame") or 0))
+            timeline_end_frame = int(float(clip.get("end_frame") or 0))
+        except Exception:
+            source_start_frame = source_end_frame = timeline_start_frame = timeline_end_frame = 0
+        source_range_known = source_end_frame > source_start_frame
+        if source_range_known:
+            duration_frames = max(0, source_end_frame - source_start_frame)
+            start_seconds = max(0.0, source_start_frame / fps)
+            duration_seconds = max(0.0, duration_frames / fps)
+        else:
+            # Resolve often does not expose audio source in/out for cut timeline items.
+            # In that case trimming from source file 0s gives the wrong BPM for later cuts.
+            start_seconds = 0.0
+            duration_seconds = 0.0
+            clip["source_range_known"] = False
+        estimate = self._estimate_bpm_with_essentia(Path(path), start_seconds, duration_seconds)
         if not estimate.get("ok"):
             fallback = self._estimate_bpm_with_ffmpeg(Path(path))
             if fallback.get("ok"):
@@ -1596,9 +1798,60 @@ print(json.dumps({{
             data["message"] = str(estimate.get("message", "BPM 估算失败。"))
         return data
 
-    def _estimate_bpm_with_essentia(self, path: Path) -> dict[str, Any]:
+    def _estimate_bpm_with_essentia(self, path: Path, start_seconds: float = 0.0, duration_seconds: float = 0.0) -> dict[str, Any]:
+        if getattr(sys, "frozen", False):
+            worker = self._find_bpm_worker_binary()
+            if not worker:
+                system_python = self._find_fast_bpm_python()
+                if system_python:
+                    return self._run_bpm_worker_with_python(system_python, path, start_seconds, duration_seconds)
+                return {"ok": False, "message": "未找到内置 Essentia BPM Worker，已回退轻量 BPM 算法。"}
+            try:
+                cmd = [
+                    worker,
+                    str(path),
+                    "--start-seconds",
+                    f"{max(0.0, float(start_seconds)):.6f}",
+                    "--duration-seconds",
+                    f"{max(0.0, float(duration_seconds)):.6f}",
+                ]
+                ffmpeg = self._find_ffmpeg_binary()
+                if ffmpeg:
+                    cmd.extend(["--ffmpeg", ffmpeg])
+                proc = subprocess.run(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=90,
+                    **hidden_subprocess_kwargs(),
+                )
+            except Exception as exc:
+                return {"ok": False, "message": f"Essentia BPM Worker 启动失败：{exc}"}
+            output = proc.stdout.decode("utf-8", errors="ignore").strip()
+            error = proc.stderr.decode("utf-8", errors="ignore").strip()
+            if proc.returncode != 0:
+                return {
+                    "ok": False,
+                    "message": "Essentia BPM Worker 运行失败。"
+                    + (f" {error[:160]}" if error else ""),
+                }
+            try:
+                data = json.loads(output)
+            except Exception:
+                return {
+                    "ok": False,
+                    "message": "Essentia BPM Worker 未返回有效结果。"
+                    + (f" {error[:160]}" if error else ""),
+                }
+            if isinstance(data, dict):
+                data.setdefault("worker", worker)
+                data.setdefault("worker_mode", "bundled_python")
+                return data
+            return {"ok": False, "message": "Essentia BPM Worker 返回结果格式异常。"}
         try:
-            import essentia.standard as es  # type: ignore
+            import importlib
+
+            es = importlib.import_module("essentia.standard")
         except Exception:
             return {"ok": False, "message": "未安装 Essentia，已回退轻量 BPM 算法。"}
         try:
@@ -1610,14 +1863,124 @@ print(json.dumps({{
         beat_times = [float(value) for value in list(beats) if float(value) >= 0]
         if not beat_times:
             return {"ok": False, "message": "Essentia 未检测到 beat 点。"}
+        quality = beat_quality(beat_times)
         return {
             "ok": True,
             "bpm": round(float(bpm), 2),
             "confidence": round(float(beats_confidence or 0.0), 2),
             "method": "essentia_rhythm_extractor",
             "beat_times_seconds": beat_times[:4000],
+            **quality,
             "alternatives": [],
         }
+
+    def _run_bpm_worker_with_python(self, python_path: str, path: Path, start_seconds: float, duration_seconds: float) -> dict[str, Any]:
+        worker_script = Path(__file__).resolve().with_name("bpm_worker.py")
+        cmd = [
+            python_path,
+            str(worker_script),
+            str(path),
+            "--start-seconds",
+            f"{max(0.0, float(start_seconds)):.6f}",
+            "--duration-seconds",
+            f"{max(0.0, float(duration_seconds)):.6f}",
+        ]
+        ffmpeg = self._find_ffmpeg_binary()
+        if ffmpeg:
+            cmd.extend(["--ffmpeg", ffmpeg])
+        env = os.environ.copy()
+        env.pop("PYTHONHOME", None)
+        env.pop("PYTHONPATH", None)
+        try:
+            proc = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=60,
+                env=env,
+                **hidden_subprocess_kwargs(),
+            )
+        except Exception as exc:
+            return {"ok": False, "message": f"系统 Python BPM Worker 启动失败：{exc}"}
+        output = proc.stdout.decode("utf-8", errors="ignore").strip()
+        error = proc.stderr.decode("utf-8", errors="ignore").strip()
+        try:
+            data = json.loads(output) if output else {}
+        except Exception:
+            data = {}
+        if proc.returncode == 0 and isinstance(data, dict) and data.get("ok"):
+            data.setdefault("worker", python_path)
+            data.setdefault("worker_mode", "system_python_fallback")
+            return data
+        return {"ok": False, "message": str(data.get("message") or error[:160] or "系统 Python BPM Worker 未返回有效结果。")}
+
+    def _find_fast_bpm_python(self) -> str:
+        if getattr(self, "_fast_bpm_python_checked", False):
+            return str(getattr(self, "_fast_bpm_python", "") or "")
+        candidates = [
+            os.environ.get("QINGHE_BPM_PYTHON", ""),
+            "/Library/Developer/CommandLineTools/usr/bin/python3",
+            shutil.which("python3") or "",
+            "/opt/homebrew/bin/python3",
+            "/usr/local/bin/python3",
+            "/usr/bin/python3",
+        ]
+        seen: set[str] = set()
+        current_executable = str(Path(sys.executable).resolve()) if sys.executable else ""
+        for candidate in candidates:
+            if not candidate:
+                continue
+            path = str(Path(candidate).expanduser())
+            if path in seen or not Path(path).exists():
+                continue
+            seen.add(path)
+            try:
+                if current_executable and str(Path(path).resolve()) == current_executable:
+                    continue
+            except Exception:
+                pass
+            env = os.environ.copy()
+            env.pop("PYTHONHOME", None)
+            env.pop("PYTHONPATH", None)
+            try:
+                proc = subprocess.run(
+                    [path, "-c", "import essentia.standard"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=4,
+                    env=env,
+                    **hidden_subprocess_kwargs(),
+                )
+            except Exception:
+                continue
+            if proc.returncode == 0:
+                self._fast_bpm_python = path
+                self._fast_bpm_python_checked = True
+                return path
+        self._fast_bpm_python = ""
+        self._fast_bpm_python_checked = True
+        return ""
+
+    def _find_bpm_worker_binary(self) -> str:
+        names = ["QingheBPMWorker.exe", "QingheBPMWorker"] if platform.system().lower() == "windows" else ["QingheBPMWorker"]
+        roots: list[Path] = []
+        try:
+            roots.append(Path(sys.executable).resolve().parent)
+        except Exception:
+            pass
+        try:
+            roots.append(Path(__file__).resolve().parent)
+        except Exception:
+            pass
+        expanded: list[Path] = []
+        for root in roots:
+            expanded.extend([root, root.parent])
+        for root in expanded:
+            for name in names:
+                candidate = root / "QingheBPMWorker" / name
+                if candidate.exists() and os.access(candidate, os.X_OK):
+                    return str(candidate)
+        return ""
 
     def probe_media_pool_api(self, timeline_index: int = 1) -> dict[str, Any]:
         data = self._run_resolve_python(
@@ -1843,6 +2206,7 @@ print(json.dumps(result, ensure_ascii=False))
         beat_marker_step: int = 4,
         beat_marker_phase: int = 1,
         first_beat_anchor_frame: int | None = None,
+        force_grid_markers: bool = False,
     ) -> dict[str, Any]:
         data = self._run_resolve_python(
             rf'''
@@ -1850,7 +2214,9 @@ import json
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
-timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+timeline = project.GetCurrentTimeline() if project else None
+if not timeline and project:
+    timeline = project.GetTimelineByIndex({int(timeline_index)})
 if not timeline:
     print(json.dumps({{"ok": False, "message": "未找到目标时间线。"}}, ensure_ascii=False))
     raise SystemExit(0)
@@ -1860,6 +2226,15 @@ def safe(callable_obj, default=None):
         return callable_obj()
     except Exception:
         return default
+
+def as_items(value):
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        return [item for item in value.values() if item]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if item]
+    return [value]
 
 bpm = float({float(bpm)})
 start_frame = int({int(start_frame)})
@@ -1877,6 +2252,7 @@ beat_times_seconds = json.loads({json.dumps(json.dumps(beat_times_seconds or [],
 beat_marker_step = max(1, int({int(beat_marker_step)}))
 beat_marker_phase = max(1, int({int(beat_marker_phase)}))
 first_beat_anchor_frame = {json.dumps(first_beat_anchor_frame)}
+force_grid_markers = {bool(force_grid_markers)!r}
 fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), None) or safe(lambda: project.GetSetting("timelineFrameRate"), None) or 25
 try:
     fps = float(fps_raw)
@@ -1903,19 +2279,42 @@ def delete_matching_markers(target):
     failed_count = 0
     get_markers = getattr(target, "GetMarkers", None)
     delete_marker = getattr(target, "DeleteMarkerAtFrame", None)
+    delete_custom = getattr(target, "DeleteMarkerByCustomData", None)
     if not callable(get_markers) or not callable(delete_marker):
         return removed_count, failed_count
     for frame_id, marker in list((safe(lambda: get_markers(), {{}}) or {{}}).items()):
         if not is_bpm_marker(marker):
             continue
         try:
-            if delete_marker(frame_id):
+            try:
+                target_frame = int(float(frame_id))
+            except Exception:
+                target_frame = frame_id
+            if delete_marker(target_frame):
+                removed_count += 1
+            elif callable(delete_custom) and marker_custom(marker) and delete_custom(marker_custom(marker)):
                 removed_count += 1
             else:
                 failed_count += 1
         except Exception:
             failed_count += 1
     return removed_count, failed_count
+
+def collect_manual_restart_markers(target, frame_offset=0, source_offset=0):
+    anchors = []
+    get_markers = getattr(target, "GetMarkers", None)
+    if not callable(get_markers):
+        return anchors
+    for frame_id, marker in list((safe(lambda: get_markers(), {{}}) or {{}}).items()):
+        if is_bpm_marker(marker):
+            continue
+        try:
+            frame = int(float(frame_id)) - int(source_offset) + int(frame_offset)
+        except Exception:
+            continue
+        if int(start_frame) <= frame <= int(end_frame):
+            anchors.append(frame)
+    return sorted(set(anchors))
 
 def item_frame(item, method_name, default=0):
     method = getattr(item, method_name, None)
@@ -1932,7 +2331,7 @@ def item_unique_id(item):
 def find_target_audio_clip():
     track_count = int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0)
     for track_index in range(1, track_count + 1):
-        items = safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), []) or []
+        items = as_items(safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), []))
         for item_index, item in enumerate(items):
             if not item:
                 continue
@@ -1950,16 +2349,26 @@ removed = 0
 failed_clear = 0
 target = timeline
 target_clip = find_target_audio_clip()
+target_clip_left_offset = item_frame(target_clip, "GetLeftOffset", 0) if target_clip else 0
 if marker_scope == "clip":
     target = target_clip
     if not target_clip:
         print(json.dumps({{"ok": False, "message": "未找到要写入节拍标记的音频片段。请重新选择音乐片段或把播放头停在片段上。", "marker_scope": marker_scope}}, ensure_ascii=False))
         raise SystemExit(0)
-    removed, failed_clear = delete_matching_markers(target)
-else:
-    removed, failed_clear = delete_matching_markers(timeline)
+manual_restart_frames = []
+if target_clip:
+    manual_restart_frames.extend(collect_manual_restart_markers(target_clip, start_frame, target_clip_left_offset))
+manual_restart_frames.extend(collect_manual_restart_markers(timeline, 0))
+manual_restart_frames = sorted(set(manual_restart_frames))
+timeline_removed, timeline_failed_clear = delete_matching_markers(timeline)
+clip_removed, clip_failed_clear = (0, 0)
+if target_clip:
+    clip_removed, clip_failed_clear = delete_matching_markers(target_clip)
+removed = timeline_removed + clip_removed
+failed_clear = timeline_failed_clear + clip_failed_clear
 
 interval = max(1.0, fps * 60.0 / bpm)
+marker_spacing_frames = interval * beat_marker_step
 count = 0
 max_markers = 2000
 phase_offset = (beat_marker_phase - 1) % beat_marker_step
@@ -1976,40 +2385,157 @@ if candidate_anchor is not None and int(start_frame) <= candidate_anchor < int(e
 marker_frames = []
 beat_anchor_index = None
 beat_frame_shift = 0
-if anchor_valid and isinstance(beat_times_seconds, list) and beat_times_seconds:
+beat_segment_count = 0
+breath_gap_count = 0
+anchor_snap_delta_frames = 0
+beat_snap_points = []
+if isinstance(beat_times_seconds, list) and beat_times_seconds:
+    for beat_second in beat_times_seconds:
+        try:
+            beat_frame = int(round(float(start_frame) + (float(beat_second) * fps) - float(source_start_frame or 0)))
+        except Exception:
+            continue
+        if int(start_frame) - int(interval) <= beat_frame <= int(end_frame) + int(interval):
+            beat_snap_points.append(beat_frame)
+    beat_snap_points = sorted(set(beat_snap_points))
+if anchor_valid and beat_snap_points:
+    anchor_int_for_snap = int(round(anchor_frame))
+    nearest_anchor = min(beat_snap_points, key=lambda frame: abs(frame - anchor_int_for_snap))
+    anchor_snap_tolerance = max(4.0, interval * 0.45)
+    if abs(nearest_anchor - anchor_int_for_snap) <= anchor_snap_tolerance:
+        anchor_snap_delta_frames = int(nearest_anchor - anchor_int_for_snap)
+        anchor_frame = float(nearest_anchor)
+
+if (not force_grid_markers) and isinstance(beat_times_seconds, list) and beat_times_seconds:
     detected_frames = []
     for beat_index, beat_second in enumerate(beat_times_seconds):
         try:
             detected_frame = int(round(float(start_frame) + (float(beat_second) * fps) - float(source_start_frame or 0)))
         except Exception:
             continue
-        if int(start_frame) - int(interval * beat_marker_step) <= detected_frame <= int(end_frame) + int(interval * beat_marker_step):
+        if int(start_frame) - int(interval) <= detected_frame <= int(end_frame) + int(interval):
             detected_frames.append((beat_index, detected_frame))
     if detected_frames:
-        beat_anchor_index, detected_anchor_frame = min(detected_frames, key=lambda item: abs(item[1] - int(round(anchor_frame))))
-        beat_frame_shift = int(round(anchor_frame)) - int(detected_anchor_frame)
-        for beat_index, detected_frame in detected_frames:
-            if (beat_index - beat_anchor_index) % beat_marker_step != 0:
+        anchor_int = int(round(anchor_frame))
+        detected_points = sorted(set(int(frame) for _idx, frame in detected_frames))
+        min_spacing = max(1.0, interval * 0.55)
+        def dedupe_beat_points(points):
+            result = []
+            for frame in sorted(set(int(point) for point in points)):
+                if result and abs(frame - result[-1]) < min_spacing:
+                    if anchor_valid and abs(frame - anchor_int) < abs(result[-1] - anchor_int):
+                        result[-1] = frame
+                    continue
+                result.append(frame)
+            return result
+
+        normalized_points = dedupe_beat_points(detected_points)
+
+        gaps = [normalized_points[idx + 1] - normalized_points[idx] for idx in range(len(normalized_points) - 1)]
+        normal_gaps = sorted(
+            gap for gap in gaps
+            if max(1.0, interval * 0.45) <= gap <= max(interval * 1.65, interval + 6)
+        )
+        if normal_gaps:
+            normal_interval = float(normal_gaps[len(normal_gaps) // 2])
+        else:
+            normal_interval = interval
+        breath_gap_threshold = max(normal_interval * 1.85, interval * 1.85, normal_interval + 10)
+        anchor_snap_tolerance = max(6.0, normal_interval * 0.45)
+
+        if anchor_valid:
+            closest_index, closest_frame = min(
+                enumerate(normalized_points),
+                key=lambda item: abs(item[1] - anchor_int),
+            )
+            beat_anchor_index = int(closest_index)
+            beat_frame_shift = anchor_int - int(closest_frame)
+            if abs(int(closest_frame) - anchor_int) <= anchor_snap_tolerance:
+                shifted_points = []
+                for frame in normalized_points:
+                    shifted_frame = int(frame) + int(beat_frame_shift)
+                    if int(start_frame) - int(interval) <= shifted_frame <= int(end_frame) + int(interval):
+                        shifted_points.append(shifted_frame)
+                if int(start_frame) <= anchor_int <= int(end_frame):
+                    shifted_points.append(anchor_int)
+                normalized_points = dedupe_beat_points(shifted_points)
+                if anchor_int in normalized_points:
+                    beat_anchor_index = normalized_points.index(anchor_int)
+            elif int(start_frame) <= anchor_int <= int(end_frame):
+                normalized_points.append(anchor_int)
+                normalized_points = dedupe_beat_points(normalized_points)
+                beat_anchor_index = normalized_points.index(anchor_int)
+                beat_frame_shift = 0
+
+        segments = []
+        current_segment = []
+        for frame in normalized_points:
+            if not current_segment:
+                current_segment = [frame]
                 continue
-            marker_frame = int(detected_frame + beat_frame_shift)
-            if marker_frame < int(start_frame) or marker_frame > int(end_frame):
+            gap = frame - current_segment[-1]
+            if gap > breath_gap_threshold:
+                segments.append(current_segment)
+                current_segment = [frame]
+                breath_gap_count += 1
+            else:
+                current_segment.append(frame)
+        if current_segment:
+            segments.append(current_segment)
+        beat_segment_count = len(segments)
+
+        for segment in segments:
+            if not segment:
                 continue
-            if marker_frame not in marker_frames:
-                marker_frames.append(marker_frame)
+            segment_anchor_index = None
+            if anchor_valid and segment[0] <= anchor_int <= segment[-1]:
+                try:
+                    segment_anchor_index = segment.index(anchor_int)
+                except ValueError:
+                    segment_anchor_index, _nearest = min(
+                        enumerate(segment),
+                        key=lambda item: abs(item[1] - anchor_int),
+                    )
+            if segment_anchor_index is None:
+                segment_anchor_index = 0
+            for idx, marker_frame in enumerate(segment):
+                if (idx - segment_anchor_index) % beat_marker_step != 0:
+                    continue
+                if marker_frame < int(start_frame) or marker_frame > int(end_frame):
+                    continue
+                if marker_frame not in marker_frames:
+                    marker_frames.append(marker_frame)
+                if len(marker_frames) >= max_markers:
+                    break
             if len(marker_frames) >= max_markers:
                 break
 elif anchor_valid:
-    marker_spacing = interval * beat_marker_step
-    first_mark = anchor_frame
-    frame = first_mark
-    while frame >= float(start_frame) and len(marker_frames) < max_markers:
-        marker_frames.append(int(round(frame)))
-        frame -= marker_spacing
-    marker_frames.reverse()
-    frame = first_mark + marker_spacing
-    while frame <= float(end_frame) and len(marker_frames) < max_markers:
-        marker_frames.append(int(round(frame)))
-        frame += marker_spacing
+    marker_spacing = marker_spacing_frames
+    grid_anchors = sorted(set(
+        int(frame)
+        for frame in [int(round(anchor_frame)), *manual_restart_frames]
+        if int(start_frame) <= int(frame) <= int(end_frame)
+    ))
+    if not grid_anchors:
+        grid_anchors = [int(round(anchor_frame))]
+    for anchor_index, grid_anchor in enumerate(grid_anchors):
+        left_bound = int(start_frame) if anchor_index == 0 else grid_anchors[anchor_index - 1] + 1
+        right_bound = int(end_frame) if anchor_index == len(grid_anchors) - 1 else grid_anchors[anchor_index + 1] - 1
+        frame = float(grid_anchor)
+        while frame >= float(left_bound) and len(marker_frames) < max_markers:
+            marker = int(round(frame))
+            if marker not in marker_frames:
+                marker_frames.append(marker)
+            frame -= marker_spacing
+        frame = float(grid_anchor) + marker_spacing
+        while frame <= float(right_bound) and len(marker_frames) < max_markers:
+            marker = int(round(frame))
+            if marker not in marker_frames:
+                marker_frames.append(marker)
+            frame += marker_spacing
+        if len(marker_frames) >= max_markers:
+            break
+    marker_frames.sort()
 elif isinstance(beat_times_seconds, list) and beat_times_seconds:
     try:
         beat_origin_seconds = float(beat_times_seconds[0])
@@ -2035,6 +2561,12 @@ else:
         marker_frames.append(int(round(frame)))
         frame += interval * beat_marker_step
 
+if anchor_valid:
+    anchor_int = int(round(anchor_frame))
+    if int(start_frame) <= anchor_int <= int(end_frame) and anchor_int not in marker_frames:
+        marker_frames.append(anchor_int)
+        marker_frames.sort()
+
 clip_color_changed = False
 
 for marker_frame in marker_frames:
@@ -2045,7 +2577,7 @@ for marker_frame in marker_frames:
     custom = "QH-BPM|%s|%.4f|%s" % (marker_scope, bpm, clip_name)
     target_frame = marker_frame
     if marker_scope == "clip":
-        target_frame = max(0, marker_frame - start_frame)
+        target_frame = max(0, marker_frame - start_frame + target_clip_left_offset)
     ok = False
     for args in (
         (target_frame, "Yellow", prefix + " Beat", note, 1, custom),
@@ -2070,18 +2602,22 @@ if marker_scope == "clip" and count == 0:
     }}, ensure_ascii=False))
     raise SystemExit(0)
 target_label = "音频片段" if marker_scope == "clip" else "时间线"
-if anchor_valid:
-    if isinstance(beat_times_seconds, list) and beat_times_seconds and beat_anchor_index is not None:
-        beat_source_label = "Essentia 实际 beat 点+播放头锚点校准"
-    else:
-        beat_source_label = "播放头锚点+BPM网格兜底"
+if manual_restart_frames and anchor_valid:
+    beat_source_label = "手动段落锚点+BPM分段网格"
+elif force_grid_markers and isinstance(beat_times_seconds, list) and beat_times_seconds:
+    beat_source_label = "播放头锚点吸附+BPM稳定网格"
 elif isinstance(beat_times_seconds, list) and beat_times_seconds:
-    beat_source_label = "Essentia beat 点"
+    if anchor_valid:
+        beat_source_label = "真实 beat 点+播放头重拍校准+气口分段重启"
+    else:
+        beat_source_label = "真实 beat 点+气口分段重启"
+elif anchor_valid:
+    beat_source_label = "播放头锚点+BPM网格兜底"
 else:
     beat_source_label = "BPM网格"
 first_marker_delta = marker_frames[0] - int(start_frame) if marker_frames else 0
 anchor_delta = int(round(anchor_frame)) - int(start_frame)
-message = "已在%s生成 %d 个节拍标记；来源 %s，每 %d 拍标一次，锚点本身会被标记，锚点距片段起点 %d 帧，并按实际 beat 点向前/向后生成。已清理旧节拍标记 %d 个；不会修改片段颜色。" % (target_label, count, beat_source_label, beat_marker_step, anchor_delta, removed)
+message = "已在%s生成 %d 个节拍标记；来源 %s，每 %d 拍约 %.2f 帧标一次，锚点本身会被标记，锚点距片段起点 %d 帧，识别段落 %d 段/气口 %d 处。已清理旧节拍标记 %d 个；不会修改片段颜色。" % (target_label, count, beat_source_label, beat_marker_step, marker_spacing_frames, anchor_delta, beat_segment_count, breath_gap_count, removed)
 print(json.dumps({{
     "ok": True,
     "message": message,
@@ -2089,6 +2625,7 @@ print(json.dumps({{
     "removed_old_markers": removed,
     "failed_clear": failed_clear,
     "interval_frames": round(interval, 2),
+    "marker_spacing_frames": round(marker_spacing_frames, 2),
     "bpm": bpm,
     "fps": fps,
     "marker_scope": marker_scope,
@@ -2097,9 +2634,14 @@ print(json.dumps({{
     "first_beat_anchor_delta_frames": anchor_delta,
     "beat_anchor_index": beat_anchor_index,
     "beat_frame_shift": beat_frame_shift,
+    "anchor_snap_delta_frames": anchor_snap_delta_frames,
     "beat_source": beat_source_label,
+    "manual_restart_count": len(manual_restart_frames),
+    "manual_restart_frames": manual_restart_frames[:80],
     "beat_marker_step": beat_marker_step,
     "beat_marker_phase": beat_marker_phase,
+    "beat_segment_count": beat_segment_count,
+    "breath_gap_count": breath_gap_count,
     "anchor_valid": anchor_valid,
     "clip_color_changed": clip_color_changed,
 }}, ensure_ascii=False))
@@ -2117,7 +2659,9 @@ import json
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
-timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+timeline = project.GetCurrentTimeline() if project else None
+if not timeline and project:
+    timeline = project.GetTimelineByIndex({int(timeline_index)})
 if not timeline:
     print(json.dumps({{"ok": False, "message": "未找到目标时间线。"}}, ensure_ascii=False))
     raise SystemExit(0)
@@ -2128,6 +2672,15 @@ def safe(callable_obj, default=None):
         return callable_obj()
     except Exception:
         return default
+
+def as_items(value):
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        return [item for item in value.values() if item]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if item]
+    return [value]
 
 def marker_custom(marker):
     if not isinstance(marker, dict):
@@ -2144,13 +2697,20 @@ def delete_matching_markers(target):
     failed_count = 0
     get_markers = getattr(target, "GetMarkers", None)
     delete_marker = getattr(target, "DeleteMarkerAtFrame", None)
+    delete_custom = getattr(target, "DeleteMarkerByCustomData", None)
     if not callable(get_markers) or not callable(delete_marker):
         return removed_count, failed_count
     for frame_id, marker in list((safe(lambda: get_markers(), {{}}) or {{}}).items()):
         if not is_bpm_marker(marker):
             continue
         try:
-            if delete_marker(frame_id):
+            try:
+                target_frame = int(float(frame_id))
+            except Exception:
+                target_frame = frame_id
+            if delete_marker(target_frame):
+                removed_count += 1
+            elif callable(delete_custom) and marker_custom(marker) and delete_custom(marker_custom(marker)):
                 removed_count += 1
             else:
                 failed_count += 1
@@ -2162,7 +2722,7 @@ removed = 0
 failed = 0
 if marker_scope == "clip":
     for track_index in range(1, int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0) + 1):
-        for item in safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), []) or []:
+        for item in as_items(safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), [])):
             item_removed, item_failed = delete_matching_markers(item)
             removed += item_removed
             failed += item_failed
@@ -2183,39 +2743,205 @@ print(json.dumps({{
             return {"ok": False, "message": "清除节拍标记失败：Resolve API 未返回结果。"}
         return data
 
+    def clear_current_audio_bpm_markers(self, timeline_index: int = 1) -> dict[str, Any]:
+        data = self._run_resolve_python(
+            rf'''
+import json
+resolve = dvr_script.scriptapp("Resolve")
+project_manager = resolve.GetProjectManager() if resolve else None
+project = project_manager.GetCurrentProject() if project_manager else None
+timeline = project.GetCurrentTimeline() if project else None
+if not timeline and project:
+    timeline = project.GetTimelineByIndex({int(timeline_index)})
+if not timeline:
+    print(json.dumps({{"ok": False, "message": "未找到目标时间线。"}}, ensure_ascii=False))
+    raise SystemExit(0)
+
+def safe(callable_obj, default=None):
+    try:
+        return callable_obj()
+    except Exception:
+        return default
+
+def as_items(value):
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        return [item for item in value.values() if item]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if item]
+    return [value]
+
+def read_properties(target):
+    if not target:
+        return {{}}
+    for method_name in ("GetClipProperty", "GetProperty"):
+        method = getattr(target, method_name, None)
+        if not callable(method):
+            continue
+        props = safe(lambda method=method: method(), {{}})
+        if isinstance(props, dict):
+            return props
+    return {{}}
+
+def item_track_type(item):
+    value = safe(lambda: item.GetTrackTypeAndIndex(), None)
+    if isinstance(value, (list, tuple)) and value:
+        return str(value[0]).lower()
+    if isinstance(value, dict):
+        return str(value.get("trackType") or value.get("type") or "").lower()
+    props = read_properties(item)
+    return str(props.get("Track Type") or props.get("Type") or "").lower()
+
+def item_frame(item, method_name, default=0):
+    method = getattr(item, method_name, None)
+    if not callable(method):
+        return default
+    try:
+        return int(method() or default)
+    except Exception:
+        return default
+
+def clip_name(item):
+    props = read_properties(item)
+    for key in ("Clip Name", "File Name", "Name"):
+        if props.get(key):
+            return str(props.get(key))
+    return str(safe(lambda: item.GetName(), "") or "未命名音频")
+
+def marker_custom(marker):
+    if not isinstance(marker, dict):
+        return ""
+    return str(marker.get("customData", "") or marker.get("custom_data", "") or "")
+
+def is_bpm_marker(marker):
+    if not isinstance(marker, dict):
+        return False
+    return str(marker.get("name", "")).startswith("[QH-BPM]") or marker_custom(marker).startswith("QH-BPM")
+
+def delete_matching_markers(target):
+    removed_count = 0
+    failed_count = 0
+    get_markers = getattr(target, "GetMarkers", None)
+    delete_marker = getattr(target, "DeleteMarkerAtFrame", None)
+    delete_custom = getattr(target, "DeleteMarkerByCustomData", None)
+    if not callable(get_markers) or not callable(delete_marker):
+        return removed_count, failed_count
+    for frame_id, marker in list((safe(lambda: get_markers(), {{}}) or {{}}).items()):
+        if not is_bpm_marker(marker):
+            continue
+        try:
+            try:
+                target_frame = int(float(frame_id))
+            except Exception:
+                target_frame = frame_id
+            if delete_marker(target_frame):
+                removed_count += 1
+            elif callable(delete_custom) and marker_custom(marker) and delete_custom(marker_custom(marker)):
+                removed_count += 1
+            else:
+                failed_count += 1
+        except Exception:
+            failed_count += 1
+    return removed_count, failed_count
+
+current_tc = str(safe(lambda: timeline.GetCurrentTimecode(), "") or "")
+fps_raw = safe(lambda: timeline.GetSetting("timelineFrameRate"), None) or safe(lambda: project.GetSetting("timelineFrameRate"), None) or 25
+try:
+    fps = float(fps_raw)
+except Exception:
+    fps = 25.0
+fps_int = max(1, int(round(fps)))
+def tc_to_frames(tc):
+    parts = str(tc or "").split(":")
+    if len(parts) != 4:
+        return None
+    try:
+        hh, mm, ss, ff = [int(float(part)) for part in parts]
+    except Exception:
+        return None
+    return (((hh * 60) + mm) * 60 + ss) * fps_int + ff
+playhead_display_frame = tc_to_frames(current_tc)
+timeline_start_frame = int(safe(lambda: timeline.GetStartFrame(), 0) or 0)
+start_tc = str(safe(lambda: timeline.GetStartTimecode(), "") or safe(lambda: timeline.GetSetting("timelineStartTimecode"), "") or "00:00:00:00")
+start_display = tc_to_frames(start_tc) or 0
+current_playhead_frame = None
+if playhead_display_frame is not None:
+    current_playhead_frame = timeline_start_frame + max(0, playhead_display_frame - start_display)
+
+targets = []
+for method_name in ("GetSelectedItems", "GetSelectedClips", "GetSelectedTimelineItems"):
+    method = getattr(timeline, method_name, None)
+    if not callable(method):
+        continue
+    for item in as_items(safe(lambda method=method: method(), [])):
+        track_type = item_track_type(item)
+        if "audio" in track_type or not track_type:
+            targets.append((item, "selected"))
+
+if not targets and current_playhead_frame is not None:
+    for track_index in range(1, int(safe(lambda: timeline.GetTrackCount("audio"), 0) or 0) + 1):
+        for item in as_items(safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), [])):
+            start = item_frame(item, "GetStart", 0)
+            end = item_frame(item, "GetEnd", start)
+            if start <= current_playhead_frame < end:
+                targets.append((item, "playhead"))
+
+if not targets:
+    print(json.dumps({{
+        "ok": False,
+        "message": "未找到当前音频片段。请选中音乐片段，或把播放头停在要清除的音频片段上。",
+        "removed": 0,
+        "failed": 0,
+    }}, ensure_ascii=False))
+    raise SystemExit(0)
+
+seen = set()
+removed = 0
+failed = 0
+clips = []
+source_mode = "selected" if any(source == "selected" for _item, source in targets) else "playhead"
+for item, source in targets:
+    uid = str(safe(lambda item=item: item.GetUniqueId(), "") or "")
+    key = uid or str(id(item))
+    if key in seen:
+        continue
+    seen.add(key)
+    item_removed, item_failed = delete_matching_markers(item)
+    removed += item_removed
+    failed += item_failed
+    clips.append({{
+        "name": clip_name(item),
+        "start_frame": item_frame(item, "GetStart", 0),
+        "end_frame": item_frame(item, "GetEnd", 0),
+        "removed": item_removed,
+        "failed": item_failed,
+        "source": source,
+    }})
+
+print(json.dumps({{
+    "ok": failed == 0,
+    "message": "已从当前音频清除 %d 个节拍标记%s。" % (removed, ("，失败 %d 个" % failed) if failed else ""),
+    "removed": removed,
+    "failed": failed,
+    "source_mode": source_mode,
+    "clips": clips,
+}}, ensure_ascii=False))
+''',
+            timeout=120,
+        )
+        if not data:
+            return {"ok": False, "message": "清除当前音频节拍标记失败：Resolve API 未返回结果。"}
+        return data
+
     def _find_ffmpeg_binary(self) -> str:
-        local_candidates = []
-        if platform.system().lower() == "windows":
-            appdata = Path(os.environ.get("APPDATA", ""))
-            if appdata:
-                local_candidates.append(
-                    appdata
-                    / "Blackmagic Design"
-                    / "DaVinci Resolve"
-                    / "Support"
-                    / "Fusion"
-                    / "Scripts"
-                    / "Modules"
-                    / "black_frame_detector"
-                    / "ffmpeg"
-                    / "windows"
-                    / "ffmpeg.exe"
-                )
-        here = Path(__file__).resolve()
-        for root in [here.parent, *here.parents]:
-            if root == root.parent:
-                continue
-            local_candidates.extend([
-                root / "ffmpeg" / "windows" / "ffmpeg.exe",
-                root / "QingheBFD_Plugin_Windows" / "ffmpeg" / "windows" / "ffmpeg.exe",
-                root / "ffmpeg" / "bin" / "ffmpeg.exe",
-            ])
+        bundled = REPO_ROOT / "ffmpeg" / "macos" / "ffmpeg"
         candidates = [
-            *(str(path) for path in local_candidates),
             shutil.which("ffmpeg") or "",
             "/opt/homebrew/bin/ffmpeg",
             "/usr/local/bin/ffmpeg",
             "/usr/bin/ffmpeg",
+            str(bundled),
         ]
         for candidate in candidates:
             if candidate and Path(candidate).exists():
@@ -2223,38 +2949,13 @@ print(json.dumps({{
         return ""
 
     def _find_ffprobe_binary(self) -> str:
-        local_candidates = []
-        if platform.system().lower() == "windows":
-            appdata = Path(os.environ.get("APPDATA", ""))
-            if appdata:
-                local_candidates.append(
-                    appdata
-                    / "Blackmagic Design"
-                    / "DaVinci Resolve"
-                    / "Support"
-                    / "Fusion"
-                    / "Scripts"
-                    / "Modules"
-                    / "black_frame_detector"
-                    / "ffmpeg"
-                    / "windows"
-                    / "ffprobe.exe"
-                )
-        here = Path(__file__).resolve()
-        for root in [here.parent, *here.parents]:
-            if root == root.parent:
-                continue
-            local_candidates.extend([
-                root / "ffmpeg" / "windows" / "ffprobe.exe",
-                root / "QingheBFD_Plugin_Windows" / "ffmpeg" / "windows" / "ffprobe.exe",
-                root / "ffmpeg" / "bin" / "ffprobe.exe",
-            ])
+        bundled = REPO_ROOT / "ffmpeg" / "macos" / "ffprobe"
         candidates = [
-            *(str(path) for path in local_candidates),
             shutil.which("ffprobe") or "",
             "/opt/homebrew/bin/ffprobe",
             "/usr/local/bin/ffprobe",
             "/usr/bin/ffprobe",
+            str(bundled),
         ]
         for candidate in candidates:
             if candidate and Path(candidate).exists():
@@ -2458,7 +3159,7 @@ start_frame = safe(lambda: timeline.GetStartFrame(), 0) or 0
 start_timecode = str(safe(lambda: timeline.GetStartTimecode(), None) or safe(lambda: timeline.GetSetting("timelineStartTimecode"), None) or "00:00:00:00")
 markers = timeline.GetMarkers() or {{}}
 records = []
-counts = {{"total": 0, "error": 0, "suspect": 0, "scene": 0, "gap": 0, "duplicate": 0, "content_dup": 0, "opacity": 0, "corrupt": 0}}
+counts = {{"total": 0, "error": 0, "suspect": 0, "scene": 0, "gap": 0, "duplicate": 0, "content_dup": 0, "opacity": 0, "corrupt": 0, "black_border": 0}}
 
 def timecode_to_frames(tc, fps):
     fps_int = max(1, int(round(float(fps or 25))))
@@ -2493,6 +3194,8 @@ def tc_from_timeline_frame(frame, fps, timeline_start_frame, timeline_start_tc):
 
 def classify(name, color):
     text = str(name or "").upper()
+    if "BDR" in text or "BORDER" in text or "BLACK_BORDER" in text or "黑边" in str(name or ""):
+        return "black_border"
     if "OPC" in text:
         return "opacity"
     if "GAP" in text:
@@ -2648,6 +3351,11 @@ print(json.dumps({{
             if text and text not in candidates:
                 candidates.append(text)
         template_path = Path(__file__).resolve().with_name("templates") / "caption-bin.drb"
+        timeout = 45.0
+        if action == "convert_srt_textplus":
+            timeout = self._subtitle_operation_timeout(timeline_index, minimum=300, per_item=0.28)
+        elif action == "apply_style":
+            timeout = self._subtitle_operation_timeout(timeline_index, minimum=300, per_item=0.20)
         data = self._run_resolve_python(
             rf'''
 import json
@@ -2758,6 +3466,19 @@ def fusion_font_available(font_name, font_path=""):
         return True
     return (name and name in index.get("names", set())) or (basename and basename in index.get("basenames", set()))
 
+def font_name_looks_corrupt(font_name):
+    text = str(font_name or "").strip()
+    if text.count("?") < 3:
+        return False
+    meaningful = "".join(ch for ch in text if ch not in "? ._-/|")
+    if not meaningful:
+        return True
+    has_cjk = any("\\u4e00" <= ch <= "\\u9fff" for ch in meaningful)
+    has_alnum = any(ch.isalnum() for ch in meaningful)
+    if not has_cjk and not has_alnum:
+        return True
+    return text.count("?") >= max(3, len(text) // 2)
+
 def fusion_font_resolved_name(font_name, font_path=""):
     name = str(font_name or "").strip()
     path = str(font_path or "").strip()
@@ -2768,6 +3489,11 @@ def fusion_font_resolved_name(font_name, font_path=""):
     if basename:
         mapped = index.get("basename_to_family", {{}}).get(basename)
         if mapped:
+            # Fusion's UI may show a localized Chinese family while the
+            # scripting FontManager exposes a Mojibake-style internal key
+            # (for example "???????"). If the key came from an exact font-file
+            # match, use it; this mirrors manual selection from Fusion's font
+            # dropdown better than writing the localized display name.
             return str(mapped)
     return name
 
@@ -2810,7 +3536,12 @@ if ACTION == "check_font":
         candidate_font, candidate_style, candidate_path = parse_font_candidate(candidate)
         candidate_attempts += 1
         available = fusion_font_available(candidate_font, candidate_path)
-        trace_item = font_candidate_probe(candidate, available, False, candidate_font if available else "", candidate_style if available else "")
+        registered = False
+        if not available and candidate_path:
+            registered = register_font_candidate(candidate_path, candidate_font)
+            available = fusion_font_available(candidate_font, candidate_path)
+        resolved_font = fusion_font_resolved_name(candidate_font, candidate_path) if available else ""
+        trace_item = font_candidate_probe(candidate, available, registered, resolved_font, candidate_style if available else "")
         trace_item["unavailable"] = not bool(available)
         if len(candidate_trace) < 24:
             candidate_trace.append(trace_item)
@@ -2818,12 +3549,14 @@ if ACTION == "check_font":
             print(json.dumps({{
                 "ok": True,
                 "available": True,
-                "font": candidate_font,
+                "font": resolved_font or candidate_font,
                 "style": candidate_style,
                 "accepted_candidate": str(candidate or ""),
+                "registered_font_path": str(candidate_path or ""),
+                "registered_font_name": str(candidate_font or ""),
                 "candidate_attempts": candidate_attempts,
                 "candidate_trace": candidate_trace,
-                "message": "当前 Fusion 可用：" + (candidate_font or FONT_NAME),
+                "message": "当前 Fusion 可用：" + (resolved_font or candidate_font or FONT_NAME),
             }}, ensure_ascii=False))
             raise SystemExit(0)
     print(json.dumps({{
@@ -3957,7 +4690,7 @@ elif ACTION == "replace":
                     candidate_font, candidate_style, candidate_path = parse_font_candidate(candidate)
                     registered = register_font_candidate(candidate_path, candidate_font)
                     candidate_attempts += 1
-                    if not fusion_font_available(candidate_font, candidate_path) and not (registered and candidate_path):
+                    if not fusion_font_available(candidate_font, candidate_path):
                         if len(candidate_trace) < 24:
                             trace_item = font_candidate_probe(candidate, False, registered, "", "")
                             trace_item["unavailable"] = True
@@ -4013,7 +4746,7 @@ elif ACTION == "replace":
                 candidate_font, candidate_style, candidate_path = parse_font_candidate(candidate)
                 registered = register_font_candidate(candidate_path, candidate_font)
                 candidate_attempts += 1
-                if not fusion_font_available(candidate_font, candidate_path) and not (registered and candidate_path):
+                if not fusion_font_available(candidate_font, candidate_path):
                     if len(candidate_trace) < 24:
                         trace_item = font_candidate_probe(candidate, False, registered, "", "")
                         trace_item["unavailable"] = True
@@ -4055,7 +4788,7 @@ elif ACTION == "replace":
                         candidate_font, candidate_style, candidate_path = parse_font_candidate(candidate)
                         registered = register_font_candidate(candidate_path, candidate_font)
                         candidate_attempts += 1
-                        if not fusion_font_available(candidate_font, candidate_path) and not (registered and candidate_path):
+                        if not fusion_font_available(candidate_font, candidate_path):
                             if len(candidate_trace) < 24:
                                 trace_item = font_candidate_probe(candidate, False, registered, current_font, "")
                                 trace_item["unavailable"] = True
@@ -4092,7 +4825,7 @@ elif ACTION == "replace":
     except Exception as exc:
         print(json.dumps({{"ok": False, "message": "字体替换异常：" + str(exc)[:200]}}, ensure_ascii=False))
 ''',
-            timeout=300 if action in {"convert_srt_textplus", "apply_style"} else 45,
+            timeout=timeout,
         )
         if not data:
             return {"ok": False, "message": "字体操作失败：Resolve API 未返回结果。", "items": []}
@@ -4702,7 +5435,7 @@ elif ACTION == "restore_delete":
         ok, msg = restore_deleted_textplus_item()
     print(json.dumps({{"ok": ok, "message": msg}}, ensure_ascii=False))
 ''',
-            timeout=60,
+            timeout=240 if action == "scan" else 180,
         )
         if not data:
             return {"ok": False, "message": "文字层操作失败：Resolve API 未返回结果。", "items": []}
@@ -4710,6 +5443,7 @@ elif ACTION == "restore_delete":
 
     def export_subtitles_srt(self, timeline_index: int = 1) -> dict[str, Any]:
         """Export all subtitle items from a timeline as SRT content."""
+        timeout = self._subtitle_operation_timeout(timeline_index, minimum=120, per_item=0.12)
         data = self._run_resolve_python(
             rf'''
 import json
@@ -4768,14 +5502,19 @@ for i, clip in enumerate(all_clips or [], 1):
 srt = "\r\n".join(lines)
 print(json.dumps({{"ok": True, "srt": srt, "count": len(all_clips) if all_clips else 0, "message": "已导出 " + str(len(all_clips) if all_clips else 0) + " 条字幕。"}}, ensure_ascii=False))
 ''',
-            timeout=15,
+            timeout=timeout,
         )
         if not data:
-            return {{"ok": False, "srt": "", "count": 0, "message": "导出失败：Resolve API 未返回结果。"}}
+            return {"ok": False, "srt": "", "count": 0, "message": "导出失败：Resolve API 未返回结果。"}
         return data
 
     def replace_subtitles_from_srt(self, timeline_index: int = 1, srt_content: str = "", original_srt: str = "") -> dict[str, Any]:
         """Replace all subtitles with new SRT content (full replace: delete all + import all)."""
+        entry_count = len(re.findall(r"(?m)^\s*\d+\s*$", srt_content or ""))
+        timeout = max(
+            self._subtitle_operation_timeout(timeline_index, minimum=180, per_item=0.2),
+            min(900, 180 + entry_count * 0.18),
+        )
         data = self._run_resolve_python(
             rf'''
 import json, os, tempfile, re
@@ -4934,10 +5673,10 @@ try:
 except Exception as e:
     print(json.dumps({{"ok": False, "count": 0, "deleted": deleted, "message": "导入SRT异常：" + str(e)[:200]}}, ensure_ascii=False))
 ''',
-            timeout=30,
+            timeout=timeout,
         )
         if not data:
-            return {{"ok": False, "count": 0, "message": "替换失败：Resolve API 未返回结果。"}}
+            return {"ok": False, "count": 0, "message": "替换失败：Resolve API 未返回结果。"}
         return data
 
     def _audio_action(self, timeline_index: int, action: str, io_in: str = "", io_out: str = "") -> dict[str, Any]:
@@ -4961,7 +5700,9 @@ AUDIO_CLIP_MARKER_COLOR = "Red"
 resolve = dvr_script.scriptapp("Resolve")
 project_manager = resolve.GetProjectManager() if resolve else None
 project = project_manager.GetCurrentProject() if project_manager else None
-timeline = project.GetTimelineByIndex({int(timeline_index)}) if project else None
+timeline = project.GetCurrentTimeline() if project else None
+if not timeline and project:
+    timeline = project.GetTimelineByIndex({int(timeline_index)})
 if not timeline:
     print(json.dumps({{"ok": False, "message": "未找到目标时间线。"}}, ensure_ascii=False))
     raise SystemExit(0)
@@ -4971,6 +5712,15 @@ def safe(callable_obj, default=None):
         return callable_obj()
     except Exception:
         return default
+
+def as_items(value):
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        return [item for item in value.values() if item]
+    if isinstance(value, (list, tuple)):
+        return [item for item in value if item]
+    return [value]
 
 resolve_version = safe(lambda: resolve.GetVersion(), []) if resolve else []
 try:
@@ -5420,7 +6170,7 @@ for track_index in range(1, track_count + 1):
     subtype = str(safe(lambda idx=track_index: timeline.GetTrackSubType("audio", idx), "") or "")
     track_name = str(safe(lambda idx=track_index: timeline.GetTrackName("audio", idx), f"Audio {{track_index}}") or f"Audio {{track_index}}")
     enabled = safe(lambda idx=track_index: timeline.GetIsTrackEnabled("audio", idx), True)
-    items = safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), []) or []
+    items = as_items(safe(lambda idx=track_index: timeline.GetItemListInTrack("audio", idx), []))
     track_is_mono = track_subtype_is_mono(subtype)
     track_format_fixed_now = False
     track_format_fix_method = ""
@@ -5599,16 +6349,27 @@ print(json.dumps({{
         fuscript = self._find_fuscript()
         if not fuscript:
             if platform.system().lower() == "darwin":
+                self._prepare_menu_fallback_params(params_path)
                 return self._trigger_resolve_menu_script()
             return False, "fuscript was not found."
         ok, message = self._launch_lua_entry_with_fuscript(fuscript, params_path)
         if ok:
             return ok, message
         if platform.system().lower() == "darwin":
+            self._prepare_menu_fallback_params(params_path)
             menu_ok, menu_message = self._trigger_resolve_menu_script()
             if menu_ok:
                 return menu_ok, f"{menu_message}（fuscript 启动失败，已改用菜单兜底：{message}）"
         return ok, message
+
+    @staticmethod
+    def _prepare_menu_fallback_params(params_path: Path) -> None:
+        try:
+            target = default_params_path()
+            if Path(params_path) != target:
+                shutil.copyfile(params_path, target)
+        except Exception:
+            pass
 
     @staticmethod
     def _launch_lua_entry_with_fuscript(fuscript: Path, params_path: Path) -> tuple[bool, str]:
@@ -5709,38 +6470,9 @@ print(json.dumps({"connected": resolve is not None}))
     @staticmethod
     def _run_resolve_python(body: str, timeout: float = 5) -> dict[str, Any] | None:
         command, stdin_script = build_resolve_python_process(body)
-        temp_script_path = ""
-        temp_output_path = ""
-        if len(command) >= 2 and str(command[1]).endswith(".py") and "qinghe_resolve_bridge_" in str(command[1]):
-            temp_script_path = str(command[1])
-        def record_error(kind: str, detail: str = "", stdout: str = "", stderr: str = "", returncode: int | None = None) -> None:
-            try:
-                payload = {
-                    "kind": kind,
-                    "detail": detail,
-                    "stdout_tail": (stdout or "")[-4000:],
-                    "stderr_tail": (stderr or "")[-4000:],
-                    "returncode": returncode,
-                    "command": command[:2],
-                    "time": int(time.time()),
-                }
-                (runtime_dir() / "last_bridge_error.json").write_text(
-                    json.dumps(payload, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
-            except Exception:
-                pass
         try:
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
-            if command and Path(str(command[0])).name.lower() == "python.exe":
-                python_home = Path(str(command[0])).resolve().parent
-                if (python_home / "python314.dll").exists() or (python_home / "python312.dll").exists():
-                    env["PYTHONHOME"] = str(python_home)
-            if command and Path(str(command[0])).name.lower() == "fuscript.exe":
-                handle, temp_output_path = tempfile.mkstemp(prefix="qinghe_resolve_bridge_output_", suffix=".jsonl")
-                os.close(handle)
-                env["QINGHE_RESOLVE_BRIDGE_OUTPUT"] = temp_output_path
             if platform.system().lower() == "darwin":
                 script_api = env.get(
                     "RESOLVE_SCRIPT_API",
@@ -5755,9 +6487,6 @@ print(json.dumps({"connected": resolve is not None}))
                     env.setdefault("RESOLVE_SCRIPT_LIB", script_lib)
                 module_path = str(Path(script_api) / "Modules")
                 env["PYTHONPATH"] = module_path + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-            subprocess_kwargs = {}
-            if not (command and Path(str(command[0])).name.lower() == "fuscript.exe"):
-                subprocess_kwargs = hidden_subprocess_kwargs()
             completed = subprocess.run(
                 command,
                 input=stdin_script,
@@ -5768,43 +6497,29 @@ print(json.dumps({"connected": resolve is not None}))
                 capture_output=True,
                 timeout=timeout,
                 check=False,
-                **subprocess_kwargs,
+                **hidden_subprocess_kwargs(),
             )
         except Exception as exc:
-            record_error("exception", str(exc))
-            if temp_output_path:
-                try:
-                    Path(temp_output_path).unlink(missing_ok=True)
-                except Exception:
-                    pass
-            return None
-        finally:
-            if temp_script_path:
-                try:
-                    Path(temp_script_path).unlink(missing_ok=True)
-                except Exception:
-                    pass
-        raw_output = completed.stdout or ""
-        if temp_output_path:
-            try:
-                file_output = Path(temp_output_path).read_text(encoding="utf-8")
-                if file_output.strip():
-                    raw_output = file_output
-            except Exception:
-                pass
-            try:
-                Path(temp_output_path).unlink(missing_ok=True)
-            except Exception:
-                pass
+            return {"ok": False, "message": f"Resolve API 调用失败：{exc}"}
         if completed.returncode != 0:
-            record_error("returncode", stdout=raw_output, stderr=completed.stderr or "", returncode=completed.returncode)
-            return None
-        output = raw_output.strip().splitlines()
+            stderr = (completed.stderr or "").strip()
+            return {
+                "ok": False,
+                "message": "Resolve API 子进程异常退出：%s" % (stderr or f"returncode={completed.returncode}"),
+                "returncode": completed.returncode,
+            }
+        output = (completed.stdout or "").strip().splitlines()
         if not output:
-            record_error("empty_stdout", stdout=raw_output, stderr=completed.stderr or "", returncode=completed.returncode)
-            return None
+            stderr = (completed.stderr or "").strip()
+            return {
+                "ok": False,
+                "message": "Resolve API 没有返回结果：%s" % (stderr or "stdout 为空"),
+            }
         try:
             return json.loads(output[-1])
         except Exception as exc:
-            record_error("json", str(exc), stdout=raw_output, stderr=completed.stderr or "", returncode=completed.returncode)
-            return None
+            return {
+                "ok": False,
+                "message": "Resolve API 返回解析失败：%s" % exc,
+                "raw_output": output[-5:],
+            }
