@@ -1658,6 +1658,7 @@ if REQUIRE_SELECTED_AUDIO:
     elif len(playhead_items) > 1:
         print(json.dumps({{
             "ok": False,
+            "needs_selection": True,
             "message": "播放头下有多条音频，请先用鼠标选中要识别的音乐音频。",
             "clip": {{}},
             "source_mode": "playhead_multiple",
@@ -1682,6 +1683,7 @@ elif not items:
 if not items:
     print(json.dumps({{
         "ok": False,
+        "needs_selection": True,
         "message": "请先用鼠标在时间线选中一段音乐音频；如果未选中，播放头需要停在唯一一条音乐音频上。",
         "clip": {{}},
     }}, ensure_ascii=False))
@@ -2935,28 +2937,48 @@ print(json.dumps({{
         return data
 
     def _find_ffmpeg_binary(self) -> str:
-        bundled = REPO_ROOT / "ffmpeg" / "macos" / "ffmpeg"
-        candidates = [
-            shutil.which("ffmpeg") or "",
-            "/opt/homebrew/bin/ffmpeg",
-            "/usr/local/bin/ffmpeg",
-            "/usr/bin/ffmpeg",
-            str(bundled),
-        ]
+        if platform.system().lower() == "windows":
+            appdata = Path(os.environ.get("APPDATA", ""))
+            candidates = [
+                str(REPO_ROOT / "QingheBFD_Plugin_Windows" / "ffmpeg" / "windows" / "ffmpeg.exe"),
+                str(REPO_ROOT / "ffmpeg" / "bin" / "ffmpeg.exe"),
+                str(REPO_ROOT / "ffmpeg" / "windows" / "ffmpeg.exe"),
+                str(appdata / "Blackmagic Design" / "DaVinci Resolve" / "Support" / "Fusion" / "Scripts" / "Modules" / "black_frame_detector" / "ffmpeg" / "windows" / "ffmpeg.exe") if appdata else "",
+                shutil.which("ffmpeg") or "",
+            ]
+        else:
+            bundled = REPO_ROOT / "ffmpeg" / "macos" / "ffmpeg"
+            candidates = [
+                str(bundled),
+                shutil.which("ffmpeg") or "",
+                "/opt/homebrew/bin/ffmpeg",
+                "/usr/local/bin/ffmpeg",
+                "/usr/bin/ffmpeg",
+            ]
         for candidate in candidates:
             if candidate and Path(candidate).exists():
                 return candidate
         return ""
 
     def _find_ffprobe_binary(self) -> str:
-        bundled = REPO_ROOT / "ffmpeg" / "macos" / "ffprobe"
-        candidates = [
-            shutil.which("ffprobe") or "",
-            "/opt/homebrew/bin/ffprobe",
-            "/usr/local/bin/ffprobe",
-            "/usr/bin/ffprobe",
-            str(bundled),
-        ]
+        if platform.system().lower() == "windows":
+            appdata = Path(os.environ.get("APPDATA", ""))
+            candidates = [
+                str(REPO_ROOT / "QingheBFD_Plugin_Windows" / "ffmpeg" / "windows" / "ffprobe.exe"),
+                str(REPO_ROOT / "ffmpeg" / "bin" / "ffprobe.exe"),
+                str(REPO_ROOT / "ffmpeg" / "windows" / "ffprobe.exe"),
+                str(appdata / "Blackmagic Design" / "DaVinci Resolve" / "Support" / "Fusion" / "Scripts" / "Modules" / "black_frame_detector" / "ffmpeg" / "windows" / "ffprobe.exe") if appdata else "",
+                shutil.which("ffprobe") or "",
+            ]
+        else:
+            bundled = REPO_ROOT / "ffmpeg" / "macos" / "ffprobe"
+            candidates = [
+                str(bundled),
+                shutil.which("ffprobe") or "",
+                "/opt/homebrew/bin/ffprobe",
+                "/usr/local/bin/ffprobe",
+                "/usr/bin/ffprobe",
+            ]
         for candidate in candidates:
             if candidate and Path(candidate).exists():
                 return candidate
