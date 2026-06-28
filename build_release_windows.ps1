@@ -128,6 +128,10 @@ $BuildPythonInfo = Invoke-PythonCapture -Arguments @(
     "import sys, PyInstaller, PySide6; from PySide6 import QtCore; print(f'python={sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro} exe={sys.executable}'); print(f'pyinstaller={PyInstaller.__version__}'); print(f'pyside6={PySide6.__version__} qt={QtCore.qVersion()}')"
 )
 $BuildPythonInfo | ForEach-Object { Write-Host $_ }
+$BuildPythonExe = (Invoke-PythonCapture -Arguments @("-c", "import sys; print(sys.executable)"))[0]
+if (!(Test-Path $BuildPythonExe)) {
+    throw "Cannot resolve real Python executable from $($PythonCommand.Label): $BuildPythonExe"
+}
 
 $pyinstallerArgs = @(
     "-m", "PyInstaller",
@@ -180,7 +184,7 @@ Copy-Item (Join-Path $Root "pyside_ui\icon.ico") $StageUi -Force
 Copy-Item (Join-Path $Root "pyside_ui\icon.svg") $StageUi -Force
 Copy-Item (Join-Path $SourceUi "data") $StageUi -Recurse -Force
 Copy-Item (Join-Path $SourceUi "templates") $StageUi -Recurse -Force
-$PythonRuntimeSource = Split-Path -Parent $PythonCommand.Exe
+$PythonRuntimeSource = Split-Path -Parent $BuildPythonExe
 $StagePythonRuntime = Join-Path $StageUi "python_runtime"
 if (Test-Path $StagePythonRuntime) {
     Remove-Item -LiteralPath $StagePythonRuntime -Recurse -Force
