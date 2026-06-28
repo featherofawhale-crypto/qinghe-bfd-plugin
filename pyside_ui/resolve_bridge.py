@@ -17,7 +17,7 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LUA_ENTRY = REPO_ROOT / "清何黑帧夹帧检测_v1.9.48_Windows" / "清何黑帧夹帧检测.lua"
+LUA_ENTRY = REPO_ROOT / "清何黑帧夹帧检测.lua"
 BRIDGE_WORKER_ARG = "--resolve-bridge"
 
 

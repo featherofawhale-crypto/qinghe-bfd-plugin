@@ -73,9 +73,15 @@ function FFmpegRunner:find_ffmpeg()
         return true
     end
 
-    -- 1. macOS 先走系统/绝对路径。随包 dylib 可能被 Gatekeeper 隔离，
-    --    若先探测随包 ffmpeg，系统安全弹窗会让 Resolve 的 io.popen 卡死。
-    if self.os ~= "macos" and self:_test_ffmpeg("ffmpeg") then
+    -- 1. Windows 必须优先使用插件随包 FFmpeg，避免被用户 PATH 里的旧版/缺组件版本污染。
+    --    macOS 仍先走系统/绝对路径：随包 dylib 可能被 Gatekeeper 隔离，先探测会让 Resolve 的 io.popen 卡死。
+    if self.os == "windows" then
+        local bundled = self:_find_bundled_ffmpeg()
+        if bundled and self:_test_ffmpeg(bundled) then
+            runner_log("find_ffmpeg bundled OK: " .. tostring(bundled))
+            return true
+        end
+    elseif self.os ~= "macos" and self:_test_ffmpeg("ffmpeg") then
         runner_log("find_ffmpeg PATH OK")
         return true
     end
@@ -107,11 +113,13 @@ function FFmpegRunner:find_ffmpeg()
         return true
     end
 
-    -- 3. 最后再使用插件捆绑的 ffmpeg（无需用户自行安装）。
-    local bundled = self:_find_bundled_ffmpeg()
-    if bundled and self:_test_ffmpeg(bundled) then
-        runner_log("find_ffmpeg bundled OK: " .. tostring(bundled))
-        return true
+    -- 3. 非 Windows 最后再使用插件捆绑的 ffmpeg（无需用户自行安装）。
+    if self.os ~= "windows" then
+        local bundled = self:_find_bundled_ffmpeg()
+        if bundled and self:_test_ffmpeg(bundled) then
+            runner_log("find_ffmpeg bundled OK: " .. tostring(bundled))
+            return true
+        end
     end
 
     -- 4. Windows 额外尝试 winget / chocolatey / scoop 路径

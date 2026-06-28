@@ -224,12 +224,22 @@ def update_info_from_manifest(manifest: dict) -> dict:
     platform_key = update_platform_key()
     platforms = manifest.get("platforms") if isinstance(manifest.get("platforms"), dict) else {}
     platform_info = platforms.get(platform_key) if isinstance(platforms.get(platform_key), dict) else {}
-    latest_version = str(platform_info.get("version") or manifest.get("version") or "").strip()
+    if platforms and not platform_info:
+        latest_version = ""
+        download_url = ""
+        package_type = ""
+    else:
+        latest_version = str(platform_info.get("version") or manifest.get("version") or "").strip()
+        download_url = str(platform_info.get("download_url") or manifest.get("download_url") or "").strip()
+        package_type = str(platform_info.get("package_type") or manifest.get("package_type") or "").strip().lower()
+        if not is_update_package_compatible(download_url, package_type):
+            download_url = ""
+            package_type = ""
     return {
         "platform": platform_key,
         "latest_version": latest_version,
-        "download_url": str(platform_info.get("download_url") or manifest.get("download_url") or "").strip(),
-        "package_type": str(platform_info.get("package_type") or manifest.get("package_type") or "").strip().lower(),
+        "download_url": download_url,
+        "package_type": package_type,
         "sha256": str(platform_info.get("sha256") or manifest.get("sha256") or "").strip().lower(),
         "release_url": str(platform_info.get("release_url") or manifest.get("release_url") or "").strip(),
         "notes": str(platform_info.get("notes") or manifest.get("notes") or "").strip(),
@@ -245,6 +255,26 @@ def update_cache_dir() -> Path:
 
 
 UPDATE_PACKAGE_SUFFIXES = {".command", ".dmg", ".pkg", ".zip", ".exe", ".msi"}
+
+
+def allowed_update_package_suffixes() -> set[str]:
+    platform_key = update_platform_key()
+    if platform_key == "windows":
+        return {".exe", ".msi", ".zip"}
+    if platform_key == "mac":
+        return {".command", ".dmg", ".pkg", ".zip"}
+    return {".zip"}
+
+
+def is_update_package_compatible(download_url: str, package_type: str = "") -> bool:
+    suffixes = allowed_update_package_suffixes()
+    parsed_path = urllib.parse.urlparse(str(download_url or "")).path
+    suffix = Path(parsed_path).suffix.lower()
+    if package_type:
+        package_suffix = "." + str(package_type).strip().lower().lstrip(".")
+        if package_suffix in suffixes:
+            return True
+    return bool(suffix and suffix in suffixes)
 
 
 def cleanup_update_cache(keep_path: Path | None = None, keep_latest: int = 1) -> None:
@@ -3712,7 +3742,6 @@ class MainWindow(QMainWindow):
         data = {
             "theme": self.theme_name,
             "donation_prompt_seen": bool(self.donation_prompt_seen),
-            "timeline_index": self.timeline_combo.currentIndex(),
             "stuck_frames": self.stuck_frames.value(),
             "suspect_frames": self.suspect_frames.value(),
             "pix_th": self.pixel_threshold.value(),
@@ -3779,18 +3808,6 @@ class MainWindow(QMainWindow):
                 self.apply_theme(str(data.get("theme") or "default"), update_combo=True, persist=False)
             else:
                 self.apply_theme("default", update_combo=True, persist=False)
-            has_current_timeline = any(
-                "当前" in self.timeline_combo.itemText(index)
-                for index in range(self.timeline_combo.count())
-            )
-            if (
-                self.timeline_combo.count() > 0
-                and self.timeline_combo.isEnabled()
-                and not self.bridge.is_connected()
-                and not has_current_timeline
-                and isinstance(data.get("timeline_index"), int)
-            ):
-                self.timeline_combo.setCurrentIndex(max(0, min(self.timeline_combo.count() - 1, data["timeline_index"])))
             for name, widget in [
                 ("content_sample_interval", self.content_sample_interval),
                 ("black_border_px", self.black_border_px),

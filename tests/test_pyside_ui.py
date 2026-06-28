@@ -8,7 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PYSIDE_DIR = ROOT / "pyside_ui"
-WINDOWS_PLUGIN_DIR = ROOT / "\u6e05\u4f55\u9ed1\u5e27\u5939\u5e27\u68c0\u6d4b_v2.0.1-beta.14_Windows"
+WINDOWS_PLUGIN_DIR = ROOT
+WINDOWS_MODULE_DIR = ROOT / "modules"
 WINDOWS_LUA_ENTRY = WINDOWS_PLUGIN_DIR / "\u6e05\u4f55\u9ed1\u5e27\u5939\u5e27\u68c0\u6d4b.lua"
 
 sys.path.insert(0, str(PYSIDE_DIR))
@@ -26,7 +27,7 @@ class PySideUiRegressionTests(unittest.TestCase):
         cls.pyside_app = pyside_app
 
     def test_version_matches_supplied_source(self) -> None:
-        self.assertEqual(self.pyside_app.APP_VERSION, "2.0.1-beta.14")
+        self.assertEqual(self.pyside_app.APP_VERSION, "2.0.1-beta.23")
 
     def test_pyside_resources_required_by_windows_package_exist(self) -> None:
         required = [
@@ -47,43 +48,41 @@ class PySideUiRegressionTests(unittest.TestCase):
 
     def test_windows_plugin_tree_uses_supplied_v2_source(self) -> None:
         self.assertTrue(WINDOWS_LUA_ENTRY.exists())
-        self.assertTrue((WINDOWS_PLUGIN_DIR / "black_frame_detector").is_dir())
-        self.assertTrue((WINDOWS_PLUGIN_DIR / "modules").is_dir())
+        self.assertTrue(WINDOWS_MODULE_DIR.is_dir())
 
         entry_source = WINDOWS_LUA_ENTRY.read_text(encoding="utf-8")
-        bridge_source = (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "py_params_bridge.lua").read_text(encoding="utf-8")
-        analyzer_source = (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "black_frame_analyzer.lua").read_text(encoding="utf-8")
+        bridge_source = (WINDOWS_MODULE_DIR / "py_params_bridge.lua").read_text(encoding="utf-8")
+        analyzer_source = (WINDOWS_MODULE_DIR / "black_frame_analyzer.lua").read_text(encoding="utf-8")
 
         self.assertIn("Recent PySide params found; skip launching UI and run detection", entry_source)
-        self.assertIn('cmd.exe /C start "" "', entry_source)
-        self.assertIn('lower_launcher:sub(-4) == ".vbs"', entry_source)
-        self.assertIn('"pyside_ui" .. sep .. "QingheBFDControl"', entry_source)
-        self.assertIn("PySide UI launcher inferred from module dir", entry_source)
-        self.assertIn("tl_dur > stuck_frames and tl_dur > 0 and not clip.skip_stuck", entry_source)
-        self.assertNotIn("tl_dur > stuck_frames and tl_dur > 0 and Analyzer.is_fully_opaque(clip, overlay_config)", entry_source)
+        self.assertIn("BFD_DISABLE_EXTERNAL_UI", entry_source)
+        self.assertIn("ui_launcher_path.txt", entry_source)
+        self.assertIn("Launching PySide UI", entry_source)
+        self.assertIn("wscript.exe", entry_source)
+        self.assertIn("tl_dur > stuck_frames and tl_dur > 0", entry_source)
         self.assertIn("detect_mixed_cut = false", bridge_source)
-        self.assertIn("MARK_COMPOSITE_NONORMAL", (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "config.lua").read_text(encoding="utf-8"))
+        self.assertIn("MARK_COMPOSITE_NONORMAL", (WINDOWS_MODULE_DIR / "config.lua").read_text(encoding="utf-8"))
         self.assertNotIn("clip.timeline_end_frame", analyzer_source)
 
     def test_resolve_bridge_points_at_windows_lua_entry(self) -> None:
         bridge_source = (PYSIDE_DIR / "resolve_bridge.py").read_text(encoding="utf-8")
 
-        self.assertIn('REPO_ROOT / "\u6e05\u4f55\u9ed1\u5e27\u5939\u5e27\u68c0\u6d4b_v2.0.1-beta.14_Windows"', bridge_source)
         self.assertIn('"\u6e05\u4f55\u9ed1\u5e27\u5939\u5e27\u68c0\u6d4b.lua"', bridge_source)
         self.assertIn("def list_caption_templates", bridge_source)
         self.assertIn("def _estimate_bpm_with_ffmpeg", bridge_source)
         self.assertIn("caption-bin.drb", bridge_source)
-        self.assertIn("qinghe_resolve_bridge_", bridge_source)
-        self.assertIn("last_bridge_error.json", bridge_source)
-        self.assertIn('root / "ffmpeg" / "windows" / "ffmpeg.exe"', bridge_source)
-        self.assertIn('root / "ffmpeg" / "windows" / "ffprobe.exe"', bridge_source)
+        self.assertIn("BRIDGE_WORKER_ARG", bridge_source)
+        self.assertIn("exec(sys.stdin.read())", bridge_source)
+        self.assertIn('REPO_ROOT / "QingheBFD_Plugin_Windows" / "ffmpeg" / "windows" / "ffmpeg.exe"', bridge_source)
+        self.assertIn('REPO_ROOT / "QingheBFD_Plugin_Windows" / "ffmpeg" / "windows" / "ffprobe.exe"', bridge_source)
+        self.assertIn('REPO_ROOT / "ffmpeg" / "bin" / "ffmpeg.exe"', bridge_source)
+        self.assertIn('REPO_ROOT / "ffmpeg" / "bin" / "ffprobe.exe"', bridge_source)
         self.assertIn('"black_frame_detector"', bridge_source)
-        self.assertIn("if root == root.parent:", bridge_source)
+        self.assertIn("for root in [exe.parent, *exe.parents]:", bridge_source)
         self.assertIn('platform.system().lower() == "windows"', bridge_source)
-        self.assertIn("def find_bundled_python_runtime", bridge_source)
-        self.assertIn('"python_runtime" / "python.exe"', bridge_source)
-        self.assertIn('env["PYTHONHOME"] = str(python_home)', bridge_source)
         self.assertIn("[sys.executable, BRIDGE_WORKER_ARG]", bridge_source)
+        self.assertIn("def run_resolve_bridge_worker", bridge_source)
+        self.assertIn("if BRIDGE_WORKER_ARG in argv[1:]", (PYSIDE_DIR / "app.py").read_text(encoding="utf-8"))
 
     def test_marker_refresh_bridge_builds_without_fstring_regression(self) -> None:
         from resolve_bridge import ResolveBridge
@@ -186,7 +185,7 @@ class PySideUiRegressionTests(unittest.TestCase):
     def test_build_script_bundles_runtime_assets_and_ffmpeg(self) -> None:
         source = (ROOT / "build_release_windows.ps1").read_text(encoding="utf-8")
 
-        self.assertIn('$Version = "2.0.1-beta.14"', source)
+        self.assertIn('$Version = "2.0.1-beta.23"', source)
         self.assertIn("black_frame_detector", source)
         self.assertIn('Join-Path $SourceFfmpeg "windows"', source)
         self.assertIn('Join-Path $Root "ffmpeg\\bin"', source)
@@ -196,8 +195,8 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn("donate", source)
         self.assertIn("templates", source)
         self.assertIn("data", source)
-        self.assertIn('Copy-Item (Join-Path $Root "pyside_ui\\data") $StageUi -Recurse -Force', source)
-        self.assertIn('Copy-Item (Join-Path $Root "pyside_ui\\templates") $StageUi -Recurse -Force', source)
+        self.assertIn('Copy-Item (Join-Path $SourceUi "data") $StageUi -Recurse -Force', source)
+        self.assertIn('Copy-Item (Join-Path $SourceUi "templates") $StageUi -Recurse -Force', source)
         self.assertIn("test_resolve_api_bridge.ps1", source)
         self.assertIn("QingheBFDControl", source)
         self.assertIn("python_runtime", source)
@@ -231,7 +230,7 @@ class PySideUiRegressionTests(unittest.TestCase):
         iss_source = (ROOT / "installer_windows.iss").read_text(encoding="utf-8")
         uninstall_source = (ROOT / "uninstall_windows.ps1").read_text(encoding="utf-8")
 
-        self.assertIn('$Version = "2.0.1-beta.14"', build_source)
+        self.assertIn('$Version = "2.0.1-beta.23"', build_source)
         self.assertIn("ISCC.exe", build_source)
         self.assertIn("QingheBFD_v${Version}_Windows_Setup.exe", build_source)
         self.assertIn("LicenseFile=", iss_source)
@@ -280,15 +279,14 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn("Invoke-Isolated $BundledFfmpeg", release_verify)
         self.assertIn("Invoke-Isolated $BundledFfprobe", release_verify)
         self.assertIn("Invoke-Isolated $BundledPython", release_verify)
-        self.assertIn("Invoke-Isolated $PackagedExe", release_verify)
+        self.assertIn("Invoke-IsolatedWithInput $PackagedExe", release_verify)
         self.assertIn("Assert-NotContains $InstallScript", release_verify)
 
     def test_duplicate_detection_and_ffmpeg_runner_are_windows_ready(self) -> None:
         entry_source = WINDOWS_LUA_ENTRY.read_text(encoding="utf-8")
-        duplicate_source = (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "duplicate_detector.lua").read_text(encoding="utf-8")
+        duplicate_source = (WINDOWS_MODULE_DIR / "duplicate_detector.lua").read_text(encoding="utf-8")
         ffmpeg_sources = [
-            (WINDOWS_PLUGIN_DIR / "black_frame_detector" / "ffmpeg_runner.lua").read_text(encoding="utf-8"),
-            (WINDOWS_PLUGIN_DIR / "modules" / "ffmpeg_runner.lua").read_text(encoding="utf-8"),
+            (WINDOWS_MODULE_DIR / "ffmpeg_runner.lua").read_text(encoding="utf-8"),
         ]
 
         self.assertIn("pcall(function() left_offset = item:GetLeftOffset() end)", entry_source)
@@ -297,9 +295,9 @@ class PySideUiRegressionTests(unittest.TestCase):
         self.assertIn("short_duplicate_side", duplicate_source)
         for ffmpeg_source in ffmpeg_sources:
             self.assertIn("raw_file_exists", ffmpeg_source)
-            self.assertIn("Windows must prefer packaged FFmpeg", ffmpeg_source)
+            self.assertIn("Windows 必须优先使用插件随包 FFmpeg", ffmpeg_source)
             self.assertIn('self.os ~= "macos" and self:_test_ffmpeg("ffmpeg")', ffmpeg_source)
-            bundled_idx = ffmpeg_source.index("Windows must prefer packaged FFmpeg")
+            bundled_idx = ffmpeg_source.index("Windows 必须优先使用插件随包 FFmpeg")
             path_idx = ffmpeg_source.index('self.os ~= "macos" and self:_test_ffmpeg("ffmpeg")')
             self.assertLess(bundled_idx, path_idx)
 
