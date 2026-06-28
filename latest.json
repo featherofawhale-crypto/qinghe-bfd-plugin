@@ -1,9 +1,9 @@
 {
-  "version": "2.0.1-beta.20",
+  "version": "2.0.1-beta.22",
   "channel": "beta",
   "package_type": "dmg",
-  "sha256": "011ce8681295a537820c165647b36a4b863ef919bc0e22571c3bca9946d39ba4",
-  "notes": "macOS 测试版更新：升至 v2.0.1-beta.20，修复同一最终可见短段被多套夹帧证据重复标记的问题，合并后标在短段第一帧，并保留同窗口/同源时间重叠约束，避免不同镜头夹帧被误合并；macOS 包为完整一键安装版，内置 PySide6/Qt、ffmpeg/ffprobe、Resolve API Bridge 和独立 BPM Worker。",
+  "sha256": "adeba28cd3cb6be4a60200b7555247daf5342ab3d116615fad0095dccbf45712",
+  "notes": "macOS 测试版更新：升至 v2.0.1-beta.22，新增更新缓存自动清理（updates 最多保留最近 1 个安装包，zip 更新成功后清理 extracted_* 解压目录），插件启动时会安全清理上次残留的复杂模式 render_cache/bfd_temp_render.*，并避开正在检测的任务；同步 UI/脚本/安装包版本为 beta.22。",
   "mandatory": false,
   "mirrors": [
     {
@@ -21,13 +21,13 @@
   ],
   "platforms": {
     "mac": {
-      "version": "2.0.1-beta.20",
+      "version": "2.0.1-beta.22",
       "package_type": "dmg",
-      "sha256": "011ce8681295a537820c165647b36a4b863ef919bc0e22571c3bca9946d39ba4",
+      "sha256": "adeba28cd3cb6be4a60200b7555247daf5342ab3d116615fad0095dccbf45712",
       "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、主 GUI Resolve API Bridge 和独立 BPM Worker；BPM 私有 Python/Essentia 随 DMG 安装到插件目录，不依赖用户系统 Python/PySide6/Homebrew。安装脚本会初始化 BPM 音频组件，减少首次从 Resolve 点击 BPM 时的等待。",
-      "size": 143783131,
+      "size": 141859640,
       "release_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/latest",
-      "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.20-macos.dmg"
+      "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.22-macos.dmg"
     },
     "windows": {
       "version": "2.0.1-beta.14",
@@ -38,7 +38,7 @@
       "notes": "Windows 包等待 Windows 电脑打包测试后再发布。"
     }
   },
-  "size": 143783131,
+  "size": 141859640,
   "release_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/latest",
-  "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.20-macos.dmg"
+  "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.22-macos.dmg"
 }
