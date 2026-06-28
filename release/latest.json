@@ -1,9 +1,9 @@
 {
-  "version": "2.0.1-beta.22",
+  "version": "2.0.1-beta.23",
   "channel": "beta",
   "package_type": "dmg",
-  "sha256": "adeba28cd3cb6be4a60200b7555247daf5342ab3d116615fad0095dccbf45712",
-  "notes": "macOS 测试版更新：升至 v2.0.1-beta.22，新增更新缓存自动清理（updates 最多保留最近 1 个安装包，zip 更新成功后清理 extracted_* 解压目录），插件启动时会安全清理上次残留的复杂模式 render_cache/bfd_temp_render.*，并避开正在检测的任务；同步 UI/脚本/安装包版本为 beta.22。",
+  "sha256": "99dea22ba12bac539395d0b9470236c33d772f0df4a6bd6713f60ebedbc3905f",
+  "notes": "macOS 测试版更新：升至 v2.0.1-beta.23，复杂模式导入成片分清何缓存和用户外部成片两条路径：缓存成片带 .qinghe_bfd_meta.lua 时严格校验时间线、IO、FPS 和时长；用户指定外部成片无匹配文件时，按当前 IO 起点和时间线 FPS 直接 FFmpeg 分析，绝不再启动 Resolve 渲染。同步达芬奇安装目录、protected_release、DMG、官网和明文源码。",
   "mandatory": false,
   "mirrors": [
     {
@@ -21,13 +21,13 @@
   ],
   "platforms": {
     "mac": {
-      "version": "2.0.1-beta.22",
+      "version": "2.0.1-beta.23",
       "package_type": "dmg",
-      "sha256": "adeba28cd3cb6be4a60200b7555247daf5342ab3d116615fad0095dccbf45712",
-      "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、主 GUI Resolve API Bridge 和独立 BPM Worker；BPM 私有 Python/Essentia 随 DMG 安装到插件目录，不依赖用户系统 Python/PySide6/Homebrew。安装脚本会初始化 BPM 音频组件，减少首次从 Resolve 点击 BPM 时的等待。",
-      "size": 141859640,
+      "sha256": "99dea22ba12bac539395d0b9470236c33d772f0df4a6bd6713f60ebedbc3905f",
+      "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、主 GUI Resolve API Bridge 和独立 BPM Worker；本版复杂模式导入外部成片时直接按当前 IO/FPS 映射分析，不再触发 Resolve 重新渲染。",
+      "size": 142105201,
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.22-macos.dmg"
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
     },
     "windows": {
       "version": "2.0.1-beta.14",
@@ -38,7 +38,7 @@
       "notes": "Windows 包等待 Windows 电脑打包测试后再发布。"
     }
   },
-  "size": 141859640,
+  "size": 142105201,
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.22-macos.dmg"
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
 }
