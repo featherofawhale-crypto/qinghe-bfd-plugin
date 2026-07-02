@@ -1,0 +1,9 @@
+.DS_Store
+/dist/
+/modules/
+/tests/
+*.lua
+*.py
+*.dmg
+*.zip
+*.command

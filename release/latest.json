@@ -1,0 +1,44 @@
+{
+  "version": "2.0.1-beta.23",
+  "channel": "beta",
+  "package_type": "dmg",
+  "sha256": "64a7161b2c7d39876f1450b3e9248cd59dbf6e408b807fe3732bd9488fedb4f8",
+  "notes": "macOS 测试版更新：v2.0.1-beta.23 重新打包，包含复杂模式后处理修正：重复镜头标记不再压缩成代表点，超过 100 个标记时启用快速写标记模式，仅跳过隐藏 customData 负载，可见标记数量、颜色、名称、note、时间码和区间不变；复杂模式导入成片继续分清何缓存和用户外部成片两条路径；本包已修正内置 ffmpeg 的第三方动态库隔离，运行时不依赖用户电脑的 Homebrew ffmpeg/dylib。",
+  "mandatory": false,
+  "mirrors": [
+    {
+      "name": "CNB",
+      "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/latest.json",
+      "priority": 1,
+      "notes": "国内优先更新源。"
+    },
+    {
+      "name": "GitHub",
+      "manifest_url": "https://raw.githubusercontent.com/featherofawhale-crypto/qinghe-bfd-plugin/main/release/latest.json",
+      "priority": 2,
+      "notes": "备用源。"
+    }
+  ],
+  "platforms": {
+    "mac": {
+      "version": "2.0.1-beta.23",
+      "package_type": "dmg",
+      "sha256": "64a7161b2c7d39876f1450b3e9248cd59dbf6e408b807fe3732bd9488fedb4f8",
+      "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、主 GUI Resolve API Bridge 和独立 BPM Worker；本包包含复杂模式重复镜头明细保留、100+ 标记快速写入优化，以及 ffmpeg 第三方动态库包内隔离修复。",
+      "size": 147830437,
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
+    },
+    "windows": {
+      "version": "2.0.1-beta.14",
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
+      "download_url": "",
+      "package_type": "zip",
+      "sha256": "",
+      "notes": "Windows 包等待 Windows 电脑打包测试后再发布。"
+    }
+  },
+  "size": 147830437,
+  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
+}

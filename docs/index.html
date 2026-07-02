@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="清何剪辑工具箱，面向 DaVinci Resolve 剪辑师的黑帧、夹帧、重复帧、字幕、Text+、字体和节拍检查工具。"
+    />
+    <meta name="theme-color" content="#06152b" />
+    <title>清何剪辑工具箱 | DaVinci Resolve 剪辑质检插件</title>
+    <link rel="icon" href="./assets/qinghe-logo.svg?v=20260618a" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css?v=20260618b" />
+    <script defer src="./vendor/three.min.js"></script>
+    <script defer src="./vendor/gsap.min.js"></script>
+    <script defer src="./vendor/ScrollTrigger.min.js"></script>
+    <script defer src="./app.js?v=20260618a"></script>
+  </head>
+  <body>
+    <canvas id="field-canvas" aria-hidden="true"></canvas>
+    <div class="page-aura" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="清何剪辑工具箱首页">
+        <img src="./assets/qinghe-logo.svg?v=20260618a" alt="" />
+        <span>清何剪辑工具箱</span>
+      </a>
+      <nav class="nav-links" aria-label="页面导航">
+        <a href="#interface">界面</a>
+        <a href="#features">功能</a>
+        <a href="#subtitle">字幕</a>
+        <a href="#install">安装</a>
+        <a href="#download">下载</a>
+      </nav>
+      <a class="header-action" href="#download">下载 DMG</a>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="hero-label">DaVinci Resolve 剪辑质检插件</p>
+          <h1 id="hero-title"><span>复杂时间线</span><span>也能快速查</span></h1>
+          <p class="hero-text">
+            为真实剪辑工程做的交片前复核工具。黑帧、夹帧、重复素材、内容重复、时间线空位、字幕、Text+、字体和节拍问题，尽量在 Resolve 里一次查清。
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#download">下载 macOS 版</a>
+            <a class="button button-quiet" href="#interface">查看界面</a>
+          </div>
+          <p class="beta-line">当前为内测版，持续优化中。恳请用户积极反馈真实工程里的问题。</p>
+        </div>
+
+        <figure class="hero-visual">
+          <div class="screenshot-frame hero-frame">
+            <img src="./assets/qinghe-current-main.png" alt="清何剪辑工具箱主面板截图" />
+          </div>
+          <figcaption>
+            <span>扫描结果写回时间线标记</span>
+            <span>黑帧 / 夹帧 / 重复 / 字体</span>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="proof-strip" aria-label="核心优势">
+        <article>
+          <strong>速度快</strong>
+          <p>为交片前复核优化，减少长时间线等待。</p>
+        </article>
+        <article>
+          <strong>复杂时间线可查</strong>
+          <p>多轨、Fusion、OFX、遮挡和最终像素进入流程。</p>
+        </article>
+        <article>
+          <strong>多版本适配</strong>
+          <p>围绕 Resolve 18、19 和后续环境持续处理兼容问题。</p>
+        </article>
+        <article>
+          <strong>剪辑师附加工具</strong>
+          <p>字幕、Text+、字体管理和 BPM 节拍一并补齐。</p>
+        </article>
+      </section>
+
+      <section id="interface" class="interface-section">
+        <div class="section-copy compact-copy">
+          <h2><span>真实界面</span><span>看清每个面板</span></h2>
+          <p>
+            主面板、字幕面板、字体面板和音频面板分别对应交付前的高频风险点。页面所见均来自当前内测版真实界面，方便先判断工具是否适合自己的流程。
+          </p>
+        </div>
+
+        <div class="screen-tour" data-active="0">
+          <div class="tour-copy">
+            <span class="tour-index">主面板</span>
+            <h3><span>交片前扫描</span><span>时间线风险</span></h3>
+            <p>集中检测黑帧、夹帧、重复素材、内容重复、透明度、黑边、渲染坏帧和时间线空位。结果会写回 Resolve 标记，按时间线位置逐条修。</p>
+            <div class="tour-tabs" role="tablist" aria-label="界面截图切换">
+              <button type="button" class="is-active" data-shot="0" aria-selected="true">主面板</button>
+              <button type="button" data-shot="1" aria-selected="false">字幕面板</button>
+              <button type="button" data-shot="2" aria-selected="false">字体面板</button>
+              <button type="button" data-shot="3" aria-selected="false">音频面板</button>
+            </div>
+          </div>
+          <div class="tour-stage">
+            <figure
+              class="tour-shot is-active"
+              data-title="交片前扫描时间线风险"
+              data-label="主面板"
+              data-copy="集中检测黑帧、夹帧、重复素材、内容重复、透明度、黑边、渲染坏帧和时间线空位。结果会写回 Resolve 标记，按时间线位置逐条修。"
+            >
+              <img src="./assets/qinghe-current-main.png" alt="清何剪辑工具箱主面板截图" />
+            </figure>
+            <figure
+              class="tour-shot subtitle-window"
+              data-title="字幕面板能边看时间线边校对"
+              data-label="字幕面板"
+              data-copy="读取 SRT、字幕轨和 Text+，支持搜索、替换、删除、撤回，也能把 SRT 一键转成 Text+ 包装字幕。"
+            >
+              <img src="./assets/qinghe-current-subtitle-window.png" alt="清何剪辑工具箱字幕面板第二窗口截图" />
+            </figure>
+            <figure
+              class="tour-shot"
+              data-title="字体管理专门为 Text+ 做"
+              data-label="字体面板"
+              data-copy="支持搜索、收藏、字体探针和本地样式库。样式库既能全部复制，也能只复制字体。"
+            >
+              <img src="./assets/qinghe-current-font-window.png" alt="清何剪辑工具箱字体面板截图" />
+            </figure>
+            <figure
+              class="tour-shot"
+              data-title="音频面板帮剪辑师找节拍"
+              data-label="音频面板"
+              data-copy="支持单声道扫描、BPM 识别、首拍定位和节拍标记生成，方便做卡点、口播和音乐节奏复核。"
+            >
+              <img src="./assets/qinghe-current-audio.png" alt="清何剪辑工具箱音频面板截图" />
+            </figure>
+            <div class="tour-progress" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="scan-section">
+        <div class="section-copy">
+          <h2><span>不是普通黑帧脚本</span><span>而是剪辑质检流程</span></h2>
+          <p>
+            主功能的差异在于速度、复杂时间线适应能力，以及把问题回写到剪辑现场。附加工具不是凑数，是剪辑师交付前最容易反复切换窗口处理的部分。
+          </p>
+        </div>
+
+        <div class="scan-layout">
+          <figure class="feature-visual">
+            <img src="./assets/qinghe-current-main.png" alt="主面板检测设置和结果统计截图" />
+          </figure>
+          <div class="feature-stack">
+            <article>
+              <span>检测速度</span>
+              <h3><span>长时间线</span><span>也要尽快出结果</span></h3>
+              <p>围绕交片前复核设计，减少等待，把问题直接标回 Resolve。</p>
+            </article>
+            <article>
+              <span>复杂时间线</span>
+              <h3><span>多轨、透明遮挡</span><span>Fusion 都进入流程</span></h3>
+              <p>成片模式、复合与 Fusion 精查、复杂模式分别覆盖不同工程结构，适合包装层、嵌套和 OFX 很重的时间线。</p>
+            </article>
+            <article>
+              <span>重复与夹帧</span>
+              <h3><span>不只看路径</span><span>也看画面关系</span></h3>
+              <p>改名、转码、同源复用和短异常片段，都尽量纳入复核逻辑。</p>
+            </article>
+            <article>
+              <span>检测范围</span>
+              <h3><span>常见交付风险</span><span>放在一个面板</span></h3>
+              <p>夹帧错误、可疑黑帧、转场黑场、时间线空位、重复素材、内容重复、透明禁用、画面黑边和渲染坏帧集中处理。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="subtitle" class="workflow-section">
+        <div class="workflow-head">
+          <h2><span>字幕、Text+、字体和节拍</span><span>给剪辑师补上工具链</span></h2>
+        </div>
+        <div class="workflow-grid">
+          <article class="wide-card">
+            <h3>字幕面板</h3>
+            <p>达芬奇 18、19 也能使用字幕查找、替换、删除和撤回。SRT、字幕轨和 Text+ 集中处理，适合短剧、口播、包装字幕最后一遍校对。</p>
+          </article>
+          <article>
+            <h3>SRT 转 Text+</h3>
+            <p>一键把 SRT 转成 Text+，方便做字体、描边、阴影和包装样式。</p>
+          </article>
+          <article>
+            <h3>字体探针</h3>
+            <p>识别中文名、英文名和 PostScript 名，查找本机字体更直接。</p>
+          </article>
+          <article>
+            <h3>样式库</h3>
+            <p>Text+ 样式既能完整复制，也能只复制字体，适合统一包装风格。</p>
+          </article>
+          <article>
+            <h3>BPM 节拍</h3>
+            <p>识别 BPM，确定首拍，生成更适合剪辑卡点的节拍标记。</p>
+          </article>
+        </div>
+        <div class="panel-gallery" aria-label="真实功能面板截图">
+          <figure>
+            <img src="./assets/qinghe-current-subtitle.png" alt="字幕面板完整截图" />
+            <figcaption>字幕查找、替换、删除和撤回</figcaption>
+          </figure>
+          <figure>
+            <img src="./assets/qinghe-current-font.png" alt="字体面板完整截图" />
+            <figcaption>字体搜索、收藏、样式库和 SRT 转 Text+</figcaption>
+          </figure>
+          <figure>
+            <img src="./assets/qinghe-current-audio.png" alt="音频面板完整截图" />
+            <figcaption>BPM 识别、首拍和节拍标记</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="install" class="install-section">
+        <div class="install-copy">
+          <h2><span>打开 DMG</span><span>运行一键安装</span></h2>
+          <p>
+            当前公开测试包暂未做 Apple Developer 公证。首次安装建议右键打开“① 一键安装.command”，安装完成后重启 DaVinci Resolve。
+          </p>
+        </div>
+        <div class="install-steps">
+          <article><strong>下载 DMG</strong><span>从 CNB、GitHub 或网盘获取 macOS 安装包。</span></article>
+          <article><strong>右键打开安装</strong><span>Control 点击“① 一键安装.command”，选择“打开”。</span></article>
+          <article><strong>重启 Resolve</strong><span>从“工作区 -> 脚本 -> Edit”启动清何剪辑工具箱。</span></article>
+        </div>
+        <div class="security-note">
+          <strong>macOS 提示无法验证时</strong>
+          <p>先尝试右键打开。仍被拦截时，进入“系统设置 -> 隐私与安全性”，在安全性区域点击“仍要打开”。不建议关闭整台 Mac 的 Gatekeeper。</p>
+        </div>
+      </section>
+
+      <section id="download" class="download-section">
+        <div class="download-copy">
+          <h2>下载测试版。</h2>
+          <p>macOS 版已提供 DMG。Windows 版会单独打包测试，上传后补直链。百度网盘作为国内备用目录。</p>
+        </div>
+        <div class="download-grid">
+          <article class="download-card primary-download">
+            <span>macOS</span>
+            <h3>DMG 一键安装版</h3>
+            <p>内置必要组件，普通用户打开安装后即可在 Resolve 菜单里启动。</p>
+            <div class="download-actions">
+              <a class="button button-primary" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg">CNB 下载</a>
+              <a class="button button-quiet" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg">GitHub 备用</a>
+            </div>
+          </article>
+          <article class="download-card">
+            <span>Windows</span>
+            <h3>等待上传</h3>
+            <p>Windows 包会在另一台电脑打包测试后补上。</p>
+          </article>
+          <article class="download-card netdisk-card">
+            <span>备用目录</span>
+            <h3>百度网盘</h3>
+            <p>达芬奇-清何剪辑工具箱，提取码 bsv8。</p>
+            <a class="button button-quiet" href="https://pan.baidu.com/s/1QxhMK7F3-ccMPDn4qNpXqA?pwd=bsv8">打开网盘</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="notice-section">
+        <div>
+          <h2><span>使用前</span><span>请备份工程</span></h2>
+          <p>本工具按“现状”提供，检测结果仅作辅助参考，不保证找出所有问题。使用者应自行评估适用性，并在使用前做好项目备份。</p>
+        </div>
+      </section>
+
+      <section class="community-section">
+        <div class="star-panel">
+          <h2><span>觉得有用</span><span>帮忙点个 Star</span></h2>
+          <p>GitHub 星标能让更多达芬奇剪辑师看到这个工具，也方便后续跟进更新。</p>
+          <a class="button button-primary small-button" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin">去 GitHub 点 Star</a>
+        </div>
+        <div class="donate-panel" aria-label="随缘支持">
+          <figure>
+            <img src="./assets/donate-wechat.jpg" alt="微信打赏二维码" />
+            <figcaption>微信</figcaption>
+          </figure>
+          <figure>
+            <img src="./assets/donate-alipay.jpg" alt="支付宝打赏二维码" />
+            <figcaption>支付宝</figcaption>
+          </figure>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>© 2026 清何剪辑工具箱</span>
+      <a href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin">GitHub</a>
+      <a href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin">CNB</a>
+    </footer>
+  </body>
+</html>
