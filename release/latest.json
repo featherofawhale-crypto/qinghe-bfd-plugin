@@ -2,8 +2,8 @@
   "version": "2.0.1-beta.23",
   "channel": "beta",
   "package_type": "dmg",
-  "sha256": "64a7161b2c7d39876f1450b3e9248cd59dbf6e408b807fe3732bd9488fedb4f8",
-  "notes": "macOS 测试版更新：v2.0.1-beta.23 重新打包，包含复杂模式后处理修正：重复镜头标记不再压缩成代表点，超过 100 个标记时启用快速写标记模式，仅跳过隐藏 customData 负载，可见标记数量、颜色、名称、note、时间码和区间不变；复杂模式导入成片继续分清何缓存和用户外部成片两条路径；本包已修正内置 ffmpeg 的第三方动态库隔离，运行时不依赖用户电脑的 Homebrew ffmpeg/dylib。",
+  "sha256": "f2995a200d8bbcab7c4267ac92b74229a9cf6e465fda8594c140b2fc9fea7533",
+  "notes": "macOS 测试版更新：v2.0.1-beta.23 重新打包，Resolve API 自动识别增强：支持 /Applications 下改名或并装的 DaVinci Resolve，例如 DaVinci Resolve 19/20/21，也支持 RESOLVE_APP_PATH 手动指定；恢复 macOS 前台窗口启动，修复点击插件无窗口；修复 API worker 缩进问题，字幕/字体/音频/IO 读取可正常连接；Release 只包含公开发布所需的 DMG、sha256 和 latest.json。",
   "mandatory": false,
   "mirrors": [
     {
@@ -23,9 +23,9 @@
     "mac": {
       "version": "2.0.1-beta.23",
       "package_type": "dmg",
-      "sha256": "64a7161b2c7d39876f1450b3e9248cd59dbf6e408b807fe3732bd9488fedb4f8",
-      "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、主 GUI Resolve API Bridge 和独立 BPM Worker；本包包含复杂模式重复镜头明细保留、100+ 标记快速写入优化，以及 ffmpeg 第三方动态库包内隔离修复。",
-      "size": 147830437,
+      "sha256": "f2995a200d8bbcab7c4267ac92b74229a9cf6e465fda8594c140b2fc9fea7533",
+      "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、Resolve Bridge/BPM Worker；启动时优先使用用户本机 Resolve 的 Developer/Scripting 与当前运行或已安装 Resolve app 内的 fusionscript.so，支持改名/多版本安装。",
+      "size": 141456980,
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
       "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
     },
@@ -38,7 +38,7 @@
       "notes": "Windows 包等待 Windows 电脑打包测试后再发布。"
     }
   },
-  "size": 147830437,
+  "size": 141456980,
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
   "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
 }
