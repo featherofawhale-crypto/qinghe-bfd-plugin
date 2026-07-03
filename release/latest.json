@@ -2,8 +2,8 @@
   "version": "2.0.1-beta.23",
   "channel": "beta",
   "package_type": "dmg",
-  "sha256": "f2995a200d8bbcab7c4267ac92b74229a9cf6e465fda8594c140b2fc9fea7533",
-  "notes": "macOS 测试版更新：v2.0.1-beta.23 重新打包，Resolve API 自动识别增强：支持 /Applications 下改名或并装的 DaVinci Resolve，例如 DaVinci Resolve 19/20/21，也支持 RESOLVE_APP_PATH 手动指定；恢复 macOS 前台窗口启动，修复点击插件无窗口；修复 API worker 缩进问题，字幕/字体/音频/IO 读取可正常连接；Release 只包含公开发布所需的 DMG、sha256 和 latest.json。",
+  "sha256": "5d7ca2373bd4b74b400fbe03bf19c54cc37fd87d10b73a7362f3a5e25b80fe1d",
+  "notes": "macOS 测试版更新：v2.0.1-beta.23 重新打包；修复 Resolve 改名/多版本共存时 API 路径探测，直接 API 读不到 IO 时继续使用临时渲染队列探测；修复 run_ui.sh 被 sh 调用时打不开；字体面板改为快速加载，使用 macOS AppKit 通用映射读取字体家族、中文名、PostScript/Fusion 内部名和粗细，不针对特定字体写死，也不再丢弃问号形式的 Fusion 字体候选；字体库只列家族，粗细回到粗细下拉框，搜索走别名索引。",
   "mandatory": false,
   "mirrors": [
     {
@@ -23,9 +23,9 @@
     "mac": {
       "version": "2.0.1-beta.23",
       "package_type": "dmg",
-      "sha256": "f2995a200d8bbcab7c4267ac92b74229a9cf6e465fda8594c140b2fc9fea7533",
-      "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、Resolve Bridge/BPM Worker；启动时优先使用用户本机 Resolve 的 Developer/Scripting 与当前运行或已安装 Resolve app 内的 fusionscript.so，支持改名/多版本安装。",
-      "size": 141456980,
+      "sha256": "5d7ca2373bd4b74b400fbe03bf19c54cc37fd87d10b73a7362f3a5e25b80fe1d",
+      "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、Resolve Bridge/BPM Worker；支持 Resolve 改名/多版本共存的 API 自动探测；字体面板使用 AppKit 通用字体别名索引，可匹配中文名、英文家族名、PostScript 名、Fusion 内部名和字体文件名，且保留问号形式候选。",
+      "size": 139019821,
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
       "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
     },
@@ -38,7 +38,7 @@
       "notes": "Windows 包等待 Windows 电脑打包测试后再发布。"
     }
   },
-  "size": 141456980,
+  "size": 139019821,
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
   "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
 }
