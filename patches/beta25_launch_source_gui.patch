@@ -1,0 +1,5 @@
+--- a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/pyside_ui/run_ui.sh
++++ b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/pyside_ui/run_ui.sh
+@@ -98 +98 @@
+-if [ "${QINGHE_PREFER_SOURCE_GUI:-0}" = "1" ] && [ -f "app.py" ]; then
++if [ "${QINGHE_PREFER_SOURCE_GUI:-0}" = "1" ] && [ -f "app.py" ] && "$PYTHON" -c "import PySide6" >/dev/null 2>&1; then

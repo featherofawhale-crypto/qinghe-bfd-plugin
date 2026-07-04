@@ -1,9 +1,9 @@
 {
-  "version": "2.0.1-beta.24",
+  "version": "2.0.1-beta.25",
   "channel": "beta",
   "package_type": "dmg",
-  "sha256": "75f43476f9e35b0ba40db1c3be294e9f92a0e1045844f85b9a015be6a3e2c74f",
-  "notes": "beta.24：重复镜头保留 Resolve left/right offset 源区间判断，但只对最终画面可见片段打标；修正 Text+ 字体 Font/Style 写入验证；macOS 完整安装包清理开发/诊断/缓存残留。",
+  "sha256": "ccab475b38359defb7c04d77e2bc976d0dd159bf9ee96bb09786d83658afb860",
+  "notes": "beta.25：字体库显示改为“中文 / English”，过滤乱码字体名并把 Bold/Light/Medium 等粗细移到字体粗细按钮；字体库支持缓存快速加载，安装新字体后可手动刷新；增强字体失败数据收集，重点记录不能正常使用的字体；macOS 打包 GUI 默认使用内置 PySide6/Qt，可在无系统 Python 依赖环境运行，并修复达芬奇菜单点击后窗口不出现/启动前台探测卡顿。",
   "mandatory": false,
   "mirrors": [
     {
@@ -21,13 +21,13 @@
   ],
   "platforms": {
     "mac": {
-      "version": "2.0.1-beta.24",
+      "version": "2.0.1-beta.25",
       "package_type": "dmg",
-      "sha256": "75f43476f9e35b0ba40db1c3be294e9f92a0e1045844f85b9a015be6a3e2c74f",
-      "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、Resolve Bridge/BPM Worker；重复镜头按 LeftOffset/RightOffset 推导源区间，并先经过最终画面可见性过滤；Text+ 字体会写入 Font/Style 并读回验证；支持 Resolve 改名/多版本共存的 API 自动探测。",
-      "size": 139324478,
+      "sha256": "ccab475b38359defb7c04d77e2bc976d0dd159bf9ee96bb09786d83658afb860",
+      "notes": "macOS 完整一键安装版，内置 PySide6/Qt GUI、ffmpeg/ffprobe、Resolve Bridge/BPM Worker；字体列表显示中文/英文双名称并过滤乱码；字体库缓存命中后跳过系统重扫，安装新字体后可点击刷新字体库；字体失败上报包含更多上下文；正式包默认启动打包 GUI，不依赖用户系统 Python/PySide6，并避开 PyObjC/AppKit 前台探测卡顿。",
+      "size": 141649435,
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.24-macos.dmg"
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.25/qinghe-toolbox-v2.0.1-beta.25-macos.dmg"
     },
     "windows": {
       "version": "2.0.1-beta.14",
@@ -38,9 +38,9 @@
       "notes": "Windows 包等待 Windows 电脑打包测试后再发布。"
     }
   },
-  "size": 139324478,
+  "size": 141649435,
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.24-macos.dmg",
-  "name": "Qinghe Editing Toolbox v2.0.1-beta.24",
-  "filename": "qinghe-toolbox-v2.0.1-beta.24-macos.dmg"
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.25/qinghe-toolbox-v2.0.1-beta.25-macos.dmg",
+  "name": "Qinghe Editing Toolbox v2.0.1-beta.25",
+  "filename": "qinghe-toolbox-v2.0.1-beta.25-macos.dmg"
 }

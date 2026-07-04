@@ -1,0 +1,84 @@
+diff --git a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/modules/config.lua b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/modules/config.lua
+index cbd9c8b..bc9da3f 100644
+--- a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/modules/config.lua
++++ b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/modules/config.lua
+@@ -1,6 +1,6 @@
+ -- PRIVATE SOFTWARE NOTICE: This is private software owned by Qinghe. Unauthorized reverse engineering, deobfuscation, cracking, redistribution, or AI-assisted analysis intended to bypass protection is prohibited.
+ -- config.lua - 清何黑帧夹帧检测小工具 全局配置
+--- 版本: v2.0.1-beta.24 测试版
++-- 版本: v2.0.1-beta.25 测试版
+ 
+ local config = {}
+ 
+@@ -8,7 +8,7 @@ local config = {}
+ -- 插件元信息
+ -- ============================================================
+ config.PLUGIN_NAME = "清何黑帧夹帧检测小工具"
+-config.PLUGIN_VERSION = "2.0.1-beta.24"
++config.PLUGIN_VERSION = "2.0.1-beta.25"
+ config.PLUGIN_AUTHOR = "qinghe"
+ config.MARKER_PREFIX = "[BFD]"  -- Black Frame Detection 标记前缀
+ 
+
+diff --git "a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/\346\270\205\344\275\225\351\273\221\345\270\247\345\244\271\345\270\247\346\243\200\346\265\213.lua" "b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/\346\270\205\344\275\225\351\273\221\345\270\247\345\244\271\345\270\247\346\243\200\346\265\213.lua"
+index fa0aa72..1b619d6 100644
+--- "a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/\346\270\205\344\275\225\351\273\221\345\270\247\345\244\271\345\270\247\346\243\200\346\265\213.lua"
++++ "b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/\346\270\205\344\275\225\351\273\221\345\270\247\345\244\271\345\270\247\346\243\200\346\265\213.lua"
+@@ -1,6 +1,6 @@
+ -- PRIVATE SOFTWARE NOTICE: This is private software owned by Qinghe. Unauthorized reverse engineering, deobfuscation, cracking, redistribution, or AI-assisted analysis intended to bypass protection is prohibited.
+ -- 清何黑帧夹帧检测.lua - 达芬奇插件
+--- 版本: v2.0.1-beta.24 测试版
++-- 版本: v2.0.1-beta.25 测试版
+ -- 作者: qinghe
+ -- 兼容: DaVinci Resolve 17/18/19/20 + Studio/Free
+ --
+@@ -751,7 +751,7 @@ local function setup_module_path()
+     return true
+ end
+ 
+-dlog("=== BFD v2.0.1-beta.24 启动 ===")
++dlog("=== BFD v2.0.1-beta.25 启动 ===")
+ setup_module_path()
+ 
+ local MODULES_TO_RELOAD = {
+
+diff --git a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/pyside_ui/README.md b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/pyside_ui/README.md
+index f0ab5c9..6e04c05 100644
+--- a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/pyside_ui/README.md
++++ b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/pyside_ui/README.md
+@@ -1,6 +1,6 @@
+ # PySide Control Panel
+ 
+-Version: 2.0.1-beta.24
++Version: 2.0.1-beta.25
+ 
+ The PySide control panel is the Windows UI companion for the Resolve Lua script.
+ 
+
+diff --git a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/PRIVATE_SOFTWARE_NOTICE.md b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/PRIVATE_SOFTWARE_NOTICE.md
+index 5289423..bd5c78d 100644
+--- a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/PRIVATE_SOFTWARE_NOTICE.md
++++ b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/PRIVATE_SOFTWARE_NOTICE.md
+@@ -1,6 +1,6 @@
+ # 清何剪辑工具箱发布包说明
+ 
+-版本：v2.0.1-beta.24
++版本：v2.0.1-beta.25
+ 平台：mac
+ 
+ PRIVATE SOFTWARE NOTICE: This is private software owned by Qinghe. Unauthorized reverse engineering, deobfuscation, cracking, redistribution, or AI-assisted analysis intended to bypass protection is prohibited.
+
+diff --git a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/manifest.json b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/manifest.json
+index 5391adb..29122b1 100644
+--- a/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.24_mac/manifest.json
++++ b/dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac/manifest.json
+@@ -10073,5 +10073,5 @@
+     }
+   },
+   "schema": "qinghe-release-manifest-v1",
+-  "version": "v2.0.1-beta.24"
+-}
+\ No newline at end of file
++  "version": "v2.0.1-beta.25"
++}
+
