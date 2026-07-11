@@ -30,12 +30,14 @@
       "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.25/qinghe-toolbox-v2.0.1-beta.25-macos.dmg"
     },
     "windows": {
-      "version": "2.0.1-beta.14",
-      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-      "download_url": "",
-      "package_type": "zip",
-      "sha256": "",
-      "notes": "Windows 包等待 Windows 电脑打包测试后再发布。"
+      "version": "2.0.1-beta.26",
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.26",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.26/QingheBFD_v2.0.1-beta.26_Windows_Setup.exe",
+      "package_type": "exe",
+      "sha256": "23e474eb86cdafca29695f079cbf544ab1a422b93c5dfbc903729dfd50ba9309",
+      "size": 145852376,
+      "filename": "QingheBFD_v2.0.1-beta.26_Windows_Setup.exe",
+      "notes": "Windows 一键安装版。Windows 更新入口必须读取 platforms.windows；macOS 顶层 download_url 继续保留 DMG，避免 macOS 自动更新下载 EXE。"
     }
   },
   "size": 141649435,
