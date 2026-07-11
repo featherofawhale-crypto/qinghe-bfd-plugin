@@ -1,6 +1,6 @@
 # 清何剪辑工具箱（DaVinci Resolve 黑帧/夹帧检测）
 
-这是给 DaVinci Resolve 用户使用的剪辑检查插件。当前公开版本提供 macOS DMG 测试包和 Windows EXE 测试包，下载安装后按平台运行一键安装即可使用。
+这是给 DaVinci Resolve 用户使用的剪辑检查插件。当前公开版本为 macOS 测试版，打开安装包后运行一键安装脚本即可使用。
 
 官网页面：
 
@@ -14,35 +14,25 @@ https://featherofawhale-crypto.github.io/qinghe-bfd-plugin/
 - macOS 包内置 Python 3.9、PySide6/Qt、FFmpeg 和 Resolve API Bridge，不要求普通用户自己配置命令行环境
 - 带有插件内“更新”按钮，后续可以直接检查新版本
 
-## 下载测试包
+## 下载 macOS 安装包
 
 请到右侧或下方的 GitHub Release 下载：
 
-- macOS：`qinghe-toolbox-v2.0.1-beta.25-macos.dmg`
-- Windows：`QingheBFD_v2.0.1-beta.26_Windows_Setup.exe`
+- `qinghe-toolbox-v2.0.1-beta.23-macos.dmg`
 
 Release 地址：
 
 https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest
 
-macOS 包是 Apple Silicon / arm64 macOS 测试版。Windows 包为独立 EXE 安装器，和 macOS DMG 分开发布。
+当前公开包是 Apple Silicon / arm64 macOS 测试版。Windows 版本会等在 Windows 电脑上单独打包测试后再发布。
 
 ## 一键安装方法
 
-macOS：
-
-1. 下载并双击打开 `qinghe-toolbox-v2.0.1-beta.25-macos.dmg`。
+1. 下载并双击打开 `qinghe-toolbox-v2.0.1-beta.23-macos.dmg`。
 2. 在打开的窗口里，右键点击 `① 一键安装.command`。
 3. 选择“打开”，按提示完成安装。
 4. 重启 DaVinci Resolve。
 5. 在 DaVinci Resolve 里打开：`工作区 -> 脚本 -> Edit -> 清何黑帧夹帧检测`。
-
-Windows：
-
-1. 下载并运行 `QingheBFD_v2.0.1-beta.26_Windows_Setup.exe`。
-2. 按安装器提示完成安装。
-3. 重启 DaVinci Resolve。
-4. 在 DaVinci Resolve 里打开：`工作区 -> 脚本 -> Edit -> 清何黑帧夹帧检测`。
 
 如果 macOS 提示“无法打开”或“来自未认证开发者”，请不要直接双击脚本，改用右键“打开”。当前公开包没有做 Apple Developer 公证，所以第一次打开时 macOS 会拦一下。DMG 内也附带了“macOS无法验证处理说明.txt”和修复脚本。
 
@@ -55,7 +45,7 @@ Windows：
 - `release/latest.json`
 - GitHub Release 附件里的 `latest.json`
 
-macOS 更新包使用 DMG，Windows 更新包使用 EXE。更新清单里 `platforms.mac` 和 `platforms.windows` 分开记录；旧版 macOS 更新器兼容字段仍保留 DMG，避免 macOS 自动更新下载 Windows EXE。
+macOS 这版更新包使用 DMG。插件会下载 DMG，并提示用户打开安装包后运行一键安装。Windows 更新包暂时不放，等 Windows 端打包测试通过后再同步。
 
 ## 卸载
 
