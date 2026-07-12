@@ -26,8 +26,8 @@
       "sha256": "03076fd057c2d3432d76372af6cb5a16f763e27b2c819369f9acb2d85820bbf4",
       "notes": "macOS 完整一键安装版；移植 Windows beta27 的后台时间线轮询、字体扫描请求合并、字体预览防抖、字体列表预计算缓存、表格批量渲染，以及字体跳转/样式读取/替换后台执行，减少字体页卡顿。内置 PySide6/Qt、ffmpeg/ffprobe、Resolve Bridge/BPM Worker，不依赖用户系统 Python/PySide6。",
       "size": 181918090,
-      "release_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/latest",
-      "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.27-macos.dmg",
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.27",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.27/qinghe-toolbox-v2.0.1-beta.27-macos.dmg",
       "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.27-macos.dmg",
       "filename": "qinghe-toolbox-v2.0.1-beta.27-macos.dmg"
     },
@@ -44,8 +44,8 @@
     }
   },
   "size": 181918090,
-  "release_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/latest",
-  "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.27-macos.dmg",
+  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.27",
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.27/qinghe-toolbox-v2.0.1-beta.27-macos.dmg",
   "name": "Qinghe Editing Toolbox v2.0.1-beta.27",
   "filename": "qinghe-toolbox-v2.0.1-beta.27-macos.dmg"
 }
