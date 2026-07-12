@@ -32,15 +32,15 @@
       "filename": "qinghe-toolbox-v2.0.1-beta.26-macos.dmg"
     },
     "windows": {
-      "version": "2.0.1-beta.26",
-      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.26",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.26/QingheBFD_v2.0.1-beta.26_Windows_Setup.exe",
-      "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/QingheBFD_v2.0.1-beta.26_Windows_Setup.exe",
+      "version": "2.0.1-beta.27",
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.27",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.27/QingheBFD_v2.0.1-beta.27_Windows_Setup.exe",
+      "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/QingheBFD_v2.0.1-beta.27_Windows_Setup.exe",
       "package_type": "exe",
-      "sha256": "23e474eb86cdafca29695f079cbf544ab1a422b93c5dfbc903729dfd50ba9309",
-      "size": 145852376,
-      "filename": "QingheBFD_v2.0.1-beta.26_Windows_Setup.exe",
-      "notes": "Windows 一键安装版。Windows 更新入口必须读取 platforms.windows；macOS 顶层 download_url 继续保留 DMG，避免 macOS 自动更新下载 EXE。"
+      "sha256": "c7dcfd222c41dc4432e01dddd0480e9791b7639666ba98cd7d299d539aa1b4ed",
+      "size": 145868031,
+      "filename": "QingheBFD_v2.0.1-beta.27_Windows_Setup.exe",
+      "notes": "Windows beta27：字体扫描、时间线轮询、跳转、样式读取和替换移入后台，减少 Resolve 字体页卡顿；字体列表和 2809 条规则使用预计算索引；多层 Text+ 使用单次 Bridge 批量替换；时间线文字层表格一次性渲染；样式库与 SRT 转 Text+ 默认折叠。保留中英文字体名、收藏、搜索、预览、样式库及全部字幕功能。"
     }
   },
   "size": 180983751,
