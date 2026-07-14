@@ -72,7 +72,7 @@
         </article>
         <article>
           <strong>多版本适配</strong>
-          <p>围绕 Resolve 18、19 和后续环境持续处理兼容问题。</p>
+          <p>围绕 Resolve 19、20、21 的字幕、Text+ 和粘贴属性差异持续处理兼容问题。</p>
         </article>
         <article>
           <strong>剪辑师附加工具</strong>
@@ -84,7 +84,7 @@
         <div class="section-copy compact-copy">
           <h2><span>真实界面</span><span>看清每个面板</span></h2>
           <p>
-            主面板、字幕面板、字体面板和音频面板分别对应交付前的高频风险点。页面所见均来自当前内测版真实界面，方便先判断工具是否适合自己的流程。
+            主面板、字幕面板、字体面板和音频面板分别对应交付前的高频风险点。页面截图使用脱敏演示数据，不包含真实工程、客户素材或项目路径。
           </p>
         </div>
 
@@ -113,7 +113,7 @@
               class="tour-shot subtitle-window"
               data-title="字幕面板能边看时间线边校对"
               data-label="字幕面板"
-              data-copy="读取 SRT、字幕轨和 Text+，支持搜索、替换、删除、撤回，也能把 SRT 一键转成 Text+ 包装字幕。"
+              data-copy="读取 SRT、字幕轨和 Text+，支持搜索、替换、删除、撤回，也能把 SRT 一键转成 Text+ 包装字幕。演示截图不包含真实字幕内容。"
             >
               <img src="./assets/qinghe-current-subtitle-window.png" alt="清何剪辑工具箱字幕面板第二窗口截图" />
             </figure>
@@ -121,7 +121,7 @@
               class="tour-shot"
               data-title="字体管理专门为 Text+ 做"
               data-label="字体面板"
-              data-copy="支持搜索、收藏、字体探针和本地样式库。样式库既能全部复制，也能只复制字体。"
+              data-copy="支持中文名、英文名和 PostScript 名搜索，能扫描时间线文字层并批量应用字体或样式。演示截图使用虚构时间线。"
             >
               <img src="./assets/qinghe-current-font-window.png" alt="清何剪辑工具箱字体面板截图" />
             </figure>
@@ -182,7 +182,7 @@
         <div class="workflow-grid">
           <article class="wide-card">
             <h3>字幕面板</h3>
-            <p>达芬奇 18、19 也能使用字幕查找、替换、删除和撤回。SRT、字幕轨和 Text+ 集中处理，适合短剧、口播、包装字幕最后一遍校对。</p>
+            <p>面向 Resolve 19、20、21 的字幕轨和 Text+ 做兼容处理。SRT、字幕轨和 Text+ 集中查找、替换、删除和撤回，适合短剧、口播、包装字幕最后一遍校对。</p>
           </article>
           <article>
             <h3>SRT 转 Text+</h3>
@@ -221,7 +221,7 @@
         <div class="install-copy">
           <h2><span>打开 DMG</span><span>运行一键安装</span></h2>
           <p>
-            当前公开测试包暂未做 Apple Developer 公证。首次安装建议右键打开“① 一键安装.command”，安装完成后重启 DaVinci Resolve。
+            当前公开测试包暂未做 Apple Developer 公证。首次安装建议右键打开“① 一键安装.command”。若 macOS 仍提示无法验证，可按下方终端命令移除隔离标记，安装完成后重启 DaVinci Resolve。
           </p>
         </div>
         <div class="install-steps">
@@ -231,7 +231,14 @@
         </div>
         <div class="security-note">
           <strong>macOS 提示无法验证时</strong>
-          <p>先尝试右键打开。仍被拦截时，进入“系统设置 -> 隐私与安全性”，在安全性区域点击“仍要打开”。不建议关闭整台 Mac 的 Gatekeeper。</p>
+          <p>优先尝试右键打开。仍被拦截时，进入“系统设置 -> 隐私与安全性”，在安全性区域点击“仍要打开”。如果还打不开，可以打开“终端”，按实际下载位置执行下面命令：</p>
+          <pre><code>xattr -dr com.apple.quarantine ~/Downloads/qinghe-toolbox-v2.0.1-beta.27-macos.dmg
+open ~/Downloads/qinghe-toolbox-v2.0.1-beta.27-macos.dmg</code></pre>
+          <p>如果是一键安装脚本被拦截，可把 DMG 窗口里的“① 一键安装.command”拖进终端，或按实际卷名执行：</p>
+          <pre><code>chmod +x "/Volumes/清何剪辑工具箱/① 一键安装.command"
+xattr -dr com.apple.quarantine "/Volumes/清何剪辑工具箱/① 一键安装.command"
+open "/Volumes/清何剪辑工具箱/① 一键安装.command"</code></pre>
+          <p>不建议关闭整台 Mac 的 Gatekeeper；只处理本次下载的 DMG 或安装脚本即可。</p>
         </div>
       </section>
 
