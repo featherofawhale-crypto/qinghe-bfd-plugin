@@ -861,6 +861,22 @@ main {
   background: rgba(244, 191, 106, 0.08);
 }
 
+.security-note pre {
+  margin: 14px 0 0;
+  padding: 16px;
+  overflow-x: auto;
+  border: 1px solid rgba(244, 191, 106, 0.26);
+  border-radius: var(--radius);
+  background: rgba(3, 9, 21, 0.52);
+  color: #f6f1e8;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.security-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
 .download-section {
   display: grid;
   grid-template-columns: minmax(0, 0.48fr) minmax(0, 0.9fr);

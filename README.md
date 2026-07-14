@@ -44,7 +44,24 @@ Windows：
 3. 重启 DaVinci Resolve。
 4. 在 DaVinci Resolve 里打开：`工作区 -> 脚本 -> Edit -> 清何黑帧夹帧检测`。
 
-如果 macOS 提示“无法打开”或“来自未认证开发者”，请不要直接双击脚本，改用右键“打开”。当前公开包没有做 Apple Developer 公证，所以第一次打开时 macOS 会拦一下。DMG 内也附带了“macOS无法验证处理说明.txt”和修复脚本。
+如果 macOS 提示“无法打开”或“来自未认证开发者”，请不要直接双击脚本，优先改用右键“打开”。当前公开包没有做 Apple Developer 公证，所以第一次打开时 macOS 会拦一下。
+
+仍被拦截时，可以进入“系统设置 -> 隐私与安全性”，在安全性区域点击“仍要打开”。也可以打开“终端”，按实际下载位置执行：
+
+```bash
+xattr -dr com.apple.quarantine ~/Downloads/qinghe-toolbox-v2.0.1-beta.27-macos.dmg
+open ~/Downloads/qinghe-toolbox-v2.0.1-beta.27-macos.dmg
+```
+
+如果是一键安装脚本被拦截，可把 DMG 窗口里的“① 一键安装.command”拖进终端，或按实际卷名执行：
+
+```bash
+chmod +x "/Volumes/清何剪辑工具箱/① 一键安装.command"
+xattr -dr com.apple.quarantine "/Volumes/清何剪辑工具箱/① 一键安装.command"
+open "/Volumes/清何剪辑工具箱/① 一键安装.command"
+```
+
+不建议关闭整台 Mac 的 Gatekeeper；只处理本次下载的 DMG 或安装脚本即可。DMG 内也附带了“macOS无法验证处理说明.txt”和修复脚本。
 
 ## 插件内更新
 
