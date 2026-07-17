@@ -230,6 +230,10 @@
           <article><strong>重启 Resolve</strong><span>从“工作区 -> 脚本 -> Edit”启动清何剪辑工具箱。</span></article>
         </div>
         <div class="security-note">
+          <strong>必须开启 DaVinci Resolve 脚本控制</strong>
+          <p>插件需要通过 DaVinci Resolve 官方脚本接口读取当前项目、时间线、字幕、字体和媒体池。若提示 API 无法连接、扫描不到时间线或媒体池为空，请在 DaVinci Resolve 里打开“偏好设置 -> 系统 -> 常规”，把“外部脚本”设置为“本地”或“网络”，保存后重启 DaVinci Resolve，再从“工作区 -> 脚本 -> Edit”启动插件。</p>
+        </div>
+        <div class="security-note">
           <strong>macOS 提示无法验证时</strong>
           <p>优先尝试右键打开。仍被拦截时，进入“系统设置 -> 隐私与安全性”，在安全性区域点击“仍要打开”。如果还打不开，可以打开“终端”，按实际下载位置执行下面命令：</p>
           <pre><code>xattr -dr com.apple.quarantine ~/Downloads/qinghe-toolbox-v2.0.1-beta.27-macos.dmg
