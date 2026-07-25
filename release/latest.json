@@ -1,9 +1,9 @@
 {
-  "version": "2.0.1-beta.23",
+  "version": "2.0.1-beta.28",
   "channel": "beta",
   "package_type": "dmg",
-  "sha256": "99dea22ba12bac539395d0b9470236c33d772f0df4a6bd6713f60ebedbc3905f",
-  "notes": "v2.0.1-beta.23 平台分流发布。macOS 保持原 dmg；Windows 新增一键安装 exe，内置 PySide6/Qt、Python runtime、ffmpeg/ffprobe、Resolve Lua 脚本和卸载入口。",
+  "sha256": "4b15fafe10c1f0f63e81ab4c922db078af221a7d0e4c3b9a0825361d1a4c7f7d",
+  "notes": "beta.28：macOS 同步 Windows beta.28，修复检测完成误报与 I/O 外复合片段误触发复杂检查；字体轨道支持按需查看和复制 Text+ 完整位置参数，并新增 Resolve API 路径与桥接诊断日志。",
   "mandatory": false,
   "mirrors": [
     {
@@ -16,18 +16,20 @@
       "name": "GitHub",
       "manifest_url": "https://raw.githubusercontent.com/featherofawhale-crypto/qinghe-bfd-plugin/main/release/latest.json",
       "priority": 2,
-      "notes": "备用更新源。"
+      "notes": "备用源。"
     }
   ],
   "platforms": {
     "mac": {
-      "version": "2.0.1-beta.23",
+      "version": "2.0.1-beta.28",
       "package_type": "dmg",
-      "sha256": "99dea22ba12bac539395d0b9470236c33d772f0df4a6bd6713f60ebedbc3905f",
-      "notes": "macOS 完整一键安装版本，保持现有 dmg 资产不替换。",
-      "size": 142105201,
-      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
+      "sha256": "4b15fafe10c1f0f63e81ab4c922db078af221a7d0e4c3b9a0825361d1a4c7f7d",
+      "notes": "macOS 完整一键安装版；同步 Windows beta.28 的检测完成状态、I/O 范围复合片段判断、字体轨道按需查看和复制位置，并补齐 Text+ 变换位置、布局中心等完整位置参数以及 Resolve API 路径/桥接诊断。内置 PySide6/Qt、ffmpeg/ffprobe、Resolve Bridge/BPM Worker。",
+      "size": 178798542,
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/latest",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.28-macos.dmg",
+      "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.28-macos.dmg",
+      "filename": "qinghe-toolbox-v2.0.1-beta.28-macos.dmg"
     },
     "windows": {
       "version": "2.0.1-beta.28",
@@ -35,11 +37,15 @@
       "sha256": "8a1d705c867bdee0065a57d9839351d800d746b4d73cdf1b819bfef7c6161c5a",
       "notes": "Windows beta.28：修复检测完成误报、I/O 外复合片段误触发复杂检查、字体轨道可选查看与复制位置；新增 Resolve API 路径/桥接诊断日志。安装包内置 PySide6/Qt、Python runtime、Essentia、ffmpeg/ffprobe。",
       "size": 145891852,
-      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/QingheBFD_v2.0.1-beta.28_Windows_Setup.exe"
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/latest",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/QingheBFD_v2.0.1-beta.28_Windows_Setup.exe",
+      "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/QingheBFD_v2.0.1-beta.28_Windows_Setup.exe",
+      "filename": "QingheBFD_v2.0.1-beta.28_Windows_Setup.exe"
     }
   },
-  "size": 142105201,
-  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/latest",
-  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.23-macos.dmg"
+  "size": 178798542,
+  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/latest",
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.28-macos.dmg",
+  "name": "Qinghe Editing Toolbox v2.0.1-beta.28",
+  "filename": "qinghe-toolbox-v2.0.1-beta.28-macos.dmg"
 }
