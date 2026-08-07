@@ -1,14 +1,12 @@
 # Git Version Management
 
-## Current Local Version
+## Current Public Version
 
-- Latest local plugin build: `2.0.1-beta.26`
-- Latest public macOS plugin release: `2.0.1-beta.25`
-- Latest public Windows plugin release: `2.0.1-beta.27`
+- Latest public macOS plugin release: `2.0.1-beta.29`
+- Latest public Windows plugin release: `2.0.1-beta.28`
 - Release channel: `beta`
-- Public macOS package filename: `qinghe-toolbox-v2.0.1-beta.25-macos.dmg`
-- Public Windows package filename: `QingheBFD_v2.0.1-beta.27_Windows_Setup.exe`
-- Local beta25 package folder: `dist/protected_release/QingheEditingToolbox_v2.0.1-beta.25_mac`
+- Public macOS package filename: `qinghe-toolbox-v2.0.1-beta.29-macos.dmg`
+- Public Windows package filename: `QingheBFD_v2.0.1-beta.28_Windows_Setup.exe`
 - Canonical update manifests:
   - `latest.json`
   - `release/latest.json`

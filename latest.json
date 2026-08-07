@@ -1,14 +1,14 @@
 {
-  "version": "2.0.1-beta.28",
+  "version": "2.0.1-beta.29",
   "channel": "beta",
   "package_type": "dmg",
-  "sha256": "4b15fafe10c1f0f63e81ab4c922db078af221a7d0e4c3b9a0825361d1a4c7f7d",
-  "notes": "beta.28：macOS 同步 Windows beta.28，修复检测完成误报与 I/O 外复合片段误触发复杂检查；字体轨道支持按需查看和复制 Text+ 完整位置参数，并新增 Resolve API 路径与桥接诊断日志。",
+  "sha256": "d8e892b60826c7a41843f898fae0652071cda94148483eb3092138181a90619d",
+  "notes": "macOS beta.29：新增轻量素材整理面板，可按 I/O、指定时间线或整个项目扫描项目目录外素材，查看路径、大小与使用位置，右键在 Finder 定位，并复制归纳、自动重链接；新增 Text+ 与 SRT 字幕轨字体扫描和字体文件收集。归纳目标目录改为始终手动选择，删除原文件仅在复制校验及重链接成功后执行。",
   "mandatory": false,
   "mirrors": [
     {
       "name": "CNB",
-      "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/latest.json",
+      "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/latest.json",
       "priority": 1,
       "notes": "国内优先更新源。"
     },
@@ -21,15 +21,15 @@
   ],
   "platforms": {
     "mac": {
-      "version": "2.0.1-beta.28",
+      "version": "2.0.1-beta.29",
       "package_type": "dmg",
-      "sha256": "4b15fafe10c1f0f63e81ab4c922db078af221a7d0e4c3b9a0825361d1a4c7f7d",
-      "notes": "macOS 完整一键安装版；同步 Windows beta.28 的检测完成状态、I/O 范围复合片段判断、字体轨道按需查看和复制位置，并补齐 Text+ 变换位置、布局中心等完整位置参数以及 Resolve API 路径/桥接诊断。内置 PySide6/Qt、ffmpeg/ffprobe、Resolve Bridge/BPM Worker。",
-      "size": 178798542,
-      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/latest",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.28-macos.dmg",
-      "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/qinghe-toolbox-v2.0.1-beta.28-macos.dmg",
-      "filename": "qinghe-toolbox-v2.0.1-beta.28-macos.dmg"
+      "sha256": "d8e892b60826c7a41843f898fae0652071cda94148483eb3092138181a90619d",
+      "notes": "macOS 完整一键安装版。新增素材整理面板：按当前 I/O、指定时间线或整个项目扫描项目目录外素材，显示路径、大小、状态与使用位置，支持右键在 Finder 定位、复制归纳、可选自动重链接；删除原文件仅在复制哈希校验及重链接成功后执行。新增 Text+ 与 SRT 字幕轨字体扫描和字体文件收集，修复 Resolve GUI 环境找不到 Homebrew fontconfig、字重误匹配等问题。目标目录始终由用户手动选择。",
+      "size": 179610338,
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
+      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
+      "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
+      "filename": "qinghe-toolbox-v2.0.1-beta.29-macos.dmg"
     },
     "windows": {
       "version": "2.0.1-beta.28",
@@ -43,9 +43,9 @@
       "filename": "QingheBFD_v2.0.1-beta.28_Windows_Setup.exe"
     }
   },
-  "size": 178798542,
-  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/latest",
-  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/qinghe-toolbox-v2.0.1-beta.28-macos.dmg",
-  "name": "Qinghe Editing Toolbox v2.0.1-beta.28",
-  "filename": "qinghe-toolbox-v2.0.1-beta.28-macos.dmg"
+  "size": 179610338,
+  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
+  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
+  "name": "Qinghe Editing Toolbox v2.0.1-beta.29",
+  "filename": "qinghe-toolbox-v2.0.1-beta.29-macos.dmg"
 }
