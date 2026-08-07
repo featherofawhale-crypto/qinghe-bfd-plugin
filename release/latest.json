@@ -29,6 +29,7 @@
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
       "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
       "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
+      "github_download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
       "filename": "qinghe-toolbox-v2.0.1-beta.29-macos.dmg"
     },
     "windows": {
@@ -40,12 +41,14 @@
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/latest",
       "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/QingheBFD_v2.0.1-beta.28_Windows_Setup.exe",
       "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/QingheBFD_v2.0.1-beta.28_Windows_Setup.exe",
+      "github_download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/QingheBFD_v2.0.1-beta.28_Windows_Setup.exe",
       "filename": "QingheBFD_v2.0.1-beta.28_Windows_Setup.exe"
     }
   },
   "size": 179610338,
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
   "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
+  "github_download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
   "name": "Qinghe Editing Toolbox v2.0.1-beta.29",
   "filename": "qinghe-toolbox-v2.0.1-beta.29-macos.dmg"
 }
