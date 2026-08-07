@@ -8,7 +8,7 @@
   "mirrors": [
     {
       "name": "CNB",
-      "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/latest.json",
+      "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/git/raw/main/release/latest.json",
       "priority": 1,
       "notes": "国内优先更新源。"
     },

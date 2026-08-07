@@ -8,7 +8,7 @@
   "mirrors": [
     {
       "name": "CNB",
-      "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/latest.json",
+      "manifest_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/git/raw/main/release/latest.json",
       "priority": 1,
       "notes": "国内优先更新源。"
     },
@@ -27,7 +27,7 @@
       "notes": "macOS 完整一键安装版。新增素材整理面板：按当前 I/O、指定时间线或整个项目扫描项目目录外素材，显示路径、大小、状态与使用位置，支持右键在 Finder 定位、复制归纳、可选自动重链接；删除原文件仅在复制哈希校验及重链接成功后执行。新增 Text+ 与 SRT 字幕轨字体扫描和字体文件收集，修复 Resolve GUI 环境找不到 Homebrew fontconfig、字重误匹配等问题。目标目录始终由用户手动选择。",
       "size": 179610338,
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
+      "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
       "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
       "filename": "qinghe-toolbox-v2.0.1-beta.29-macos.dmg"
     },
@@ -38,14 +38,14 @@
       "notes": "Windows beta.28：修复检测完成误报、I/O 外复合片段误触发复杂检查、字体轨道可选查看与复制位置；新增 Resolve API 路径/桥接诊断日志。安装包内置 PySide6/Qt、Python runtime、Essentia、ffmpeg/ffprobe。",
       "size": 145891852,
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/latest",
-      "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/latest/QingheBFD_v2.0.1-beta.28_Windows_Setup.exe",
+      "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/QingheBFD_v2.0.1-beta.28_Windows_Setup.exe",
       "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/latest/QingheBFD_v2.0.1-beta.28_Windows_Setup.exe",
       "filename": "QingheBFD_v2.0.1-beta.28_Windows_Setup.exe"
     }
   },
   "size": 179610338,
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
-  "download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
+  "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
   "name": "Qinghe Editing Toolbox v2.0.1-beta.29",
   "filename": "qinghe-toolbox-v2.0.1-beta.29-macos.dmg"
 }
