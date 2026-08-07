@@ -207,9 +207,9 @@
 
           <article class="organizer-fonts">
             <span class="organizer-kicker">字体收集</span>
-            <h3>Text+ 与 SRT 字幕轨都进入扫描</h3>
-            <p>读取所有可访问的 Text+ 字体，并从字幕轨设置识别 SRT 使用的字体；按字体家族和字重定位本机实际字体文件，再收集到手动选择的目录。</p>
-            <p class="organizer-boundary">Resolve API 无法读取字体属性的普通 Text 会列为未解析项。当前 SRT 支持检测与收集，不包含批量修改字体属性。</p>
+            <h3>Text+、SRT 和普通 Text 都进入扫描</h3>
+            <p>读取 Text+ 文本层、字幕轨设置和普通 Text 的 DRT 样式字体；按字体家族和字重定位本机实际字体文件，再收集到手动选择的目录。</p>
+            <p class="organizer-boundary">系统没有对应字体文件时仍显示 Resolve 记录的字体名和未匹配原因，但不会伪造文件或允许勾选。当前 SRT 支持检测与收集，不包含批量修改字体属性。</p>
           </article>
 
           <article>
@@ -220,14 +220,14 @@
 
           <article>
             <span class="organizer-kicker">重新归位</span>
-            <h3>正确目录始终由你选择</h3>
-            <p>归位前必须手动选择目标目录。插件只复制清单中的误放素材，处理同名冲突和重复文件，并可选择让 DaVinci Resolve 自动重链接到新位置。</p>
+            <h3>正确目录和保留层级都由你选择</h3>
+            <p>归位前必须手动选择目标目录。可从源路径前端或末端保留指定层级，并直接预览每个素材的目标目录；插件处理同名冲突和重复文件，也可让 Resolve 自动重链接。</p>
           </article>
 
           <article>
             <span class="organizer-kicker">删除保护</span>
             <h3>失败时绝不提前删除原文件</h3>
-            <p>“删除原文件”是独立可选项，只有新副本 SHA256 校验通过且 Resolve 重链接成功后才会执行；任一步失败都会保留原文件并报告原因。</p>
+            <p>“删除原文件”是独立可选项，只有新副本验证通过且 Resolve 重链接成功后才会执行；不删除时跳过额外哈希预检提速。后台进度显示当前文件、字节和速度，完成后弹窗汇总。</p>
           </article>
         </div>
       </section>
@@ -312,10 +312,10 @@ open "/Volumes/清何剪辑工具箱 v2.0.1-beta.29/① 一键安装.command"</c
           <article class="download-card primary-download">
             <span>macOS</span>
             <h3>DMG 一键安装版</h3>
-            <p>v2.0.1-beta.29 新增误放素材归位补漏、Finder 定位、Text+ 与 SRT 字体收集；它不替代 Resolve 项目整理，归位目录始终手动选择，删除原文件受复制校验和重链接结果保护。</p>
+            <p>v2.0.1-beta.29 新增误放素材归位、目录层级预览、后台复制进度，以及 Text+、SRT、普通 Text 字体收集；它不替代 Resolve 项目整理，删除原文件受复制验证和重链接结果保护。</p>
             <div class="download-actions">
-              <a class="button button-primary" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg">GitHub 下载</a>
-              <a class="button button-quiet" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg">CNB 镜像下载</a>
+              <a class="button button-primary" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg">CNB 国内下载</a>
+              <a class="button button-quiet" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg">GitHub 备用下载</a>
             </div>
           </article>
           <article class="download-card">

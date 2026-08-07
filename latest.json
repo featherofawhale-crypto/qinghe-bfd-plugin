@@ -2,8 +2,8 @@
   "version": "2.0.1-beta.29",
   "channel": "beta",
   "package_type": "dmg",
-  "sha256": "d8e892b60826c7a41843f898fae0652071cda94148483eb3092138181a90619d",
-  "notes": "macOS beta.29：新增轻量素材整理面板，可按 I/O、指定时间线或整个项目扫描项目目录外素材，查看路径、大小与使用位置，右键在 Finder 定位，并复制归纳、自动重链接；新增 Text+ 与 SRT 字幕轨字体扫描和字体文件收集。归纳目标目录改为始终手动选择，删除原文件仅在复制校验及重链接成功后执行。",
+  "sha256": "3132f8f16643670b40afe08182e76ac5603708a18e4cd709ce14c2a64d8cd47f",
+  "notes": "macOS beta.29：新增轻量素材归纳面板，可按当前 I/O、当前时间线或整个项目扫描项目目录外的在用素材；支持 Finder 定位、目录层级预览、后台计划、进度与高速安全复制、可选自动重链接和受保护的源文件删除。字体收集覆盖 Text+、SRT 字幕轨和普通 Text；系统缺失字体会明确显示未匹配。",
   "mandatory": false,
   "mirrors": [
     {
@@ -23,9 +23,9 @@
     "mac": {
       "version": "2.0.1-beta.29",
       "package_type": "dmg",
-      "sha256": "d8e892b60826c7a41843f898fae0652071cda94148483eb3092138181a90619d",
-      "notes": "macOS 完整一键安装版。新增素材整理面板：按当前 I/O、指定时间线或整个项目扫描项目目录外素材，显示路径、大小、状态与使用位置，支持右键在 Finder 定位、复制归纳、可选自动重链接；删除原文件仅在复制哈希校验及重链接成功后执行。新增 Text+ 与 SRT 字幕轨字体扫描和字体文件收集，修复 Resolve GUI 环境找不到 Homebrew fontconfig、字重误匹配等问题。目标目录始终由用户手动选择。",
-      "size": 179610338,
+      "sha256": "3132f8f16643670b40afe08182e76ac5603708a18e4cd709ce14c2a64d8cd47f",
+      "notes": "macOS 完整一键安装版。素材归纳用于补查工程已用但误放在项目素材目录外的文件，不替代 Resolve 项目整理；支持当前 I/O、当前时间线和整个项目范围，显示路径、大小、状态、使用位置及目录层级目标预览，右键可在 Finder 定位。归纳计划和复制在后台运行，显示实时进度与速度；支持可选自动重链接，只有复制验证和重链接成功后才按用户选择删除源文件。字体收集覆盖 Text+、SRT 字幕轨和普通 Text，修复 GUI 环境字体索引与样式匹配，未安装字体保留未匹配提示。",
+      "size": 181781182,
       "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
       "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
       "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
@@ -45,7 +45,7 @@
       "filename": "QingheBFD_v2.0.1-beta.28_Windows_Setup.exe"
     }
   },
-  "size": 179610338,
+  "size": 181781182,
   "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
   "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
   "github_download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
