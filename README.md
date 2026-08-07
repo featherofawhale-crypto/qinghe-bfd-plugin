@@ -11,7 +11,7 @@ https://featherofawhale-crypto.github.io/qinghe-bfd-plugin/
 - 快速检查时间线里的黑帧、夹帧、重复帧、异常空隙等问题
 - 给检测结果自动打标记，方便回到时间线逐个修正
 - 支持复杂时间线、字幕/Text+、字体管理和剪辑节拍辅助
-- 素材整理可扫描项目目录外素材、在 Finder 定位、复制归纳并按需自动重链接
+- 素材整理是 Resolve 项目管理的补充：扫描已用但误放在项目目录外的素材，在 Finder 定位、复制归位并按需自动重链接
 - 字体收集可扫描 Text+ 与 SRT 字幕轨，把实际使用的字体文件归纳到指定目录
 - macOS 包内置 Python 3.9、PySide6/Qt、FFmpeg 和 Resolve API Bridge，不要求普通用户自己配置命令行环境
 - 带有插件内“更新”按钮，后续可以直接检查新版本

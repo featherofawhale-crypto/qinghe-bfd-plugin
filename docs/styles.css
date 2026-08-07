@@ -344,6 +344,7 @@ main {
 .tour-stage::before,
 .download-card::before,
 .feature-stack article::before,
+.organizer-grid article::before,
 .workflow-grid article::before,
 .panel-gallery figure::before,
 .proof-strip article::before,
@@ -424,6 +425,7 @@ main {
 
 .interface-section,
 .scan-section,
+.organizer-section,
 .workflow-section,
 .install-section,
 .download-section,
@@ -476,6 +478,7 @@ main {
 .tour-copy,
 .tour-stage,
 .feature-stack article,
+.organizer-grid article,
 .workflow-grid article,
 .install-steps article,
 .security-note,
@@ -499,13 +502,15 @@ main {
 
 .tour-index,
 .download-card span,
-.feature-stack span {
+.feature-stack span,
+.organizer-kicker {
   color: var(--accent);
   font-weight: 750;
 }
 
 .tour-copy h3,
 .feature-stack h3,
+.organizer-grid h3,
 .workflow-grid h3,
 .download-card h3 {
   margin: 18px 0 0;
@@ -517,6 +522,7 @@ main {
 
 .tour-copy p,
 .feature-stack p,
+.organizer-grid p,
 .workflow-grid p,
 .download-card p,
 .security-note p {
@@ -755,6 +761,62 @@ main {
 
 .feature-stack article {
   padding: 24px;
+}
+
+.organizer-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.organizer-grid article {
+  min-height: 230px;
+  padding: 26px;
+}
+
+.organizer-grid h3 {
+  margin-top: 18px;
+  font-size: clamp(25px, 2.8vw, 38px);
+}
+
+.organizer-lead {
+  grid-column: span 2;
+  min-height: 380px;
+  background: var(--surface-strong);
+}
+
+.organizer-fonts {
+  min-height: 380px;
+}
+
+.organizer-scopes {
+  margin: 28px 0 0;
+}
+
+.organizer-scopes div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.32fr) minmax(0, 1fr);
+  gap: 20px;
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
+}
+
+.organizer-scopes dt {
+  color: var(--text);
+  font-weight: 760;
+}
+
+.organizer-scopes dd {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.organizer-boundary {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--soft) !important;
+  font-size: 14px;
 }
 
 .workflow-head {
@@ -1037,6 +1099,14 @@ main {
     grid-template-columns: 1fr 1fr;
   }
 
+  .organizer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .organizer-lead {
+    grid-column: 1 / -1;
+  }
+
   .workflow-grid .wide-card {
     grid-row: auto;
     grid-column: 1 / -1;
@@ -1110,6 +1180,7 @@ main {
 
   .interface-section,
   .scan-section,
+  .organizer-section,
   .workflow-section,
   .install-section,
   .download-section,
@@ -1150,10 +1221,20 @@ main {
   }
 
   .workflow-grid,
+  .organizer-grid,
   .panel-gallery,
   .download-grid,
   .donate-panel {
     grid-template-columns: 1fr;
+  }
+
+  .organizer-lead {
+    grid-column: auto;
+  }
+
+  .organizer-scopes div {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 
   .primary-download {

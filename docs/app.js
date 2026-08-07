@@ -12,7 +12,7 @@
   window.addEventListener("pointermove", setPointer, { passive: true });
 
   const cards = document.querySelectorAll(
-    ".screenshot-frame, .tour-stage, .download-card, .feature-stack article, .workflow-grid article, .panel-gallery figure, .proof-strip article, .install-steps article, .star-panel, .donate-panel, .notice-section > div"
+    ".screenshot-frame, .tour-stage, .download-card, .feature-stack article, .organizer-grid article, .workflow-grid article, .panel-gallery figure, .proof-strip article, .install-steps article, .star-panel, .donate-panel, .notice-section > div"
   );
 
   cards.forEach((card) => {
@@ -96,7 +96,7 @@
 
     if (window.ScrollTrigger) {
       gsap.utils
-        .toArray(".proof-strip article, .section-copy, .screen-tour, .scan-layout, .workflow-grid article, .panel-gallery figure, .install-steps article, .download-card, .notice-section > div, .community-section > div")
+        .toArray(".proof-strip article, .section-copy, .screen-tour, .scan-layout, .organizer-grid article, .workflow-grid article, .panel-gallery figure, .install-steps article, .download-card, .notice-section > div, .community-section > div")
         .forEach((element) => {
           gsap.from(element, {
             y: 34,

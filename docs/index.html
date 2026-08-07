@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="清何剪辑工具箱，面向 DaVinci Resolve 剪辑师的黑帧、夹帧、重复帧、字幕、Text+、字体和节拍检查工具。"
+      content="清何剪辑工具箱，面向 DaVinci Resolve 剪辑师的黑帧、夹帧、放错目录素材归位、字幕、Text+、字体收集和节拍检查工具。"
     />
     <meta name="theme-color" content="#06152b" />
     <title>清何剪辑工具箱 | DaVinci Resolve 剪辑质检插件</title>
     <link rel="icon" href="./assets/qinghe-logo.svg?v=20260618a" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css?v=20260618b" />
+    <link rel="stylesheet" href="./styles.css?v=20260807a" />
     <script defer src="./vendor/three.min.js"></script>
     <script defer src="./vendor/gsap.min.js"></script>
     <script defer src="./vendor/ScrollTrigger.min.js"></script>
-    <script defer src="./app.js?v=20260618a"></script>
+    <script defer src="./app.js?v=20260807a"></script>
   </head>
   <body>
     <canvas id="field-canvas" aria-hidden="true"></canvas>
@@ -28,6 +28,7 @@
       <nav class="nav-links" aria-label="页面导航">
         <a href="#interface">界面</a>
         <a href="#features">功能</a>
+        <a href="#organizer">素材归位</a>
         <a href="#subtitle">字幕</a>
         <a href="#install">安装</a>
         <a href="#download">下载</a>
@@ -41,7 +42,7 @@
           <p class="hero-label">DaVinci Resolve 剪辑质检插件</p>
           <h1 id="hero-title"><span>复杂时间线</span><span>也能快速查</span></h1>
           <p class="hero-text">
-            为真实剪辑工程做的交片前复核工具。黑帧、夹帧、重复素材、内容重复、时间线空位、字幕、Text+、字体和节拍问题，尽量在 Resolve 里一次查清。
+            为真实剪辑工程做的交片前复核工具。黑帧、夹帧、重复素材、内容重复、时间线空位、放错目录素材归位、字幕、Text+、字体收集和节拍问题，尽量在 Resolve 里一次处理。
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#download">下载 macOS 版</a>
@@ -75,8 +76,8 @@
           <p>围绕 Resolve 19、20、21 的字幕、Text+ 和粘贴属性差异持续处理兼容问题。</p>
         </article>
         <article>
-          <strong>剪辑师附加工具</strong>
-          <p>字幕、Text+、字体管理和 BPM 节拍一并补齐。</p>
+          <strong>放错素材可归位</strong>
+          <p>补查项目目录外的误放素材，复制归位并按需重链接。</p>
         </article>
       </section>
 
@@ -175,6 +176,62 @@
         </div>
       </section>
 
+      <section id="organizer" class="organizer-section">
+        <div class="section-copy">
+          <h2><span>放错目录的素材</span><span>重新归位</span></h2>
+          <p>
+            这是 Resolve 项目整理的补充工具，不替代 DaVinci Resolve 自带的媒体管理。它专门找出已经被时间线使用、却误放在项目素材目录之外的文件，帮助把这些漏网素材重新归纳并重链接；扫描只生成候选清单，实际归位由用户明确触发。
+          </p>
+        </div>
+
+        <div class="organizer-grid">
+          <article class="organizer-lead">
+            <span class="organizer-kicker">误放素材补查</span>
+            <h3>只检查这次真正用到的目录外素材</h3>
+            <p>范围和黑帧检测保持一致，可聚焦当前剪辑，也能覆盖整个项目。所选项目素材目录会作为“正确位置”的基准，目录内文件不会被列入归位候选。</p>
+            <dl class="organizer-scopes">
+              <div>
+                <dt>当前 I/O</dt>
+                <dd>只读取当前时间线入点到出点之间实际使用的素材。</dd>
+              </div>
+              <div>
+                <dt>指定时间线</dt>
+                <dd>从项目时间线列表中自由选择，不必切换 Resolve 当前时间线。</dd>
+              </div>
+              <div>
+                <dt>整个项目</dt>
+                <dd>遍历当前项目全部时间线，合并重复引用并保留使用位置。</dd>
+              </div>
+            </dl>
+          </article>
+
+          <article class="organizer-fonts">
+            <span class="organizer-kicker">字体收集</span>
+            <h3>Text+ 与 SRT 字幕轨都进入扫描</h3>
+            <p>读取所有可访问的 Text+ 字体，并从字幕轨设置识别 SRT 使用的字体；按字体家族和字重定位本机实际字体文件，再收集到手动选择的目录。</p>
+            <p class="organizer-boundary">Resolve API 无法读取字体属性的普通 Text 会列为未解析项。当前 SRT 支持检测与收集，不包含批量修改字体属性。</p>
+          </article>
+
+          <article>
+            <span class="organizer-kicker">候选清单</span>
+            <h3>放错在哪里、被哪里使用都看清楚</h3>
+            <p>项目目录外素材和缺失素材都会保留在结果表中，并显示路径、大小、状态和使用位置。右键文件可在 Finder 中显示；文件已缺失时，会打开能够定位到的上级目录。</p>
+          </article>
+
+          <article>
+            <span class="organizer-kicker">重新归位</span>
+            <h3>正确目录始终由你选择</h3>
+            <p>归位前必须手动选择目标目录。插件只复制清单中的误放素材，处理同名冲突和重复文件，并可选择让 DaVinci Resolve 自动重链接到新位置。</p>
+          </article>
+
+          <article>
+            <span class="organizer-kicker">删除保护</span>
+            <h3>失败时绝不提前删除原文件</h3>
+            <p>“删除原文件”是独立可选项，只有新副本 SHA256 校验通过且 Resolve 重链接成功后才会执行；任一步失败都会保留原文件并报告原因。</p>
+          </article>
+        </div>
+      </section>
+
       <section id="subtitle" class="workflow-section">
         <div class="workflow-head">
           <h2><span>字幕、Text+、字体和节拍</span><span>给剪辑师补上工具链</span></h2>
@@ -190,7 +247,7 @@
           </article>
           <article>
             <h3>字体探针</h3>
-            <p>识别中文名、英文名和 PostScript 名，查找本机字体更直接。</p>
+            <p>识别中文名、英文名和 PostScript 名，并为 Text+、SRT 字体文件收集提供准确匹配。</p>
           </article>
           <article>
             <h3>样式库</h3>
@@ -255,7 +312,7 @@ open "/Volumes/清何剪辑工具箱 v2.0.1-beta.29/① 一键安装.command"</c
           <article class="download-card primary-download">
             <span>macOS</span>
             <h3>DMG 一键安装版</h3>
-            <p>v2.0.1-beta.29 新增素材整理、Finder 定位、Text+ 与 SRT 字体收集；归纳目录始终手动选择，删除原文件受复制校验和重链接结果保护。</p>
+            <p>v2.0.1-beta.29 新增误放素材归位补漏、Finder 定位、Text+ 与 SRT 字体收集；它不替代 Resolve 项目整理，归位目录始终手动选择，删除原文件受复制校验和重链接结果保护。</p>
             <div class="download-actions">
               <a class="button button-primary" href="https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg">GitHub 下载</a>
               <a class="button button-quiet" href="https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg">CNB 镜像下载</a>
