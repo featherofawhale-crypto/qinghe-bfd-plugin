@@ -22,12 +22,12 @@ https://featherofawhale-crypto.github.io/qinghe-bfd-plugin/
 
 请到右侧或下方的官网下载区下载：
 
-- macOS：`qinghe-toolbox-v2.0.1-beta.29-macos.dmg`
+- macOS：`qinghe-toolbox-v2.0.1-beta.30-macos.dmg`
 - Windows：`QingheBFD_v2.0.1-beta.29_Windows_Setup.exe`
 
 Release 地址：
 
-https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29
+https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.30
 
 macOS 包是 Apple Silicon / arm64 macOS 测试版。Windows 包为独立 EXE 安装器，和 macOS DMG 分开发布。
 
@@ -35,7 +35,7 @@ macOS 包是 Apple Silicon / arm64 macOS 测试版。Windows 包为独立 EXE �
 
 macOS：
 
-1. 下载并双击打开 `qinghe-toolbox-v2.0.1-beta.29-macos.dmg`。
+1. 下载并双击打开 `qinghe-toolbox-v2.0.1-beta.30-macos.dmg`。
 2. 在打开的窗口里，右键点击 `① 一键安装.command`。
 3. 选择“打开”，按提示完成安装。
 4. 重启 DaVinci Resolve。
@@ -65,16 +65,16 @@ Windows：
 仍被拦截时，可以进入“系统设置 -> 隐私与安全性”，在安全性区域点击“仍要打开”。也可以打开“终端”，按实际下载位置执行：
 
 ```bash
-xattr -dr com.apple.quarantine ~/Downloads/qinghe-toolbox-v2.0.1-beta.29-macos.dmg
-open ~/Downloads/qinghe-toolbox-v2.0.1-beta.29-macos.dmg
+xattr -dr com.apple.quarantine ~/Downloads/qinghe-toolbox-v2.0.1-beta.30-macos.dmg
+open ~/Downloads/qinghe-toolbox-v2.0.1-beta.30-macos.dmg
 ```
 
 如果是一键安装脚本被拦截，可把 DMG 窗口里的“① 一键安装.command”拖进终端，或按实际卷名执行：
 
 ```bash
-chmod +x "/Volumes/清何剪辑工具箱 v2.0.1-beta.29/① 一键安装.command"
-xattr -dr com.apple.quarantine "/Volumes/清何剪辑工具箱 v2.0.1-beta.29/① 一键安装.command"
-open "/Volumes/清何剪辑工具箱 v2.0.1-beta.29/① 一键安装.command"
+chmod +x "/Volumes/清何剪辑工具箱 v2.0.1-beta.30/① 一键安装.command"
+xattr -dr com.apple.quarantine "/Volumes/清何剪辑工具箱 v2.0.1-beta.30/① 一键安装.command"
+open "/Volumes/清何剪辑工具箱 v2.0.1-beta.30/① 一键安装.command"
 ```
 
 不建议关闭整台 Mac 的 Gatekeeper；只处理本次下载的 DMG 或安装脚本即可。DMG 内也附带了“macOS无法验证处理说明.txt”和修复脚本。

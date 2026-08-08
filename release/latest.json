@@ -1,9 +1,9 @@
 {
-  "version": "2.0.1-beta.29",
+  "version": "2.0.1-beta.30",
   "channel": "beta",
   "package_type": "dmg",
-  "sha256": "3132f8f16643670b40afe08182e76ac5603708a18e4cd709ce14c2a64d8cd47f",
-  "notes": "beta.29 已同时提供 macOS 与 Windows。素材归纳用于补查工程在用但误放在项目目录外的文件，支持目录层级预览、后台进度、安全复制与可选重链接；字体收集覆盖 Text+、SRT 和普通 Text。",
+  "sha256": "537b9c8d2acdb6f1ef123d274f1955b6ec607ecb9a54d18d258fedb9f516cb6c",
+  "notes": "macOS beta.30 修复素材归纳目录判定和字体文件发现：扫描只按项目素材目录判断目录内外，修改归纳目录保留当前扫描结果，修改项目素材目录或扫描范围才使结果失效；没有 fc-list 时直接索引 macOS 原生字体目录。Windows 当前版本仍为 beta.29。",
   "mandatory": false,
   "mirrors": [
     {
@@ -21,16 +21,16 @@
   ],
   "platforms": {
     "mac": {
-      "version": "2.0.1-beta.29",
+      "version": "2.0.1-beta.30",
       "package_type": "dmg",
-      "sha256": "3132f8f16643670b40afe08182e76ac5603708a18e4cd709ce14c2a64d8cd47f",
-      "notes": "macOS 完整一键安装版。素材归纳用于补查工程已用但误放在项目素材目录外的文件，不替代 Resolve 项目整理；支持当前 I/O、当前时间线和整个项目范围，显示路径、大小、状态、使用位置及目录层级目标预览，右键可在 Finder 定位。归纳计划和复制在后台运行，显示实时进度与速度；支持可选自动重链接，只有复制验证和重链接成功后才按用户选择删除源文件。字体收集覆盖 Text+、SRT 字幕轨和普通 Text，修复 GUI 环境字体索引与样式匹配，未安装字体保留未匹配提示。",
-      "size": 181781182,
-      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
-      "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
-      "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
-      "github_download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
-      "filename": "qinghe-toolbox-v2.0.1-beta.29-macos.dmg"
+      "sha256": "537b9c8d2acdb6f1ef123d274f1955b6ec607ecb9a54d18d258fedb9f516cb6c",
+      "notes": "macOS 完整一键安装版。素材归纳扫描只依据项目素材目录判断目录内外，归纳目录仅用于计算复制目标；修改归纳目录会保留当前扫描列表和勾选状态，修改项目素材目录、时间线或扫描范围才使旧结果失效。字体收集在没有 fc-list 时直接扫描 ~/Library/Fonts、/Library/Fonts 和 /System/Library/Fonts，并解析字体内部家族、样式、全名及 PostScript 名称。",
+      "size": 183055180,
+      "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.30",
+      "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.30/qinghe-toolbox-v2.0.1-beta.30-macos.dmg",
+      "cnb_download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.30/qinghe-toolbox-v2.0.1-beta.30-macos.dmg",
+      "github_download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.30/qinghe-toolbox-v2.0.1-beta.30-macos.dmg",
+      "filename": "qinghe-toolbox-v2.0.1-beta.30-macos.dmg"
     },
     "windows": {
       "version": "2.0.1-beta.29",
@@ -45,10 +45,10 @@
       "filename": "QingheBFD_v2.0.1-beta.29_Windows_Setup.exe"
     }
   },
-  "size": 181781182,
-  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.29",
-  "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
-  "github_download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.29/qinghe-toolbox-v2.0.1-beta.29-macos.dmg",
-  "name": "Qinghe Editing Toolbox v2.0.1-beta.29",
-  "filename": "qinghe-toolbox-v2.0.1-beta.29-macos.dmg"
+  "size": 183055180,
+  "release_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/tag/v2.0.1-beta.30",
+  "download_url": "https://cnb.cool/featherofawhale/qinghe-bfd-plugin/-/releases/download/v2.0.1-beta.30/qinghe-toolbox-v2.0.1-beta.30-macos.dmg",
+  "github_download_url": "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.30/qinghe-toolbox-v2.0.1-beta.30-macos.dmg",
+  "name": "Qinghe Editing Toolbox v2.0.1-beta.30",
+  "filename": "qinghe-toolbox-v2.0.1-beta.30-macos.dmg"
 }
