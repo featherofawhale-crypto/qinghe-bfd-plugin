@@ -1,0 +1,17 @@
+main:
+  push:
+    - stages:
+        - name: 下载并校验 Windows beta30 安装器
+          image: alpine:3.20
+          script: |
+            apk add --no-cache curl
+            curl -L --fail --retry 3 -o QingheBFD_v2.0.1-beta.30_Windows_Setup.exe "https://github.com/featherofawhale-crypto/qinghe-bfd-plugin/releases/download/v2.0.1-beta.30/QingheBFD_v2.0.1-beta.30_Windows_Setup.exe"
+            test "$(sha256sum QingheBFD_v2.0.1-beta.30_Windows_Setup.exe | cut -d' ' -f1)" = "41cef7c4eda51e2513bd4a925d578146b31d5c3487467f2cf86db1972db8a02a"
+
+        - name: 上传 Windows beta30 Release 附件
+          image: cnbcool/attachments:latest
+          settings:
+            tag: v2.0.1-beta.30
+            attachments:
+              - QingheBFD_v2.0.1-beta.30_Windows_Setup.exe
+              - latest.json
