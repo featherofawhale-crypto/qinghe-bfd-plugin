@@ -23,7 +23,7 @@ https://featherofawhale-crypto.github.io/qinghe-bfd-plugin/
 请到右侧或下方的官网下载区下载：
 
 - macOS：`qinghe-toolbox-v2.0.1-beta.30-macos.dmg`
-- Windows：`QingheBFD_v2.0.1-beta.29_Windows_Setup.exe`
+- Windows：`QingheBFD_v2.0.1-beta.30_Windows_Setup.exe`
 
 Release 地址：
 
@@ -43,7 +43,7 @@ macOS：
 
 Windows：
 
-1. 下载并运行 `QingheBFD_v2.0.1-beta.29_Windows_Setup.exe`。
+1. 下载并运行 `QingheBFD_v2.0.1-beta.30_Windows_Setup.exe`。
 2. 按安装器提示完成安装。
 3. 重启 DaVinci Resolve。
 4. 在 DaVinci Resolve 里打开：`工作区 -> 脚本 -> Edit -> 清何黑帧夹帧检测`。
