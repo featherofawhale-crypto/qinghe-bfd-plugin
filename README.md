@@ -4,8 +4,7 @@
 
 官网页面：
 
-https://featherofawhale-crypto.github.io/qinghe-bfd-plugin/
-
+https://qhxmp.top/
 ## 它能做什么
 
 - 快速检查时间线里的黑帧、夹帧、重复帧、异常空隙等问题
